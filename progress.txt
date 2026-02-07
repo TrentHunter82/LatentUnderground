@@ -1,0 +1,6 @@
+﻿# Swarm Progress Log
+
+## Learnings
+(Patterns discovered across iterations - READ THIS FIRST)
+
+---

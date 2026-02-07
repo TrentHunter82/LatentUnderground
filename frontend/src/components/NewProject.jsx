@@ -1,0 +1,184 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { createProject, launchSwarm } from '../lib/api'
+
+const complexityOptions = ['Simple', 'Medium', 'Complex']
+
+export default function NewProject({ onProjectChange }) {
+  const navigate = useNavigate()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [form, setForm] = useState({
+    name: '',
+    goal: '',
+    project_type: 'Web Application (frontend + backend)',
+    tech_stack: '',
+    complexity: 'Medium',
+    requirements: '',
+    folder_path: '',
+  })
+
+  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    try {
+      const project = await createProject(form)
+      onProjectChange?.()
+      navigate(`/projects/${project.id}`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleLaunchNew = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    try {
+      const project = await createProject(form)
+      await launchSwarm({
+        project_id: project.id,
+        resume: false,
+        no_confirm: true,
+        agent_count: 4,
+        max_phases: 3,
+      })
+      onProjectChange?.()
+      navigate(`/projects/${project.id}`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const inputClass = 'retro-input w-full rounded px-3 py-2 text-sm transition-colors'
+  const labelClass = 'block text-xs font-medium text-zinc-400 mb-1.5 font-mono uppercase tracking-wider'
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="max-w-2xl mx-auto px-4 py-4 sm:p-6">
+        <h1 className="text-xl font-semibold text-zinc-100 mb-1 font-mono">New Swarm Project</h1>
+        <p className="text-sm text-zinc-500 mb-6">Configure and launch a new Claude swarm session.</p>
+
+        {error && (
+          <div className="mb-4 px-4 py-2 rounded bg-signal-red/10 border border-signal-red/30 text-signal-red text-sm font-mono">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className={labelClass}>Project Name</label>
+            <input
+              className={inputClass}
+              placeholder="My Awesome App"
+              value={form.name}
+              onChange={set('name')}
+              required
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>Goal</label>
+            <textarea
+              className={`${inputClass} min-h-20 resize-y`}
+              placeholder="What should this project accomplish?"
+              value={form.goal}
+              onChange={set('goal')}
+              rows={3}
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Project Type</label>
+              <input
+                className={inputClass}
+                placeholder="Web Application"
+                value={form.project_type}
+                onChange={set('project_type')}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Tech Stack</label>
+              <input
+                className={inputClass}
+                placeholder="React + FastAPI + SQLite"
+                value={form.tech_stack}
+                onChange={set('tech_stack')}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Complexity</label>
+            <div className="flex gap-2">
+              {complexityOptions.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, complexity: opt }))}
+                  className={`px-4 py-2 rounded text-sm font-medium transition-colors cursor-pointer font-mono ${
+                    form.complexity === opt
+                      ? 'btn-neon'
+                      : 'bg-retro-grid text-zinc-400 hover:bg-retro-border border border-retro-border'
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Requirements</label>
+            <textarea
+              className={`${inputClass} min-h-20 resize-y`}
+              placeholder="Specific requirements, constraints, or notes..."
+              value={form.requirements}
+              onChange={set('requirements')}
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>Project Folder Path</label>
+            <input
+              className={inputClass}
+              placeholder="C:/Projects/my-app"
+              value={form.folder_path}
+              onChange={set('folder_path')}
+              required
+            />
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-3 pt-2">
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-5 py-2.5 rounded bg-retro-grid hover:bg-retro-border text-zinc-200 text-sm font-medium transition-colors disabled:opacity-50 cursor-pointer border border-retro-border font-mono"
+            >
+              {loading ? 'Creating...' : 'Create Project'}
+            </button>
+            <button
+              type="button"
+              onClick={handleLaunchNew}
+              disabled={loading}
+              className="btn-neon px-5 py-2.5 rounded text-sm disabled:opacity-50"
+            >
+              {loading ? 'Launching...' : 'Create & Launch'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}

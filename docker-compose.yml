@@ -1,0 +1,16 @@
+services:
+  latent-underground:
+    build: .
+    ports:
+      - "${LU_PORT:-8000}:8000"
+    volumes:
+      - lu-data:/app/data
+    environment:
+      - LU_HOST=0.0.0.0
+      - LU_PORT=8000
+      - LU_DB_PATH=/app/data/latent.db
+      - LU_LOG_LEVEL=info
+    restart: unless-stopped
+
+volumes:
+  lu-data:
