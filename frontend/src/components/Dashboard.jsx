@@ -7,6 +7,7 @@ import SignalPanel from './SignalPanel'
 import TaskProgress from './TaskProgress'
 import ActivityFeed from './ActivityFeed'
 import { DashboardSkeleton } from './Skeleton'
+import Sparkline from './Sparkline'
 import ConfirmDialog from './ConfirmDialog'
 import { useToast } from './Toast'
 
@@ -18,19 +19,22 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
   const [status, setStatus] = useState(null)
   const [error, setError] = useState(null)
   const [stats, setStats] = useState(null)
+  const [runs, setRuns] = useState([])
   const [confirmDelete, setConfirmDelete] = useState(false)
   const toast = useToast()
 
   const refresh = useCallback(async () => {
     try {
-      const [proj, st, statsData] = await Promise.all([
+      const [proj, st, statsData, historyData] = await Promise.all([
         getProject(projectId),
         getSwarmStatus(projectId).catch(() => null),
         getProjectStats(projectId).catch(() => null),
+        getSwarmHistory(projectId).catch(() => ({ runs: [] })),
       ])
       setProject(proj)
       setStatus(st)
       setStats(statsData)
+      setRuns(historyData.runs || [])
       setError(null)
     } catch (e) {
       setError(e.message)
@@ -150,6 +154,9 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
                 <span>avg {Math.round(stats.avg_duration_seconds / 60)}m</span>
               )}
               <span>{stats.total_tasks_completed} tasks completed</span>
+              {runs.length > 1 && (
+                <Sparkline data={runs.map(r => r.tasks_completed || 0)} />
+              )}
             </div>
           )}
         </div>

@@ -28,6 +28,7 @@ import { getSwarmHistory } from '../lib/api'
 import { ToastProvider } from '../components/Toast'
 import ProjectView from '../components/ProjectView'
 import Dashboard from '../components/Dashboard'
+import Sparkline from '../components/Sparkline'
 
 function renderProjectView(props = {}) {
   return render(
@@ -190,5 +191,37 @@ describe('Dashboard export button', () => {
 
     URL.createObjectURL = origCreate
     URL.revokeObjectURL = origRevoke
+  })
+})
+
+// --- Sparkline Component ---
+describe('Sparkline', () => {
+  it('renders SVG with polyline for multiple data points', () => {
+    const { container } = render(<Sparkline data={[1, 3, 2, 5, 4]} />)
+    const svg = container.querySelector('svg')
+    expect(svg).toBeInTheDocument()
+    expect(svg).toHaveAttribute('role', 'img')
+    expect(svg).toHaveAttribute('aria-label', 'Sparkline: 5 points')
+    const polyline = container.querySelector('polyline')
+    expect(polyline).toBeInTheDocument()
+    expect(polyline).toHaveAttribute('points')
+  })
+
+  it('renders placeholder line for empty data', () => {
+    const { container } = render(<Sparkline data={[]} />)
+    const svg = container.querySelector('svg')
+    expect(svg).toHaveAttribute('aria-label', 'Sparkline: no data')
+    const line = container.querySelector('line')
+    expect(line).toBeInTheDocument()
+    expect(container.querySelector('polyline')).toBeNull()
+  })
+
+  it('renders dot for single data point', () => {
+    const { container } = render(<Sparkline data={[42]} />)
+    const svg = container.querySelector('svg')
+    expect(svg).toHaveAttribute('aria-label', 'Sparkline: 1 point')
+    const circle = container.querySelector('circle')
+    expect(circle).toBeInTheDocument()
+    expect(container.querySelector('polyline')).toBeNull()
   })
 })
