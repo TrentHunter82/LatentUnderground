@@ -65,28 +65,75 @@
 - [x] Total: 373 tests, zero failures
 - [x] tests-passing.signal created
 
-## Claude-1 - Phase 5 Plan
+## Claude-3 - Phase 6 Test Plan
 
-### Task 1: Environment Configuration (.env support)
-- [ ] Create `app/config.py` with Settings class (env vars with defaults)
-- [ ] Update `database.py` to use config DB_PATH
-- [ ] Update `run.py` to use config HOST/PORT
-- [ ] Update `main.py` CORS to use config CORS_ORIGINS
-- [ ] Create `.env.example`
+### Step 1: Health endpoint tests (test_health.py) - DONE
+- [x] test_health_ok - 200 with status=ok, db=ok
+- [x] test_health_has_all_fields - response has {status, db, app, version}
+- [x] test_health_degraded_on_db_failure - patch aiosqlite.connect, expect 503
 
-### Task 2: Docker Support
-- [ ] Dockerfile: multi-stage (build frontend, serve from backend)
-- [ ] docker-compose.yml with volume for DB
-- [ ] .dockerignore
+### Step 2: Phase 6 hardening tests (test_phase6_hardening.py) - DONE
+- [x] SwarmLaunchValidation: agent_count/max_phases boundary + rejection (5 tests)
+- [x] ProjectCreateValidation: empty name, long name, long goal, empty folder_path (4 tests)
+- [x] BufferLockExists: _buffers_lock type, _MAX_OUTPUT_LINES, MAX_CONTENT_SIZE (3 tests)
 
-### Task 3: Database Backup Endpoint
-- [ ] GET /api/backup → SQLite file download
+### Step 3: Skipped backend tests - DONE
+- [x] test_project_search.py: 10 tests (search, filter, sort, combined) - all skipped
+- [x] test_analytics.py: 4 tests (empty, not found, aggregation, fields) - all skipped
+- [x] test_log_search.py: 7 tests (text, agent, level, combined, pagination) - all skipped
 
-### Task 4: Swarm Templates CRUD
-- [ ] Add swarm_templates table
-- [ ] Pydantic models + CRUD routes
-- [ ] Register router
+### Step 4: Frontend tests - DONE
+- [x] phase6-components.test.jsx: 23 real tests (useHealthCheck 3, Sidebar Search 5, Sidebar Status Filter 3, useNotifications 4, LogViewer Search 3, Analytics Tab 3, Analytics Component 3)
+- [x] phase6-api.test.js: 5 tests (searchProjects, getProjectAnalytics, searchLogs) - skipped
+- [x] Fixed truncated file from Claude-2, completed useNotifications tests
+- [x] Fixed requestPermission test (permission='default' to trigger actual call)
+- [x] Fixed notify test (mock document.hasFocus=true)
+- [x] Fixed Analytics "Total Runs" duplicate text (getAllByText)
 
-### Task 5: Process Reconnection
-- [ ] Startup check for stale running projects
-- [ ] Auto-correct dead PIDs, log results
+### Step 5: Pre-existing test fixes - DONE
+- [x] phase3-components: max_phases default 3→24 (2 assertions)
+- [x] ProjectSettings.jsx: input max=20→24 (HTML5 validation blocked form submit)
+- [x] components.test.jsx: getByText('All')→getAllByText('All') (duplicate button)
+- [x] performance.test.jsx: same "All" button fix
+
+### Step 6: Verification - DONE
+- [x] Backend: 229 passed, 21 skipped = 250 total
+- [x] Frontend: 196 passed, 5 skipped = 201 total
+- [x] Grand total: 425 passing + 26 skipped = 451 tests, zero failures
+- [x] tests-passing.signal created
+
+## Claude-2 - Phase 6 Frontend Features (COMPLETE)
+
+### Task 5: Health Status Indicator - DONE
+- [x] Created useHealthCheck.js hook (polls /api/health every 30s, measures latency)
+- [x] Updated App.jsx header with combined health+WS indicator + hover tooltip
+
+### Task 1: Project Search + Status Filter - DONE
+- [x] Added search input + status filter buttons to Sidebar.jsx
+- [x] Client-side filtering by name/goal + status, "No matching projects" empty state
+
+### Task 4: Browser Notifications - DONE
+- [x] Created useNotifications.js hook, integrated in App.jsx + SwarmControls.jsx
+
+### Task 3: Log Search Improvements - DONE
+- [x] Added search, level filter, copy, download to LogViewer.jsx
+
+### Task 2: Analytics Tab - DONE
+- [x] Created Analytics.jsx (summary chips + 3 SVG charts), added as 7th tab
+- [x] Updated tab count in phase5/accessibility tests (6->7)
+
+### Verification - DONE
+- [x] 23 new tests, 196 total passing, zero failures
+- [x] Production build: 441KB JS + 34KB CSS + 179KB highlight.js
+
+## Claude-1 - Phase 5 Plan (COMPLETE)
+All Phase 5 tasks done. See TASKS.md.
+
+## Claude-1 - Production Hardening Plan
+- [x] 1. Thread safety on output buffers (swarm.py) - added _buffers_lock
+- [x] 2. Input validation on SwarmLaunchRequest (swarm.py) - Field(ge=1, le=16/20)
+- [x] 3. Input validation on ProjectCreate/ProjectUpdate (project.py) - min/max_length
+- [x] 4. Health check with database probe (main.py) - SELECT 1, 503 on failure
+- [x] 5. Fix data loss on swarm stop (swarm.py) - join threads before pop
+- [x] 6. Add logging to silent exception handlers (websocket.py, swarm.py) - logger.debug
+- [x] 7. Run full test suite - 214 backend + 173 frontend = 387 passing, zero failures

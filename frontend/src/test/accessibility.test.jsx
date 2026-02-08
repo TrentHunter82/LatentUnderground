@@ -218,7 +218,7 @@ describe('ProjectView Tab Accessibility', () => {
   it('each tab has role="tab"', async () => {
     await act(async () => { renderProjectView() })
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.length).toBe(6) // Dashboard, History, Output, Files, Logs, Settings
+    expect(tabs.length).toBe(7) // Dashboard, History, Output, Files, Logs, Analytics, Settings
   })
 
   it('active tab has aria-selected="true"', async () => {

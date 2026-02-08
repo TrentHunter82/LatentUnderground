@@ -4,6 +4,7 @@ import FileEditor from './FileEditor'
 import LogViewer from './LogViewer'
 import SwarmHistory from './SwarmHistory'
 import TerminalOutput from './TerminalOutput'
+import Analytics from './Analytics'
 import ProjectSettings from './ProjectSettings'
 import { useParams } from 'react-router-dom'
 import { getProject, getSwarmHistory, getSwarmOutput, updateProjectConfig } from '../lib/api'
@@ -14,6 +15,7 @@ const tabs = [
   { id: 'output', label: 'Output' },
   { id: 'files', label: 'Files' },
   { id: 'logs', label: 'Logs' },
+  { id: 'analytics', label: 'Analytics' },
   { id: 'settings', label: 'Settings' },
 ]
 
@@ -100,6 +102,9 @@ export default function ProjectView({ wsEvents, onProjectChange }) {
           <div className="p-4 h-full">
             <LogViewer projectId={projectId} wsEvents={wsEvents} />
           </div>
+        )}
+        {activeTab === 'analytics' && (
+          <Analytics projectId={projectId} />
         )}
         {activeTab === 'settings' && (
           <div className="p-4 h-full overflow-y-auto">

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { getProjects } from './lib/api'
 import { useWebSocket } from './hooks/useWebSocket'
+import { useHealthCheck } from './hooks/useHealthCheck'
+import { useNotifications } from './hooks/useNotifications'
 import Sidebar from './components/Sidebar'
 import Home from './components/Home'
 import NewProject from './components/NewProject'
@@ -15,6 +17,18 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const { connected } = useWebSocket(setWsEvent)
+  const { status: healthStatus, latency } = useHealthCheck()
+  const { notify } = useNotifications()
+
+  // Fire browser notification on swarm complete/failed
+  useEffect(() => {
+    if (!wsEvent) return
+    if (wsEvent.type === 'swarm_complete') {
+      notify('Swarm Complete', { body: 'All agents have finished successfully.' })
+    } else if (wsEvent.type === 'swarm_failed') {
+      notify('Swarm Failed', { body: wsEvent.error || 'The swarm encountered an error.' })
+    }
+  }, [wsEvent, notify])
 
   const refreshProjects = useCallback(async () => {
     try {
@@ -53,9 +67,29 @@ export default function App() {
 
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <div className={`flex items-center gap-1.5 ${connected ? 'opacity-50' : 'opacity-100'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'led-active' : 'led-danger animate-pulse'}`} />
-              <span className="text-[10px] text-zinc-500 font-mono">{connected ? 'ONLINE' : 'OFFLINE'}</span>
+            <div className="group relative flex items-center gap-1.5 cursor-default">
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                healthStatus === 'healthy' && connected ? 'led-active' :
+                healthStatus === 'slow' ? 'led-warning' :
+                healthStatus === 'degraded' ? 'led-danger' :
+                'led-danger animate-pulse'
+              }`} />
+              <span className="text-[10px] text-zinc-500 font-mono">{
+                healthStatus === 'healthy' && connected ? 'ONLINE' :
+                healthStatus === 'slow' ? 'SLOW' :
+                healthStatus === 'degraded' ? 'DEGRADED' :
+                'OFFLINE'
+              }</span>
+              {/* Tooltip */}
+              <div className="absolute right-0 top-full mt-1 hidden group-hover:block bg-retro-dark border border-retro-border rounded px-2.5 py-1.5 text-[10px] font-mono whitespace-nowrap z-50 shadow-lg">
+                <div className="text-zinc-400">WS: <span className={connected ? 'text-crt-green' : 'text-signal-red'}>{connected ? 'connected' : 'disconnected'}</span></div>
+                <div className="text-zinc-400">API: <span className={
+                  healthStatus === 'healthy' ? 'text-crt-green' :
+                  healthStatus === 'slow' ? 'text-signal-yellow' :
+                  'text-signal-red'
+                }>{healthStatus}</span></div>
+                {latency !== null && <div className="text-zinc-500">Latency: {latency}ms</div>}
+              </div>
             </div>
           </div>
         </div>

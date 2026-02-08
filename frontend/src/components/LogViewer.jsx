@@ -11,10 +11,15 @@ const agentColors = {
   'supervisor': { label: 'text-zinc-400', bg: 'bg-zinc-500/5' },
 }
 
+const levels = ['all', 'INFO', 'WARN', 'ERROR', 'DEBUG']
+const levelRegex = /\b(INFO|WARN|ERROR|DEBUG)\b/
+
 export default function LogViewer({ projectId, wsEvents }) {
   const [logs, setLogs] = useState([])
   const [filter, setFilter] = useState('all')
   const [autoScroll, setAutoScroll] = useState(true)
+  const [searchText, setSearchText] = useState('')
+  const [levelFilter, setLevelFilter] = useState('all')
   const containerRef = useRef(null)
 
   // Load initial logs
@@ -55,11 +60,37 @@ export default function LogViewer({ projectId, wsEvents }) {
     }
   }, [logs, autoScroll])
 
-  const filtered = filter === 'all' ? logs : logs.filter((l) => l.agent === filter)
+  const filtered = logs.filter((l) => {
+    if (filter !== 'all' && l.agent !== filter) return false
+    if (levelFilter !== 'all') {
+      const match = l.text.match(levelRegex)
+      if (!match || match[1] !== levelFilter) return false
+    }
+    if (searchText) {
+      return l.text.toLowerCase().includes(searchText.toLowerCase())
+    }
+    return true
+  })
+
+  const handleCopy = () => {
+    const text = filtered.map((l) => `[${l.agent}] ${l.text}`).join('\n')
+    navigator.clipboard.writeText(text).catch(() => {})
+  }
+
+  const handleDownload = () => {
+    const text = filtered.map((l) => `[${l.agent}] ${l.text}`).join('\n')
+    const blob = new Blob([text], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `logs-${projectId}-${Date.now()}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="retro-panel border border-retro-border rounded flex flex-col h-full">
-      {/* Header */}
+      {/* Agent filter row */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-retro-border flex-wrap">
         <button
           onClick={() => setFilter('all')}
@@ -92,6 +123,51 @@ export default function LogViewer({ projectId, wsEvents }) {
           />
           Auto-scroll
         </label>
+      </div>
+
+      {/* Search + Level filter + actions row */}
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-retro-border flex-wrap">
+        <input
+          type="text"
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          placeholder="Search logs..."
+          className="retro-input px-2 py-1 text-xs w-40"
+        />
+        {levels.map((lvl) => (
+          <button
+            key={lvl}
+            onClick={() => setLevelFilter(lvl)}
+            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer border-0 font-mono ${
+              levelFilter === lvl ? 'bg-retro-grid text-crt-green border border-crt-green/30' : 'text-zinc-500 hover:text-zinc-300 bg-transparent'
+            }`}
+          >
+            {lvl === 'all' ? 'All' : lvl}
+          </button>
+        ))}
+
+        <div className="flex-1" />
+
+        <button
+          onClick={handleCopy}
+          title="Copy logs"
+          className="p-1 rounded text-zinc-500 hover:text-crt-green hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="5" y="5" width="9" height="9" rx="1" />
+            <path d="M11 5V3a1 1 0 00-1-1H3a1 1 0 00-1 1v7a1 1 0 001 1h2" />
+          </svg>
+        </button>
+        <button
+          onClick={handleDownload}
+          title="Download logs"
+          className="p-1 rounded text-zinc-500 hover:text-crt-green hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 2v9M4 8l4 4 4-4" />
+            <path d="M2 13h12" />
+          </svg>
+        </button>
       </div>
 
       {/* Log output */}

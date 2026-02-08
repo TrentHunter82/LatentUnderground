@@ -1,15 +1,19 @@
 import { useState } from 'react'
 import { launchSwarm, stopSwarm } from '../lib/api'
 import { useToast } from './Toast'
+import { useNotifications } from '../hooks/useNotifications'
 import ConfirmDialog from './ConfirmDialog'
 
 export default function SwarmControls({ projectId, status, onAction }) {
   const [loading, setLoading] = useState(false)
   const [confirmStop, setConfirmStop] = useState(false)
   const toast = useToast()
+  const { requestPermission } = useNotifications()
 
   const handleLaunch = async (resume = false) => {
     setLoading(true)
+    // Non-blocking permission request on first launch
+    requestPermission()
     try {
       await launchSwarm({
         project_id: projectId,

@@ -46,7 +46,7 @@ describe('ProjectView tab keyboard navigation', () => {
   it('renders all tab buttons with correct ARIA attributes', async () => {
     await act(async () => { renderProjectView() })
     const tabs = screen.getAllByRole('tab')
-    expect(tabs).toHaveLength(6)
+    expect(tabs).toHaveLength(7)
 
     // First tab (Dashboard) should be selected
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
@@ -89,11 +89,11 @@ describe('ProjectView tab keyboard navigation', () => {
     const tabs = screen.getAllByRole('tab')
 
     // Select last tab (Settings)
-    fireEvent.click(tabs[5])
-    expect(tabs[5]).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(tabs[6])
+    expect(tabs[6]).toHaveAttribute('aria-selected', 'true')
 
     // ArrowRight should wrap to first (Dashboard)
-    fireEvent.keyDown(tabs[5], { key: 'ArrowRight' })
+    fireEvent.keyDown(tabs[6], { key: 'ArrowRight' })
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
   })
 
@@ -103,7 +103,7 @@ describe('ProjectView tab keyboard navigation', () => {
 
     // ArrowLeft from first tab should go to last
     fireEvent.keyDown(tabs[0], { key: 'ArrowLeft' })
-    expect(tabs[5]).toHaveAttribute('aria-selected', 'true')
+    expect(tabs[6]).toHaveAttribute('aria-selected', 'true')
   })
 
   it('jumps to first tab on Home', async () => {
@@ -125,7 +125,7 @@ describe('ProjectView tab keyboard navigation', () => {
 
     // End should go to last tab
     fireEvent.keyDown(tabs[0], { key: 'End' })
-    expect(tabs[5]).toHaveAttribute('aria-selected', 'true')
+    expect(tabs[6]).toHaveAttribute('aria-selected', 'true')
   })
 
   it('tabpanel has aria-labelledby linking to active tab', async () => {

@@ -16,12 +16,25 @@ const statusGlow = {
   created: 'led-warning',
 }
 
+const statusFilters = ['all', 'running', 'stopped', 'created']
+
 export default function Sidebar({ projects, onRefresh, collapsed, onToggle }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
   const activeId = id ? Number(id) : null
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+
+  const filteredProjects = projects.filter((p) => {
+    if (statusFilter !== 'all' && p.status !== statusFilter) return false
+    if (search) {
+      const q = search.toLowerCase()
+      return (p.name || '').toLowerCase().includes(q) || (p.goal || '').toLowerCase().includes(q)
+    }
+    return true
+  })
 
   return (
     <>
@@ -64,6 +77,30 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle }) {
           </button>
         </div>
 
+        {/* Search + Filter */}
+        <div className="px-3 pb-2 space-y-2">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search projects..."
+            className="retro-input w-full px-2.5 py-1.5 text-xs"
+          />
+          <div className="flex gap-1">
+            {statusFilters.map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer border-0 font-mono capitalize ${
+                  statusFilter === s ? 'bg-retro-grid text-crt-green border border-crt-green/30' : 'text-zinc-500 hover:text-zinc-300 bg-transparent'
+                }`}
+              >
+                {s === 'all' ? 'All' : s}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Project List */}
         <div className="flex-1 overflow-y-auto px-2">
           <div className="px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-medium font-mono">
@@ -74,7 +111,12 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle }) {
               No projects yet
             </div>
           )}
-          {projects.map((p) => (
+          {filteredProjects.length === 0 && projects.length > 0 && (
+            <div className="px-3 py-4 text-sm text-zinc-600 text-center">
+              No matching projects
+            </div>
+          )}
+          {filteredProjects.map((p) => (
             <div key={p.id} className="group relative mb-0.5">
               <Link
                 to={`/projects/${p.id}`}
