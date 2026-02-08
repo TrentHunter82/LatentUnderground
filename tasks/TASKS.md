@@ -5,8 +5,8 @@
 - [x] Add Docker support: Dockerfile + docker-compose.yml for single-command deployment
 - [x] Add environment configuration: .env file support for host, port, database path
 - [x] Add database backup/export endpoint (GET /api/backup -> SQLite dump)
-- [ ] Add swarm templates table and CRUD endpoints (save/load project configs as presets)
-- [ ] Add process reconnection: detect and reattach to running subprocesses after restart
+- [x] Add swarm templates table and CRUD endpoints (save/load project configs as presets)
+- [x] Add process reconnection: detect and reattach to running subprocesses after restart
 - [x] Signal: Create .claude/signals/backend-ready.signal
 
 ## Claude-2 [Frontend/Interface] - UX and advanced features
@@ -37,5 +37,5 @@
 
 ## Completion Criteria
 - [x] Application deployable via Docker with single command
-- [ ] Swarm templates can be saved and loaded
+- [x] Swarm templates can be saved and loaded
 - [x] All tests pass (backend + frontend, including new Phase 5 tests)

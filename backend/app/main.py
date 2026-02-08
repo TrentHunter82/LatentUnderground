@@ -1,14 +1,17 @@
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+import aiosqlite
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from . import config
-from .database import init_db
-from .routes import projects, swarm, files, logs, websocket, backup
+from .database import DB_PATH, init_db
+from .routes import projects, swarm, files, logs, websocket, backup, templates
+from .routes.swarm import _pid_alive
 from .routes.watcher import router as watcher_router, cleanup_watchers
 
 logger = logging.getLogger("latent")
@@ -29,6 +32,49 @@ def _ensure_directories():
         (project_root / subdir).mkdir(parents=True, exist_ok=True)
 
 
+async def _reconcile_running_projects():
+    """Check projects marked 'running' and reconcile with actual process state.
+
+    On restart, we can't reattach to subprocess pipes, but we can:
+    - Mark dead-PID projects as stopped and close orphan swarm_runs
+    - Keep alive-PID projects as running (user can stop them normally)
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        rows = await (await db.execute(
+            "SELECT id, name, swarm_pid FROM projects WHERE status = 'running'"
+        )).fetchall()
+
+        for row in rows:
+            pid = row["swarm_pid"]
+            project_id = row["id"]
+
+            if _pid_alive(pid):
+                logger.info(
+                    "Project %d (%s) has alive process pid=%s (cannot reattach pipes)",
+                    project_id, row["name"], pid,
+                )
+            else:
+                logger.warning(
+                    "Project %d (%s) had stale pid=%s, marking as stopped",
+                    project_id, row["name"], pid,
+                )
+                await db.execute(
+                    "UPDATE projects SET status = 'stopped', swarm_pid = NULL, "
+                    "updated_at = datetime('now') WHERE id = ?",
+                    (project_id,),
+                )
+                await db.execute(
+                    "UPDATE swarm_runs SET ended_at = datetime('now'), status = 'crashed' "
+                    "WHERE project_id = ? AND status = 'running'",
+                    (project_id,),
+                )
+
+        if rows:
+            await db.commit()
+            logger.info("Reconciled %d running project(s) on startup", len(rows))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logging.basicConfig(
@@ -38,6 +84,7 @@ async def lifespan(app: FastAPI):
     )
     _ensure_directories()
     await init_db()
+    await _reconcile_running_projects()
     logger.info("Latent Underground started")
     yield
     await swarm.cancel_drain_tasks()
@@ -67,6 +114,7 @@ app.include_router(logs.router)
 app.include_router(websocket.router)
 app.include_router(watcher_router)
 app.include_router(backup.router)
+app.include_router(templates.router)
 
 
 @app.get("/api/health")
