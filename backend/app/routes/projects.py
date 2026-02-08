@@ -33,8 +33,33 @@ async def create_project(project: ProjectCreate, db: aiosqlite.Connection = Depe
 
 
 @router.get("", response_model=list[ProjectOut])
-async def list_projects(db: aiosqlite.Connection = Depends(get_db)):
-    rows = await (await db.execute("SELECT * FROM projects ORDER BY created_at DESC, id DESC")).fetchall()
+async def list_projects(
+    search: str = "",
+    status: str | None = None,
+    sort: str = "created_at",
+    db: aiosqlite.Connection = Depends(get_db),
+):
+    """List projects with optional search, status filter, and sort."""
+    conditions = []
+    params = []
+
+    if search:
+        conditions.append("(name LIKE ? OR goal LIKE ?)")
+        like = f"%{search}%"
+        params.extend([like, like])
+
+    if status:
+        conditions.append("status = ?")
+        params.append(status)
+
+    where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    # Whitelist sort columns to prevent SQL injection
+    allowed_sorts = {"name": "name ASC", "updated_at": "updated_at DESC", "created_at": "created_at DESC"}
+    order = allowed_sorts.get(sort, "created_at DESC")
+
+    query = f"SELECT * FROM projects{where} ORDER BY {order}, id DESC"
+    rows = await (await db.execute(query, params)).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -101,6 +126,65 @@ async def project_stats(project_id: int, db: aiosqlite.Connection = Depends(get_
         "total_runs": total_runs,
         "avg_duration_seconds": avg_duration,
         "total_tasks_completed": total_tasks,
+    }
+
+
+@router.get("/{project_id}/analytics")
+async def project_analytics(project_id: int, db: aiosqlite.Connection = Depends(get_db)):
+    """Get detailed analytics for a project: run trends, efficiency, phase durations."""
+    row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Total runs
+    total_runs = (await (await db.execute(
+        "SELECT COUNT(*) as cnt FROM swarm_runs WHERE project_id = ?", (project_id,)
+    )).fetchone())["cnt"]
+
+    # Average duration (completed runs with both timestamps)
+    avg_row = await (await db.execute(
+        """SELECT AVG(
+            CAST((julianday(ended_at) - julianday(started_at)) * 86400 AS INTEGER)
+        ) as avg_duration
+        FROM swarm_runs
+        WHERE project_id = ? AND ended_at IS NOT NULL""",
+        (project_id,),
+    )).fetchone()
+    avg_duration = round(avg_row["avg_duration"]) if avg_row["avg_duration"] is not None else None
+
+    # Total tasks completed
+    total_tasks = (await (await db.execute(
+        "SELECT COALESCE(SUM(tasks_completed), 0) as total FROM swarm_runs WHERE project_id = ?",
+        (project_id,),
+    )).fetchone())["total"]
+
+    # Success rate (completed vs total finished runs)
+    finished = (await (await db.execute(
+        "SELECT COUNT(*) as cnt FROM swarm_runs WHERE project_id = ? AND ended_at IS NOT NULL",
+        (project_id,),
+    )).fetchone())["cnt"]
+    completed = (await (await db.execute(
+        "SELECT COUNT(*) as cnt FROM swarm_runs WHERE project_id = ? AND status = 'completed'",
+        (project_id,),
+    )).fetchone())["cnt"]
+    success_rate = round((completed / finished) * 100, 1) if finished > 0 else None
+
+    # Run history for trends (last 20 runs)
+    trend_rows = await (await db.execute(
+        """SELECT started_at, ended_at, status, tasks_completed
+           FROM swarm_runs WHERE project_id = ?
+           ORDER BY started_at DESC, id DESC LIMIT 20""",
+        (project_id,),
+    )).fetchall()
+    run_trends = [dict(r) for r in trend_rows]
+
+    return {
+        "project_id": project_id,
+        "total_runs": total_runs,
+        "avg_duration": avg_duration,
+        "total_tasks": total_tasks,
+        "success_rate": success_rate,
+        "run_trends": run_trends,
     }
 
 

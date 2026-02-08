@@ -222,7 +222,7 @@ describe('ProjectSettings', () => {
   it('renders with default values', () => {
     render(<ProjectSettings projectId={1} onSave={vi.fn()} />)
     expect(screen.getByLabelText('Agent Count')).toHaveValue(4)
-    expect(screen.getByLabelText('Max Phases')).toHaveValue(3)
+    expect(screen.getByLabelText('Max Phases')).toHaveValue(24)
   })
 
   it('renders with initial config', () => {
@@ -250,7 +250,7 @@ describe('ProjectSettings', () => {
 
     expect(onSave).toHaveBeenCalledWith(42, expect.objectContaining({
       agent_count: 4,
-      max_phases: 3,
+      max_phases: 24,
     }))
   })
 

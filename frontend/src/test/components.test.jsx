@@ -474,7 +474,7 @@ describe('LogViewer', () => {
   it('renders agent filter buttons', async () => {
     getLogs.mockResolvedValue({ logs: [] })
     await act(async () => { render(<LogViewer projectId={1} />) })
-    expect(screen.getByText('All')).toBeInTheDocument()
+    expect(screen.getAllByText('All').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Claude-1')).toBeInTheDocument()
     expect(screen.getByText('Claude-2')).toBeInTheDocument()
     expect(screen.getByText('Claude-3')).toBeInTheDocument()

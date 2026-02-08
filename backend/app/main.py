@@ -1,4 +1,5 @@
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -6,7 +7,7 @@ import aiosqlite
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from . import config
 from .database import DB_PATH, init_db
@@ -15,6 +16,8 @@ from .routes.swarm import _pid_alive
 from .routes.watcher import router as watcher_router, cleanup_watchers
 
 logger = logging.getLogger("latent")
+
+_start_time = time.time()
 
 # Path to the built frontend
 FRONTEND_DIST = config.FRONTEND_DIST
@@ -117,9 +120,24 @@ app.include_router(backup.router)
 app.include_router(templates.router)
 
 
-@app.get("/api/health")
+@app.get("/api/health", tags=["system"])
 async def health():
-    return {"status": "ok", "app": "Latent Underground", "version": "0.1.0"}
+    """System health check: database status, active processes, uptime, and version."""
+    uptime_seconds = int(time.time() - _start_time)
+    base = {"app": "Latent Underground", "version": "0.1.0", "uptime_seconds": uptime_seconds}
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("SELECT 1")
+            db.row_factory = aiosqlite.Row
+            active = (await (await db.execute(
+                "SELECT COUNT(*) as cnt FROM projects WHERE status = 'running'"
+            )).fetchone())["cnt"]
+        return {**base, "status": "ok", "db": "ok", "active_processes": active}
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={**base, "status": "degraded", "db": "error", "active_processes": 0},
+        )
 
 
 # --- Serve frontend static files ---

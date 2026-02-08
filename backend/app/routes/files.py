@@ -51,7 +51,11 @@ async def read_file(path: str, project_id: int, db: aiosqlite.Connection = Depen
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
-    return {"path": normalized, "content": file_path.read_text(encoding="utf-8")}
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read file: {e}")
+    return {"path": normalized, "content": content}
 
 
 @router.put("/{path:path}")
@@ -76,7 +80,10 @@ async def write_file(path: str, body: FileWriteRequest, db: aiosqlite.Connection
 
     file_path = Path(dict(row)["folder_path"]) / normalized
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text(body.content, encoding="utf-8")
+    try:
+        file_path.write_text(body.content, encoding="utf-8")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to write file: {e}")
     _last_write[key] = now
 
     logger.info("File written: %s (project %d, %d bytes)", normalized, body.project_id, len(body.content))

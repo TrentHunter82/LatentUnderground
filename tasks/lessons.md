@@ -96,6 +96,26 @@ After ANY correction, failed attempt, or discovery, add a lesson here.
 - Root cause: uvicorn's WatchFiles reloader on Windows runs the child server process with `SelectorEventLoop`, which does NOT support `asyncio.create_subprocess_exec`. Only `ProactorEventLoop` supports async subprocesses on Windows.
 - Rule: On Windows, use `subprocess.Popen` + daemon threads for output draining instead of `asyncio.create_subprocess_exec`. This works regardless of the event loop type. Reserve async subprocess calls for Linux/macOS only.
 
+### [Claude-3] When changing production code's mock target, update ALL test files that mock it
+- What happened: Claude-1 migrated swarm.py from asyncio.create_subprocess_exec to subprocess.Popen, but only updated 4 of 8 test files. The remaining 4 files (test_e2e, test_workflow_integration, test_swarm_history, test_project_stats) had 10 stale mocks patching the wrong target - meaning real PowerShell subprocesses ran during tests.
+- Root cause: grep for the old pattern was only done in the files that were explicitly changed, not across the entire test suite
+- Rule: After changing a mock target in production code, ALWAYS grep for the old pattern across ALL test files: `grep -r "old_pattern" tests/`. Fix every occurrence. Add buffer cleanup to conftest if the mock involves module-level state.
+
+### [Claude-3] MagicMock streams need readline.return_value = b"" for drain thread termination
+- What happened: Tests using MagicMock for subprocess stdout/stderr caused drain threads to run infinitely because MagicMock().readline() returns a truthy MagicMock instead of b"" (EOF). This leaked garbage into _output_buffers, causing test_output_empty_buffer to fail.
+- Root cause: iter(stream.readline, b"") sentinel comparison fails because MagicMock != b"". The drain thread never exits.
+- Rule: When mocking subprocess streams used by drain threads, either (1) add conftest cleanup for _output_buffers with cancel_drain_tasks() in teardown, or (2) set mock_process.stdout.readline.return_value = b"" to make drain threads terminate immediately.
+
+### [Claude-3] HTML5 input max constraint blocks form submission silently
+- What happened: ProjectSettings form submit tests failed (onSave never called, "Saving..." never shown) after max_phases default changed from 3 to 24
+- Root cause: The `<input type="number" max={20}>` with `value={24}` fails HTML5 constraint validation. Form onSubmit is never called because the browser blocks it silently.
+- Rule: When changing a numeric default, also update the corresponding HTML input min/max constraints. Verify: is the default value within [min, max]? This is invisible in manual testing (browsers show a tooltip) but breaks automated tests completely.
+
+### [Claude-3] LogViewer gained a second toolbar with "All" button, breaking getByText('All')
+- What happened: Tests using `getByText('All')` failed with "found multiple elements" after LogViewer added a log-level filter bar with its own "All" button
+- Root cause: Agent filter bar has "All" button and the new level filter bar also has "All" button. `getByText` expects exactly one match.
+- Rule: Use `getAllByText('All')[0]` or `getAllByText('All').length >= 1` when the same text can appear in multiple UI sections. Prefer `getByRole` with `name` option for more resilient selectors.
+
 ### [Claude-3] vi.mock must include ALL exports used by child components, not just the tested component
 - What happened: ProjectView tab accessibility tests failed with "No startWatch export" because the vi.mock for ../lib/api didn't include startWatch, which Dashboard (a child of ProjectView) imports
 - Root cause: vi.mock replaces the entire module. Any export used by any child component in the render tree must be mocked, not just what the direct component uses

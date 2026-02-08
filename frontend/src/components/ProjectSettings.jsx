@@ -51,7 +51,7 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
             id="maxPhases"
             type="number"
             min={1}
-            max={20}
+            max={24}
             value={maxPhases}
             onChange={(e) => setMaxPhases(Number(e.target.value))}
             className="retro-input w-full px-3 py-2 rounded text-sm"

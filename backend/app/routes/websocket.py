@@ -1,6 +1,9 @@
 import asyncio
 import json
+import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+logger = logging.getLogger("latent.websocket")
 
 router = APIRouter()
 
@@ -24,6 +27,7 @@ class ConnectionManager:
             try:
                 await ws.send_text(message)
             except Exception:
+                logger.debug("WebSocket send failed, removing connection", exc_info=True)
                 disconnected.append(ws)
         for ws in disconnected:
             self.disconnect(ws)

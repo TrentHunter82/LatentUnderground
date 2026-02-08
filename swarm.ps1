@@ -1,6 +1,6 @@
 # Claude Swarm v3 - Autonomous Multi-Agent Launcher
 # Features: Orchestration rules, self-improvement loop, supervisor, signals, auto-recovery, auto-chain
-# Usage: .\swarm.ps1 [-Resume] [-NoConfirm] [-AgentCount 4] [-MaxPhases 3]
+# Usage: .\swarm.ps1 [-Resume] [-NoConfirm] [-AgentCount 4] [-MaxPhases 24]
 # Double-click: Use swarm.bat wrapper
 # Auto-chain: When a phase completes, supervisor automatically launches the next swarm
 #             up to MaxPhases (default 24). Override with -MaxPhases N.

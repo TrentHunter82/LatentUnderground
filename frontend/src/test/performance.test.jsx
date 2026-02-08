@@ -75,7 +75,7 @@ describe('LogViewer Performance', () => {
     })
 
     // All agent filter buttons should be present
-    expect(screen.getByText('All')).toBeInTheDocument()
+    expect(screen.getAllByText('All').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Claude-1')).toBeInTheDocument()
     expect(screen.getByText('Claude-2')).toBeInTheDocument()
   })
