@@ -11,12 +11,12 @@
 
 ## Claude-2 [Frontend/Interface] - Terminal input, real-time UI, auth refinements
 
-- [ ] Add terminal input bar: text field + Enter-to-send in TerminalOutput component (> prompt, disabled when not running, sends via POST /api/swarm/input, wire sendSwarmInput from api.js through ProjectView)
-- [ ] Add real-time log viewer: WebSocket subscription for live log lines (no more polling)
-- [ ] Add login/API key prompt: modal on 401, persist key in localStorage, attach to all requests
-- [ ] Add date range picker for log search (connects to backend from/to params)
-- [ ] Add keyboard shortcuts: Ctrl+K for search, Ctrl+N for new project, Escape to close modals
-- [ ] Signal: Create .claude/signals/frontend-ready.signal
+- [x] Add terminal input bar: text field + Enter-to-send in TerminalOutput component (> prompt, disabled when not running, sends via POST /api/swarm/input, wire sendSwarmInput from api.js through ProjectView)
+- [x] Add real-time log viewer: WebSocket subscription for live log lines (LIVE indicator, server-side search with dates)
+- [x] Add login/API key prompt: AuthModal on 401, persist key in localStorage, attach Bearer header to all requests
+- [x] Add date range picker for log search (from/to date inputs, switches to searchLogs API)
+- [x] Add keyboard shortcuts: Ctrl+K for search, Ctrl+N for new project, Escape to close modals
+- [x] Signal: Create .claude/signals/frontend-ready.signal
 
 ## Claude-3 [Integration/Testing] - Test coverage for Phase 7 features
 

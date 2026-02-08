@@ -80,6 +80,7 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle }) {
         {/* Search + Filter */}
         <div className="px-3 pb-2 space-y-2">
           <input
+            id="sidebar-search"
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}

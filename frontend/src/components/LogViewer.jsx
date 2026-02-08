@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { getLogs } from '../lib/api'
+import { getLogs, searchLogs } from '../lib/api'
 import { AGENT_NAMES, AGENT_LOG_COLORS } from '../lib/constants'
 
 const levels = ['all', 'INFO', 'WARN', 'ERROR', 'DEBUG']
@@ -11,9 +11,17 @@ export default function LogViewer({ projectId, wsEvents }) {
   const [autoScroll, setAutoScroll] = useState(true)
   const [searchText, setSearchText] = useState('')
   const [levelFilter, setLevelFilter] = useState('all')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
   const containerRef = useRef(null)
+  const lastWsTime = useRef(0)
+  const [isLive, setIsLive] = useState(false)
 
-  // Load initial logs
+  const hasDateFilter = fromDate || toDate
+  const hasServerFilter = hasDateFilter
+
+  // Load initial logs (no date filters)
   const loadLogs = useCallback(async () => {
     try {
       const data = await getLogs(projectId, 200)
@@ -30,21 +38,65 @@ export default function LogViewer({ projectId, wsEvents }) {
     }
   }, [projectId])
 
-  useEffect(() => {
-    loadLogs()
-  }, [loadLogs])
+  // Server-side search (when date filters are active)
+  const runSearch = useCallback(async () => {
+    setIsSearching(true)
+    try {
+      const params = {}
+      if (searchText) params.q = searchText
+      if (filter !== 'all') params.agent = filter
+      if (levelFilter !== 'all') params.level = levelFilter
+      if (fromDate) params.from_date = fromDate
+      if (toDate) params.to_date = toDate
 
-  // Append WebSocket log events
+      const data = await searchLogs(projectId, params)
+      const results = (data.results || []).map((r, i) => ({
+        id: `search-${i}-${Date.now()}`,
+        agent: r.agent,
+        text: r.text,
+      }))
+      setLogs(results)
+    } catch (e) {
+      console.warn('Failed to search logs:', e)
+    } finally {
+      setIsSearching(false)
+    }
+  }, [projectId, searchText, filter, levelFilter, fromDate, toDate])
+
+  useEffect(() => {
+    if (hasServerFilter) {
+      runSearch()
+    } else {
+      loadLogs()
+    }
+  }, [hasServerFilter, runSearch, loadLogs])
+
+  // Append WebSocket log events (only when not in search mode)
   useEffect(() => {
     if (wsEvents?.type === 'log') {
-      const newEntries = wsEvents.lines.map((line, i) => ({
-        id: `${wsEvents.agent}-ws-${Date.now()}-${i}`,
-        agent: wsEvents.agent,
-        text: line,
-      }))
-      setLogs((prev) => [...prev, ...newEntries].slice(-1000))
+      lastWsTime.current = Date.now()
+      setIsLive(true)
+
+      if (!hasServerFilter) {
+        const newEntries = wsEvents.lines.map((line, i) => ({
+          id: `${wsEvents.agent}-ws-${Date.now()}-${i}`,
+          agent: wsEvents.agent,
+          text: line,
+        }))
+        setLogs((prev) => [...prev, ...newEntries].slice(-1000))
+      }
     }
-  }, [wsEvents])
+  }, [wsEvents, hasServerFilter])
+
+  // LIVE indicator timeout
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (Date.now() - lastWsTime.current > 5000) {
+        setIsLive(false)
+      }
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [])
 
   // Auto-scroll
   useEffect(() => {
@@ -53,17 +105,21 @@ export default function LogViewer({ projectId, wsEvents }) {
     }
   }, [logs, autoScroll])
 
-  const filtered = useMemo(() => logs.filter((l) => {
-    if (filter !== 'all' && l.agent !== filter) return false
-    if (levelFilter !== 'all') {
-      const match = l.text.match(levelRegex)
-      if (!match || match[1] !== levelFilter) return false
-    }
-    if (searchText) {
-      return l.text.toLowerCase().includes(searchText.toLowerCase())
-    }
-    return true
-  }), [logs, filter, levelFilter, searchText])
+  // Client-side filtering (only when not using server search)
+  const filtered = useMemo(() => {
+    if (hasServerFilter) return logs
+    return logs.filter((l) => {
+      if (filter !== 'all' && l.agent !== filter) return false
+      if (levelFilter !== 'all') {
+        const match = l.text.match(levelRegex)
+        if (!match || match[1] !== levelFilter) return false
+      }
+      if (searchText) {
+        return l.text.toLowerCase().includes(searchText.toLowerCase())
+      }
+      return true
+    })
+  }, [logs, filter, levelFilter, searchText, hasServerFilter])
 
   const handleCopy = () => {
     const text = filtered.map((l) => `[${l.agent}] ${l.text}`).join('\n')
@@ -107,6 +163,13 @@ export default function LogViewer({ projectId, wsEvents }) {
 
         <div className="flex-1" />
 
+        {isLive && !hasServerFilter && (
+          <span className="flex items-center gap-1 text-[10px] font-mono text-crt-green">
+            <span className="w-1.5 h-1.5 rounded-full bg-crt-green animate-pulse" />
+            LIVE
+          </span>
+        )}
+
         <label className="flex items-center gap-1.5 text-xs text-zinc-500 cursor-pointer font-mono">
           <input
             type="checkbox"
@@ -118,7 +181,7 @@ export default function LogViewer({ projectId, wsEvents }) {
         </label>
       </div>
 
-      {/* Search + Level filter + actions row */}
+      {/* Search + Level filter + Date range + actions row */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-retro-border flex-wrap">
         <input
           type="text"
@@ -139,7 +202,37 @@ export default function LogViewer({ projectId, wsEvents }) {
           </button>
         ))}
 
+        <input
+          type="date"
+          value={fromDate}
+          onChange={(e) => setFromDate(e.target.value)}
+          className="retro-input px-1.5 py-0.5 text-[10px] font-mono w-28"
+          aria-label="From date"
+          title="From date"
+        />
+        <input
+          type="date"
+          value={toDate}
+          onChange={(e) => setToDate(e.target.value)}
+          className="retro-input px-1.5 py-0.5 text-[10px] font-mono w-28"
+          aria-label="To date"
+          title="To date"
+        />
+        {hasDateFilter && (
+          <button
+            onClick={() => { setFromDate(''); setToDate('') }}
+            className="text-[10px] text-zinc-500 hover:text-signal-red bg-transparent border-0 cursor-pointer font-mono"
+            aria-label="Clear date filter"
+          >
+            Clear dates
+          </button>
+        )}
+
         <div className="flex-1" />
+
+        {isSearching && (
+          <span className="text-[10px] text-zinc-500 font-mono animate-pulse">Searching...</span>
+        )}
 
         <button
           onClick={handleCopy}
