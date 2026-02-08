@@ -284,6 +284,7 @@ vi.mock('../lib/api', () => ({
   createProject: vi.fn(),
   getLogs: vi.fn().mockResolvedValue({ logs: [] }),
   deleteProject: vi.fn(),
+  getTemplates: vi.fn(() => Promise.resolve([])),
 }))
 
 import { launchSwarm, stopSwarm, createProject, getLogs, deleteProject } from '../lib/api'

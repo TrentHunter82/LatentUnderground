@@ -50,20 +50,21 @@ class TestSSEStreaming:
 
         _output_buffers.pop(project_id, None)
 
-    async def test_stream_done_when_no_drain_tasks(self):
-        """Generator should emit done event when buffer is empty and no drain tasks."""
-        from app.routes.swarm import _output_buffers, _drain_tasks
+    async def test_stream_done_when_no_drain_threads(self):
+        """Generator should emit done event when buffer is empty and no drain threads."""
+        from app.routes.swarm import _output_buffers, _drain_threads
 
         project_id = 43
         _output_buffers[project_id] = []
-        # Ensure no drain tasks for this project
-        _drain_tasks.pop(project_id, None)
+        # Ensure no drain threads for this project
+        _drain_threads.pop(project_id, None)
 
-        # With no drain tasks, the generator sends a done event (not keepalive)
+        # With no drain threads, the generator sends a done event (not keepalive)
         buf = _output_buffers.get(project_id, [])
         offset = 0
         if offset >= len(buf):
-            if project_id not in _drain_tasks or not _drain_tasks[project_id]:
+            threads = _drain_threads.get(project_id, [])
+            if not threads or not any(t.is_alive() for t in threads):
                 event = f"data: {json.dumps({'type': 'done'})}\n\n"
             else:
                 event = ": keepalive\n\n"
@@ -87,10 +88,10 @@ class TestSSEStreaming:
     async def test_stream_endpoint_exists(self, client, created_project):
         """SSE endpoint should exist and return buffered lines then done event."""
         pid = created_project["id"]
-        from app.routes.swarm import _output_buffers, _drain_tasks
+        from app.routes.swarm import _output_buffers, _drain_threads
         _output_buffers[pid] = ["test line"]
-        # Ensure no drain tasks so generator self-terminates
-        _drain_tasks.pop(pid, None)
+        # Ensure no drain threads so generator self-terminates
+        _drain_threads.pop(pid, None)
 
         resp = await client.get(f"/api/swarm/output/{pid}/stream")
         assert resp.status_code == 200

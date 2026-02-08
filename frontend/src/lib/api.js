@@ -42,6 +42,9 @@ export const getProjectStats = (projectId) => request(`/projects/${projectId}/st
 export const updateProjectConfig = (projectId, config) =>
   request(`/projects/${projectId}/config`, { method: 'PATCH', body: JSON.stringify(config) })
 
+// Templates
+export const getTemplates = () => request('/templates')
+
 // Watchers
 export const startWatch = (projectId) => request(`/watch/${projectId}`, { method: 'POST' })
 export const stopWatch = (projectId) => request(`/unwatch/${projectId}`, { method: 'POST' })

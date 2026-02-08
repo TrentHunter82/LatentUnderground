@@ -2,7 +2,7 @@
 
 import json
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 class TestProjectStats:
@@ -35,11 +35,13 @@ class TestProjectStats:
         })
         pid = resp.json()["id"]
 
-        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
-            mock_process = AsyncMock()
+        with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
             mock_process.pid = 100
-            mock_process.wait = AsyncMock()
-            mock_exec.return_value = mock_process
+            mock_process.stdout = MagicMock()
+            mock_process.stderr = MagicMock()
+            mock_process.wait = MagicMock()
+            mock_popen.return_value = mock_process
 
             # Run 1: launch + stop
             await client.post("/api/swarm/launch", json={"project_id": pid})
@@ -61,10 +63,12 @@ class TestProjectStats:
         })
         pid = resp.json()["id"]
 
-        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
-            mock_process = AsyncMock()
+        with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
             mock_process.pid = 200
-            mock_exec.return_value = mock_process
+            mock_process.stdout = MagicMock()
+            mock_process.stderr = MagicMock()
+            mock_popen.return_value = mock_process
 
             await client.post("/api/swarm/launch", json={"project_id": pid})
             await client.post("/api/swarm/launch", json={"project_id": pid})

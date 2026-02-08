@@ -22,6 +22,7 @@ vi.mock('../lib/api', () => ({
   stopSwarm: vi.fn(),
   getLogs: vi.fn(() => Promise.resolve({ logs: [] })),
   createProject: vi.fn(),
+  getTemplates: vi.fn(() => Promise.resolve([])),
 }))
 
 import { getSwarmHistory } from '../lib/api'

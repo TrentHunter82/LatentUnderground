@@ -91,6 +91,11 @@ After ANY correction, failed attempt, or discovery, add a lesson here.
 - Root cause: Component was coded with an `initialConfig` prop but the parent never provided it
 - Rule: When integrating a component that supports pre-population props, trace the data path end-to-end: DB -> API -> parent component -> child prop. Verify with: does the saved value round-trip?
 
+### [Claude-1] asyncio.create_subprocess_exec fails on Windows under uvicorn's reloader
+- What happened: POST /api/swarm/launch returned 500 Internal Server Error with `NotImplementedError` from `_make_subprocess_transport`
+- Root cause: uvicorn's WatchFiles reloader on Windows runs the child server process with `SelectorEventLoop`, which does NOT support `asyncio.create_subprocess_exec`. Only `ProactorEventLoop` supports async subprocesses on Windows.
+- Rule: On Windows, use `subprocess.Popen` + daemon threads for output draining instead of `asyncio.create_subprocess_exec`. This works regardless of the event loop type. Reserve async subprocess calls for Linux/macOS only.
+
 ### [Claude-3] vi.mock must include ALL exports used by child components, not just the tested component
 - What happened: ProjectView tab accessibility tests failed with "No startWatch export" because the vi.mock for ../lib/api didn't include startWatch, which Dashboard (a child of ProjectView) imports
 - Root cause: vi.mock replaces the entire module. Any export used by any child component in the render tree must be mocked, not just what the direct component uses

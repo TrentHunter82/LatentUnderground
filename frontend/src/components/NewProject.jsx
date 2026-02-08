@@ -1,22 +1,57 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createProject, launchSwarm } from '../lib/api'
+import { createProject, launchSwarm, getTemplates } from '../lib/api'
 
 const complexityOptions = ['Simple', 'Medium', 'Complex']
+
+const defaultForm = {
+  name: '',
+  goal: '',
+  project_type: 'Web Application (frontend + backend)',
+  tech_stack: '',
+  complexity: 'Medium',
+  requirements: '',
+  folder_path: '',
+}
 
 export default function NewProject({ onProjectChange }) {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [form, setForm] = useState({
-    name: '',
-    goal: '',
-    project_type: 'Web Application (frontend + backend)',
-    tech_stack: '',
-    complexity: 'Medium',
-    requirements: '',
-    folder_path: '',
-  })
+  const [templates, setTemplates] = useState([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [templateConfig, setTemplateConfig] = useState(null)
+  const [form, setForm] = useState({ ...defaultForm })
+
+  useEffect(() => {
+    getTemplates().then(setTemplates).catch(() => {})
+  }, [])
+
+  const handleTemplateChange = (e) => {
+    const id = e.target.value
+    setSelectedTemplateId(id)
+
+    if (!id) {
+      setForm({ ...defaultForm })
+      setTemplateConfig(null)
+      return
+    }
+
+    const tmpl = templates.find((t) => String(t.id) === id)
+    if (!tmpl) return
+
+    const cfg = tmpl.config || {}
+    setTemplateConfig(cfg)
+
+    // Populate form fields from template config where applicable
+    setForm((f) => ({
+      ...f,
+      project_type: cfg.project_type || f.project_type,
+      tech_stack: cfg.tech_stack || f.tech_stack,
+      complexity: cfg.complexity || f.complexity,
+      requirements: cfg.requirements || f.requirements,
+    }))
+  }
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
@@ -45,8 +80,8 @@ export default function NewProject({ onProjectChange }) {
         project_id: project.id,
         resume: false,
         no_confirm: true,
-        agent_count: 4,
-        max_phases: 3,
+        agent_count: templateConfig?.agent_count ?? 4,
+        max_phases: templateConfig?.max_phases ?? 3,
       })
       onProjectChange?.()
       navigate(`/projects/${project.id}`)
@@ -73,6 +108,31 @@ export default function NewProject({ onProjectChange }) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {templates.length > 0 && (
+            <div>
+              <label className={labelClass}>Start from Template</label>
+              <select
+                value={selectedTemplateId}
+                onChange={handleTemplateChange}
+                className={`${inputClass} cursor-pointer`}
+              >
+                <option value="">Custom (no template)</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}{t.description ? ` — ${t.description}` : ''}
+                  </option>
+                ))}
+              </select>
+              {templateConfig && (
+                <p className="text-xs text-zinc-600 mt-1 font-mono">
+                  {templateConfig.agent_count && `${templateConfig.agent_count} agents`}
+                  {templateConfig.agent_count && templateConfig.max_phases && ' · '}
+                  {templateConfig.max_phases && `${templateConfig.max_phases} phases`}
+                </p>
+              )}
+            </div>
+          )}
+
           <div>
             <label className={labelClass}>Project Name</label>
             <input

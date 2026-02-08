@@ -3,6 +3,8 @@ import json
 import logging
 import os
 import re
+import subprocess
+import threading
 from datetime import datetime
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -30,36 +32,40 @@ router = APIRouter(prefix="/api/swarm", tags=["swarm"])
 _output_buffers: dict[int, list[str]] = {}
 _MAX_OUTPUT_LINES = 500
 
-# Track background drain tasks for cancellation on stop/shutdown
-_drain_tasks: dict[int, list[asyncio.Task]] = {}
+# Track background drain threads for cleanup on stop/shutdown
+_drain_threads: dict[int, list[threading.Thread]] = {}
+_drain_stop_events: dict[int, threading.Event] = {}
 
 
 async def cancel_drain_tasks(project_id: int | None = None):
-    """Cancel drain tasks. If project_id is None, cancel all."""
+    """Signal drain threads to stop. If project_id is None, stop all."""
     if project_id is not None:
-        tasks = _drain_tasks.pop(project_id, [])
-        for t in tasks:
-            t.cancel()
+        evt = _drain_stop_events.pop(project_id, None)
+        if evt:
+            evt.set()
+        _drain_threads.pop(project_id, None)
         return
-    for pid, tasks in _drain_tasks.items():
-        for t in tasks:
-            t.cancel()
-    _drain_tasks.clear()
+    for evt in _drain_stop_events.values():
+        evt.set()
+    _drain_stop_events.clear()
+    _drain_threads.clear()
 
 
-async def _drain_stream(project_id: int, stream: asyncio.StreamReader, label: str):
-    """Read lines from a subprocess stream and store them."""
+def _drain_stream_sync(project_id: int, stream, label: str, stop_event: threading.Event):
+    """Read lines from a subprocess stream in a background thread."""
     buf = _output_buffers.setdefault(project_id, [])
     try:
-        async for line in stream:
+        for line in iter(stream.readline, b""):
+            if stop_event.is_set():
+                break
             text = line.decode("utf-8", errors="replace").rstrip()
             buf.append(f"[{label}] {text}")
             if len(buf) > _MAX_OUTPUT_LINES:
                 del buf[: len(buf) - _MAX_OUTPUT_LINES]
-    except asyncio.CancelledError:
-        raise
     except Exception:
         logger.error("_drain_stream failed for project %d [%s]", project_id, label, exc_info=True)
+    finally:
+        stream.close()
 
 
 class SwarmLaunchRequest(BaseModel):
@@ -99,20 +105,30 @@ async def launch_swarm(req: SwarmLaunchRequest, db: aiosqlite.Connection = Depen
         "-MaxPhases", str(req.max_phases),
     ]
 
-    process = await asyncio.create_subprocess_exec(
-        *args,
+    # Use subprocess.Popen instead of asyncio.create_subprocess_exec because
+    # uvicorn's reloader on Windows uses SelectorEventLoop which doesn't
+    # support async subprocesses (NotImplementedError).
+    process = subprocess.Popen(
+        args,
         cwd=str(folder),
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
 
-    # Cancel any existing drain tasks for this project, then start new ones
+    # Cancel any existing drain threads for this project, then start new ones
     await cancel_drain_tasks(req.project_id)
     _output_buffers[req.project_id] = []
-    _drain_tasks[req.project_id] = [
-        asyncio.create_task(_drain_stream(req.project_id, process.stdout, "stdout")),
-        asyncio.create_task(_drain_stream(req.project_id, process.stderr, "stderr")),
-    ]
+    stop_event = threading.Event()
+    _drain_stop_events[req.project_id] = stop_event
+    stdout_thread = threading.Thread(
+        target=_drain_stream_sync, args=(req.project_id, process.stdout, "stdout", stop_event), daemon=True
+    )
+    stderr_thread = threading.Thread(
+        target=_drain_stream_sync, args=(req.project_id, process.stderr, "stderr", stop_event), daemon=True
+    )
+    stdout_thread.start()
+    stderr_thread.start()
+    _drain_threads[req.project_id] = [stdout_thread, stderr_thread]
 
     await db.execute(
         "UPDATE projects SET status = 'running', swarm_pid = ?, updated_at = datetime('now') WHERE id = ?",
@@ -146,15 +162,15 @@ async def stop_swarm(req: SwarmStopRequest, db: aiosqlite.Connection = Depends(g
     _output_buffers.pop(req.project_id, None)
 
     if stop_script.exists():
-        process = await asyncio.create_subprocess_exec(
-            "powershell", "-ExecutionPolicy", "Bypass", "-File", str(stop_script),
+        process = subprocess.Popen(
+            ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(stop_script)],
             cwd=str(folder),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
         try:
-            await asyncio.wait_for(process.wait(), timeout=30)
-        except asyncio.TimeoutError:
+            process.wait(timeout=30)
+        except subprocess.TimeoutExpired:
             logger.warning("stop-swarm.ps1 timed out after 30s for project %d, killing", req.project_id)
             process.kill()
 
@@ -292,8 +308,9 @@ async def swarm_output_stream(project_id: int, request: Request, db: aiosqlite.C
                     yield f"data: {json.dumps({'line': line})}\n\n"
                 offset = len(buf)
             else:
-                # If no active drain tasks (swarm not running), we're done
-                if project_id not in _drain_tasks or not _drain_tasks[project_id]:
+                # If no active drain threads (swarm not running), we're done
+                threads = _drain_threads.get(project_id, [])
+                if not threads or not any(t.is_alive() for t in threads):
                     yield f"data: {json.dumps({'type': 'done'})}\n\n"
                     break
                 yield f": keepalive\n\n"

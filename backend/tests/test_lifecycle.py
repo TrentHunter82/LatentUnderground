@@ -5,7 +5,7 @@ all the pieces work together correctly as an integrated system.
 """
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -62,18 +62,12 @@ class TestFullProjectLifecycle:
         # -- 5. Launch swarm (mocked subprocess) --
         (mock_project_folder / "swarm.ps1").write_text("# Mock swarm script")
 
-        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
-            mock_process = AsyncMock()
+        with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
             mock_process.pid = 12345
-            mock_process.stdout = AsyncMock()
-            mock_process.stderr = AsyncMock()
-            mock_process.wait = AsyncMock()
-            # Make stdout/stderr return empty async iterators
-            mock_process.stdout.__aiter__ = lambda self: self
-            mock_process.stdout.__anext__ = AsyncMock(side_effect=StopAsyncIteration)
-            mock_process.stderr.__aiter__ = lambda self: self
-            mock_process.stderr.__anext__ = AsyncMock(side_effect=StopAsyncIteration)
-            mock_exec.return_value = mock_process
+            mock_process.stdout = MagicMock()
+            mock_process.stderr = MagicMock()
+            mock_popen.return_value = mock_process
 
             launch_resp = await client.post("/api/swarm/launch", json={
                 "project_id": pid,
@@ -157,17 +151,13 @@ class TestFullProjectLifecycle:
 
         # Run 3 launch/stop cycles
         for i in range(3):
-            with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
-                mock_process = AsyncMock()
+            with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
+                mock_process = MagicMock()
                 mock_process.pid = 10000 + i
-                mock_process.stdout = AsyncMock()
-                mock_process.stderr = AsyncMock()
-                mock_process.wait = AsyncMock()
-                mock_process.stdout.__aiter__ = lambda self: self
-                mock_process.stdout.__anext__ = AsyncMock(side_effect=StopAsyncIteration)
-                mock_process.stderr.__aiter__ = lambda self: self
-                mock_process.stderr.__anext__ = AsyncMock(side_effect=StopAsyncIteration)
-                mock_exec.return_value = mock_process
+                mock_process.stdout = MagicMock()
+                mock_process.stderr = MagicMock()
+                mock_process.wait = MagicMock()
+                mock_popen.return_value = mock_process
 
                 await client.post("/api/swarm/launch", json={"project_id": pid})
             await client.post("/api/swarm/stop", json={"project_id": pid})

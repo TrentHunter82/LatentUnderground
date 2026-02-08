@@ -63,12 +63,15 @@ async def app(tmp_db, tmp_path):
     """Create a FastAPI test app with test database."""
     from app import database
     from app.routes.files import _last_write
+    from app.routes.swarm import _output_buffers, cancel_drain_tasks
 
     original_db_path = database.DB_PATH
     database.DB_PATH = tmp_db
 
     # Clear rate limiter state between tests
     _last_write.clear()
+    # Clear output buffers from previous tests
+    _output_buffers.clear()
 
     try:
         from app.main import app as _app
@@ -81,6 +84,9 @@ async def app(tmp_db, tmp_path):
 
     yield _app
 
+    # Stop any drain threads and clear buffers on teardown
+    await cancel_drain_tasks()
+    _output_buffers.clear()
     database.DB_PATH = original_db_path
 
 

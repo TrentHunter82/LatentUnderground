@@ -191,6 +191,7 @@ vi.mock('../lib/api', () => ({
   readFile: vi.fn(() => Promise.resolve({ content: '' })),
   writeFile: vi.fn(),
   startWatch: vi.fn(() => Promise.resolve()),
+  getTemplates: vi.fn(() => Promise.resolve([])),
 }))
 
 import ProjectView from '../components/ProjectView'

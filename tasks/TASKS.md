@@ -11,8 +11,8 @@
 
 ## Claude-2 [Frontend/Interface] - UX and advanced features
 
-- [ ] Add swarm template selector in NewProject form (dropdown of saved presets)
-- [ ] Add mini-graph sparkline showing task completion rate over time in Dashboard
+- [x] Add swarm template selector in NewProject form (dropdown of saved presets)
+- [x] Add mini-graph sparkline showing task completion rate over time in Dashboard
 - [x] Add keyboard navigation for tabs (arrow keys, Home/End)
 - [x] Add responsive mobile layout improvements (tab overflow scroll, collapsible panels)
 - [x] Add project export button (download project config + history as JSON)

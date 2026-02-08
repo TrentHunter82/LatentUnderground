@@ -1,8 +1,9 @@
-"""Tests for production hardening changes: file size limit, logging, drain task tracking."""
+"""Tests for production hardening changes: file size limit, logging, drain thread tracking."""
 
-import asyncio
 import logging
-from unittest.mock import AsyncMock, patch
+import subprocess
+import threading
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -51,10 +52,12 @@ class TestLogging:
         })
         pid = resp.json()["id"]
 
-        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
-            mock_process = AsyncMock()
+        with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
             mock_process.pid = 99999
-            mock_exec.return_value = mock_process
+            mock_process.stdout = MagicMock()
+            mock_process.stderr = MagicMock()
+            mock_popen.return_value = mock_process
 
             with caplog.at_level(logging.INFO, logger="latent.swarm"):
                 await client.post("/api/swarm/launch", json={"project_id": pid})
@@ -108,11 +111,11 @@ class TestLogging:
         assert any("Stale PID" in r.message for r in caplog.records)
 
 
-class TestDrainTaskTracking:
-    """Tests for background drain task tracking and cancellation."""
+class TestDrainThreadTracking:
+    """Tests for background drain thread tracking and cancellation."""
 
-    async def test_drain_tasks_tracked_on_launch(self, client, mock_project_folder):
-        from app.routes.swarm import _drain_tasks
+    async def test_drain_threads_tracked_on_launch(self, client, mock_project_folder):
+        from app.routes.swarm import _drain_threads
 
         (mock_project_folder / "swarm.ps1").write_text("# Mock")
         resp = await client.post("/api/projects", json={
@@ -122,21 +125,21 @@ class TestDrainTaskTracking:
         })
         pid = resp.json()["id"]
 
-        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
-            mock_process = AsyncMock()
+        with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
             mock_process.pid = 11111
-            mock_exec.return_value = mock_process
+            mock_process.stdout = MagicMock()
+            mock_process.stderr = MagicMock()
+            mock_popen.return_value = mock_process
 
             await client.post("/api/swarm/launch", json={"project_id": pid})
 
-        assert pid in _drain_tasks
-        assert len(_drain_tasks[pid]) == 2
+        assert pid in _drain_threads
+        assert len(_drain_threads[pid]) == 2
+        _drain_threads.pop(pid, None)
 
-        for t in _drain_tasks.pop(pid, []):
-            t.cancel()
-
-    async def test_drain_tasks_cancelled_on_stop(self, client, mock_project_folder):
-        from app.routes.swarm import _drain_tasks
+    async def test_drain_threads_cleaned_on_stop(self, client, mock_project_folder):
+        from app.routes.swarm import _drain_threads, _drain_stop_events
 
         (mock_project_folder / "swarm.ps1").write_text("# Mock")
         resp = await client.post("/api/projects", json={
@@ -146,32 +149,35 @@ class TestDrainTaskTracking:
         })
         pid = resp.json()["id"]
 
-        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
-            mock_process = AsyncMock()
+        with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
             mock_process.pid = 22222
-            mock_process.wait = AsyncMock()
-            mock_exec.return_value = mock_process
+            mock_process.stdout = MagicMock()
+            mock_process.stderr = MagicMock()
+            mock_process.wait = MagicMock()
+            mock_popen.return_value = mock_process
 
             await client.post("/api/swarm/launch", json={"project_id": pid})
-            assert pid in _drain_tasks
+            assert pid in _drain_threads
 
             await client.post("/api/swarm/stop", json={"project_id": pid})
 
-        assert pid not in _drain_tasks
+        assert pid not in _drain_threads
+        assert pid not in _drain_stop_events
 
-    async def test_cancel_all_drain_tasks(self):
-        from app.routes.swarm import _drain_tasks, cancel_drain_tasks
+    async def test_cancel_all_drain_threads(self):
+        from app.routes.swarm import _drain_stop_events, cancel_drain_tasks
 
-        task1 = AsyncMock(spec=asyncio.Task)
-        task2 = AsyncMock(spec=asyncio.Task)
-        _drain_tasks[100] = [task1]
-        _drain_tasks[200] = [task2]
+        evt1 = threading.Event()
+        evt2 = threading.Event()
+        _drain_stop_events[100] = evt1
+        _drain_stop_events[200] = evt2
 
         await cancel_drain_tasks()
 
-        task1.cancel.assert_called_once()
-        task2.cancel.assert_called_once()
-        assert len(_drain_tasks) == 0
+        assert evt1.is_set()
+        assert evt2.is_set()
+        assert len(_drain_stop_events) == 0
 
 
 class TestStopTimeout:
@@ -186,15 +192,14 @@ class TestStopTimeout:
         })
         pid = resp.json()["id"]
 
-        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
-            mock_process = AsyncMock()
-            mock_process.wait = AsyncMock(side_effect=asyncio.TimeoutError)
-            mock_process.kill = AsyncMock()
-            mock_exec.return_value = mock_process
+        with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
+            mock_process.wait = MagicMock(side_effect=subprocess.TimeoutExpired(cmd="stop", timeout=30))
+            mock_process.kill = MagicMock()
+            mock_popen.return_value = mock_process
 
-            with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError):
-                with caplog.at_level(logging.WARNING, logger="latent.swarm"):
-                    resp = await client.post("/api/swarm/stop", json={"project_id": pid})
+            with caplog.at_level(logging.WARNING, logger="latent.swarm"):
+                resp = await client.post("/api/swarm/stop", json={"project_id": pid})
 
             assert resp.status_code == 200
             assert resp.json()["status"] == "stopped"
