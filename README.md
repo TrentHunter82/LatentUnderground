@@ -179,7 +179,7 @@ All other paths return 403 Forbidden.
 2. Each agent works on assigned tasks from `tasks/TASKS.md`
 3. Agents write heartbeats to `.claude/heartbeats/` so the supervisor knows they're alive
 4. Agents create signal files in `.claude/signals/` when milestones are reached
-5. The supervisor auto-chains to the next phase when `phase-complete.signal` appears
+5. The supervisor auto-chains to the next phase when `phase-complete.signal` appears (up to 24 phases by default; override with `-MaxPhases N`)
 6. This web app provides a GUI for the entire lifecycle instead of terminal scripts
 
 ## Development Status
@@ -192,7 +192,7 @@ All other paths return 403 Forbidden.
 - Swarm run history tracking (start/stop timestamps, duration, task counts)
 - SSE real-time output streaming endpoint
 - Project statistics API (total runs, average duration, tasks completed)
-- Project agent configuration (agent count, max phases, custom prompts)
+- Project agent configuration (agent count, max phases up to 24, custom prompts)
 - SwarmHistory component with run table (started, duration, status, tasks)
 - TerminalOutput component with ANSI color parsing, auto-scroll, and line cap
 - ProjectSettings component with save/load configuration form
