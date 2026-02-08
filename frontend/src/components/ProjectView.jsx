@@ -26,12 +26,12 @@ export default function ProjectView({ wsEvents, onProjectChange }) {
   const [project, setProject] = useState(null)
 
   useEffect(() => {
-    getProject(projectId).then(setProject).catch(() => {})
+    getProject(projectId).then(setProject).catch((e) => console.warn('Failed to load project:', e))
   }, [projectId])
 
   const initialConfig = useMemo(() => {
     if (!project?.config) return null
-    try { return JSON.parse(project.config) } catch { return null }
+    try { return JSON.parse(project.config) } catch (e) { console.warn('Failed to parse project config:', e); return null }
   }, [project])
 
   const tabRefs = useRef({})
@@ -95,7 +95,7 @@ export default function ProjectView({ wsEvents, onProjectChange }) {
         )}
         {activeTab === 'output' && (
           <div className="p-4 h-full">
-            <TerminalOutput projectId={projectId} fetchOutput={getSwarmOutput} />
+            <TerminalOutput projectId={projectId} fetchOutput={getSwarmOutput} isRunning={project?.status === 'running'} />
           </div>
         )}
         {activeTab === 'logs' && (

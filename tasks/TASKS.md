@@ -1,45 +1,44 @@
-﻿# Latent Underground - Task Board (Phase 6)
+# Latent Underground - Task Board (Phase 7)
 
-## Claude-1 [Backend/Core] - Search, analytics, and monitoring APIs
+## Claude-1 [Backend/Core] - Stdin input, real-time streaming, auth, DB optimization
 
-- [x] Add project search/filter endpoint: GET /api/projects?search=&status=&sort= with query params
-- [x] Add analytics endpoints: GET /api/projects/{id}/analytics (run trends, agent efficiency, phase durations)
-- [x] Add centralized log endpoint: GET /api/logs/search?q=&level=&agent=&from=&to= with full-text search
-- [x] Add health check endpoint: GET /api/health (db status, active processes, uptime, version)
-- [x] Add OpenAPI/Swagger docs: enable FastAPI auto-docs at /docs with proper descriptions
+- [x] Add swarm stdin input: pipe stdin in Popen, store process objects in _swarm_processes dict, POST /api/swarm/input endpoint (write to stdin, echo as [stdin] in output buffer, cleanup on stop/shutdown)
+- [x] Add WebSocket-based log streaming: push new log lines to connected clients in real-time (replace polling)
+- [x] Add basic authentication: API key middleware with configurable LU_API_KEY env var (skip for /api/health)
+- [x] Add database indexes: CREATE INDEX on projects(status), swarm_runs(project_id, started_at), swarm_runs(status)
+- [x] Add log search date range filter: from/to params on GET /api/logs/search (missing from Phase 6)
 - [x] Signal: Create .claude/signals/backend-ready.signal
 
-## Claude-2 [Frontend/Interface] - Search UI, analytics dashboard, log improvements
+## Claude-2 [Frontend/Interface] - Terminal input, real-time UI, auth refinements
 
-- [x] Add project search bar + status filter in Sidebar (instant filter as you type)
-- [x] Add analytics tab in ProjectView: run trend chart, agent efficiency bars, phase timeline
-- [x] Add log search: text search input, log level filter, timestamp range picker, copy/download
-- [x] Add browser notifications: Web Push API for swarm completion/failure events
-- [x] Add health status indicator in header (green/yellow/red dot showing backend connectivity)
-- [x] Signal: Create .claude/signals/frontend-ready.signal
+- [ ] Add terminal input bar: text field + Enter-to-send in TerminalOutput component (> prompt, disabled when not running, sends via POST /api/swarm/input, wire sendSwarmInput from api.js through ProjectView)
+- [ ] Add real-time log viewer: WebSocket subscription for live log lines (no more polling)
+- [ ] Add login/API key prompt: modal on 401, persist key in localStorage, attach to all requests
+- [ ] Add date range picker for log search (connects to backend from/to params)
+- [ ] Add keyboard shortcuts: Ctrl+K for search, Ctrl+N for new project, Escape to close modals
+- [ ] Signal: Create .claude/signals/frontend-ready.signal
 
-## Claude-3 [Integration/Testing] - Test coverage for new features
+## Claude-3 [Integration/Testing] - Test coverage for Phase 7 features
 
-- [x] Add tests for project search/filter API (10 skipped - endpoints not yet implemented)
-- [x] Add tests for analytics endpoint (4 skipped - endpoints not yet implemented)
-- [x] Add tests for centralized log search (7 skipped - endpoints not yet implemented)
-- [x] Add tests for health check endpoint (3 passing: ok, fields, degraded)
-- [x] Add tests for Phase 6 hardening (12 passing: validation, constants, locks)
-- [x] Add frontend tests for search UI, analytics, log search, notifications (18 skipped)
-- [x] Fix pre-existing test failures (max_phases 3→24, duplicate "All" button)
-- [x] Signal: Create .claude/signals/tests-passing.signal
+- [ ] Add tests for stdin input endpoint (not found, not running, success, broken pipe, process exited, echo to buffer, text too long - 8 tests)
+- [ ] Add tests for WebSocket log streaming (subscribe, receive lines, unsubscribe)
+- [ ] Add tests for auth middleware (valid key, invalid key, missing key, health bypass)
+- [ ] Add tests for database indexes (verify index existence, query plan improvements)
+- [ ] Add tests for log search date range filter (from, to, both, invalid dates)
+- [ ] Add frontend tests for terminal input, real-time logs, auth modal, keyboard shortcuts
+- [ ] Signal: Create .claude/signals/tests-passing.signal
 
 ## Claude-4 [Polish/Review] - Final quality gate
 
-- [x] Review all Phase 6 code changes for quality and consistency
-- [x] Verify no regressions: all Phase 5 tests still pass (387+) — 214 backend + 173 frontend = 387 total, zero failures
-- [x] Performance review: search queries use indexes, analytics queries are efficient
-- [x] Documentation review: API docs accurate, README updated with new features
-- [x] FINAL: Generate next-swarm.ps1 for Phase 7
+- [ ] Review all Phase 7 code changes for quality and consistency
+- [ ] Verify no regressions: all Phase 6 tests still pass (387+)
+- [ ] Security review: auth implementation, key storage, middleware bypass rules
+- [ ] Performance review: verify indexes improve query plans, log streaming doesn't leak connections
+- [ ] FINAL: Generate next-swarm.ps1 for Phase 8 (if needed) or mark project complete
 
 ## Completion Criteria
-- [x] Projects searchable and filterable by name/status
-- [x] Analytics dashboard shows run trends and agent efficiency
-- [x] Logs searchable with text, level, and date filters (note: date range filter not yet implemented)
-- [x] Health endpoint provides system status at a glance
-- [x] All tests pass (backend + frontend, including new Phase 6 tests)
+- [ ] Users can type input to running swarm processes from the web terminal
+- [ ] Log viewer updates in real-time via WebSocket (no polling)
+- [ ] API protected by optional API key (configurable via env var)
+- [ ] Database queries use indexes for search and analytics
+- [ ] All tests pass (backend + frontend, including new Phase 7 tests)

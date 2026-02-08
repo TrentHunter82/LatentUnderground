@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useNavigate } from 'react-router-dom'
 import { getProjects } from './lib/api'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useHealthCheck } from './hooks/useHealthCheck'
@@ -10,11 +10,14 @@ import NewProject from './components/NewProject'
 import ProjectView from './components/ProjectView'
 import ErrorBoundary from './components/ErrorBoundary'
 import ThemeToggle from './components/ThemeToggle'
+import AuthModal from './components/AuthModal'
 
 export default function App() {
   const [projects, setProjects] = useState([])
   const [wsEvent, setWsEvent] = useState(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [showAuth, setShowAuth] = useState(false)
+  const navigate = useNavigate()
 
   const { connected } = useWebSocket(setWsEvent)
   const { status: healthStatus, latency } = useHealthCheck()
@@ -30,11 +33,43 @@ export default function App() {
     }
   }, [wsEvent, notify])
 
+  // Listen for 401 auth-required events from api.js
+  useEffect(() => {
+    const handler = () => setShowAuth(true)
+    window.addEventListener('auth-required', handler)
+    return () => window.removeEventListener('auth-required', handler)
+  }, [])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      const isMod = e.ctrlKey || e.metaKey
+
+      if (isMod && e.key === 'k') {
+        e.preventDefault()
+        const searchInput = document.getElementById('sidebar-search')
+        if (searchInput) {
+          setSidebarCollapsed(false)
+          setTimeout(() => searchInput.focus(), 100)
+        }
+      } else if (isMod && e.key === 'n') {
+        e.preventDefault()
+        navigate('/projects/new')
+      } else if (e.key === 'Escape') {
+        setShowAuth(false)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [navigate])
+
   const refreshProjects = useCallback(async () => {
     try {
       const data = await getProjects()
       setProjects(data)
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to refresh projects:', e)
+    }
   }, [])
 
   useEffect(() => {
@@ -66,14 +101,32 @@ export default function App() {
           </button>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAuth(true)}
+              className="p-1.5 rounded-md text-zinc-500 hover:text-crt-green hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
+              title="API Key"
+              aria-label="Configure API key"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M10 5a3 3 0 11-6 0 3 3 0 016 0zM2 14a5 5 0 0110 0" />
+                <path d="M12 4l2 2-3 3-2-2 3-3z" />
+              </svg>
+            </button>
             <ThemeToggle />
             <div className="group relative flex items-center gap-1.5 cursor-default">
-              <span className={`w-1.5 h-1.5 rounded-full ${
-                healthStatus === 'healthy' && connected ? 'led-active' :
-                healthStatus === 'slow' ? 'led-warning' :
-                healthStatus === 'degraded' ? 'led-danger' :
-                'led-danger animate-pulse'
-              }`} />
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  healthStatus === 'healthy' && connected ? 'led-active' :
+                  healthStatus === 'slow' ? 'led-warning' :
+                  healthStatus === 'degraded' ? 'led-danger' :
+                  'led-danger animate-pulse'
+                }`}
+                aria-label={`System status: ${
+                  healthStatus === 'healthy' && connected ? 'online' :
+                  healthStatus === 'slow' ? 'slow' :
+                  healthStatus === 'degraded' ? 'degraded' : 'offline'
+                }`}
+              />
               <span className="text-[10px] text-zinc-500 font-mono">{
                 healthStatus === 'healthy' && connected ? 'ONLINE' :
                 healthStatus === 'slow' ? 'SLOW' :
@@ -102,6 +155,8 @@ export default function App() {
           </Routes>
         </ErrorBoundary>
       </main>
+
+      <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
     </div>
   )
 }

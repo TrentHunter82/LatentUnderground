@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { sendSwarmInput } from '../lib/api'
 
 const ANSI_COLORS = {
   '30': 'text-zinc-900', '31': 'text-signal-red', '32': 'text-crt-green',
@@ -38,12 +39,15 @@ function parseAnsiLine(text) {
   return parts.length ? parts : [{ text, className: 'text-zinc-300' }]
 }
 
-export default function TerminalOutput({ projectId, fetchOutput }) {
+export default function TerminalOutput({ projectId, fetchOutput, isRunning }) {
   const [lines, setLines] = useState([])
   const [autoScroll, setAutoScroll] = useState(true)
+  const [inputText, setInputText] = useState('')
+  const [inputError, setInputError] = useState(null)
   const containerRef = useRef(null)
   const offsetRef = useRef(0)
   const intervalRef = useRef(null)
+  const inputRef = useRef(null)
 
   useEffect(() => {
     if (!projectId || !fetchOutput) return
@@ -61,8 +65,8 @@ export default function TerminalOutput({ projectId, fetchOutput }) {
           })
           offsetRef.current = data.next_offset
         }
-      } catch {
-        // Silently ignore polling errors
+      } catch (e) {
+        console.warn('Terminal output poll error:', e)
       }
     }
 
@@ -86,6 +90,34 @@ export default function TerminalOutput({ projectId, fetchOutput }) {
     setAutoScroll(scrollHeight - scrollTop - clientHeight < 50)
   }
 
+  const handleSendInput = async () => {
+    const text = inputText.trim()
+    if (!text) return
+
+    setInputError(null)
+    setInputText('')
+
+    // Echo locally
+    setLines((prev) => {
+      const next = [...prev, `> ${text}`]
+      return next.length > 1000 ? next.slice(-1000) : next
+    })
+
+    try {
+      await sendSwarmInput(projectId, text)
+    } catch (e) {
+      setInputError(e.message)
+      setTimeout(() => setInputError(null), 3000)
+    }
+  }
+
+  const handleInputKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendInput()
+    }
+  }
+
   return (
     <div className="retro-panel border border-retro-border rounded flex flex-col">
       <div className="flex items-center justify-between px-4 py-2 border-b border-retro-border">
@@ -103,7 +135,7 @@ export default function TerminalOutput({ projectId, fetchOutput }) {
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="p-3 font-mono text-xs leading-5 overflow-y-auto max-h-96 min-h-[200px] bg-retro-dark"
+        className="p-3 font-mono text-xs leading-5 overflow-y-auto max-h-96 min-h-[200px] bg-retro-dark flex-1"
         role="log"
         aria-label="Terminal output"
       >
@@ -119,6 +151,35 @@ export default function TerminalOutput({ projectId, fetchOutput }) {
           ))
         )}
       </div>
+
+      {/* Input bar */}
+      <div className="flex items-center gap-2 px-3 py-2 border-t border-retro-border bg-retro-dark/50">
+        <span className="text-crt-green font-mono text-xs select-none">&gt;</span>
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          onKeyDown={handleInputKeyDown}
+          disabled={!isRunning}
+          placeholder={isRunning ? 'Type input for swarm...' : 'Swarm not running'}
+          className="retro-input flex-1 px-2 py-1 text-xs font-mono disabled:opacity-40 disabled:cursor-not-allowed"
+          aria-label="Terminal input"
+        />
+        <button
+          onClick={handleSendInput}
+          disabled={!isRunning || !inputText.trim()}
+          className="px-2.5 py-1 text-xs font-mono rounded bg-transparent border border-crt-green/30 text-crt-green hover:bg-crt-green/10 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+          aria-label="Send input"
+        >
+          Send
+        </button>
+      </div>
+      {inputError && (
+        <div className="px-3 py-1 text-[10px] text-signal-red font-mono bg-signal-red/5">
+          {inputError}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,30 +1,11 @@
+import { AGENT_BORDER_COLORS, AGENT_NEON_COLORS, AGENT_ROLES } from '../lib/constants'
+
 function timeSince(timestamp) {
   if (!timestamp) return 'never'
   const diff = (Date.now() - new Date(timestamp).getTime()) / 1000
   if (diff < 60) return `${Math.floor(diff)}s ago`
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   return `${Math.floor(diff / 3600)}h ago`
-}
-
-const agentColors = {
-  'Claude-1': 'border-crt-cyan',
-  'Claude-2': 'border-crt-magenta',
-  'Claude-3': 'border-crt-green',
-  'Claude-4': 'border-crt-amber',
-}
-
-const agentNeon = {
-  'Claude-1': 'neon-cyan',
-  'Claude-2': 'neon-magenta',
-  'Claude-3': 'neon-green',
-  'Claude-4': 'neon-amber',
-}
-
-const agentRoles = {
-  'Claude-1': 'Backend/Core',
-  'Claude-2': 'Frontend/UI',
-  'Claude-3': 'Integration/Test',
-  'Claude-4': 'Polish/Review',
 }
 
 export default function AgentGrid({ agents }) {
@@ -43,13 +24,13 @@ export default function AgentGrid({ agents }) {
             return (
               <div
                 key={a.name}
-                className={`p-3 rounded bg-retro-grid/50 border-l-2 ${agentColors[a.name] || 'border-zinc-600'}`}
+                className={`p-3 rounded bg-retro-grid/50 border-l-2 ${AGENT_BORDER_COLORS[a.name] || 'border-zinc-600'}`}
               >
                 <div className="flex items-center justify-between">
-                  <span className={`text-sm font-medium font-mono ${agentNeon[a.name] || 'text-zinc-200'}`}>{a.name}</span>
+                  <span className={`text-sm font-medium font-mono ${AGENT_NEON_COLORS[a.name] || 'text-zinc-200'}`}>{a.name}</span>
                   <span className={`w-2 h-2 rounded-full ${isActive ? 'led-active animate-pulse' : 'led-inactive'}`} />
                 </div>
-                <div className="text-[11px] text-zinc-500 mt-1 font-mono">{agentRoles[a.name] || ''}</div>
+                <div className="text-[11px] text-zinc-500 mt-1 font-mono">{AGENT_ROLES[a.name] || ''}</div>
                 <div className={`text-[11px] mt-1 font-mono ${isActive ? 'text-crt-green' : 'text-zinc-600'}`}>
                   {isActive ? 'Active' : 'Stale'} &middot; {timeSince(a.last_heartbeat)}
                 </div>

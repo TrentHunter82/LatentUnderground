@@ -129,7 +129,7 @@
 ## Claude-1 - Phase 5 Plan (COMPLETE)
 All Phase 5 tasks done. See TASKS.md.
 
-## Claude-1 - Production Hardening Plan
+## Claude-1 - Production Hardening Plan (COMPLETE)
 - [x] 1. Thread safety on output buffers (swarm.py) - added _buffers_lock
 - [x] 2. Input validation on SwarmLaunchRequest (swarm.py) - Field(ge=1, le=16/20)
 - [x] 3. Input validation on ProjectCreate/ProjectUpdate (project.py) - min/max_length
@@ -137,3 +137,12 @@ All Phase 5 tasks done. See TASKS.md.
 - [x] 5. Fix data loss on swarm stop (swarm.py) - join threads before pop
 - [x] 6. Add logging to silent exception handlers (websocket.py, swarm.py) - logger.debug
 - [x] 7. Run full test suite - 214 backend + 173 frontend = 387 passing, zero failures
+
+## Claude-1 - Phase 7 Plan (COMPLETE)
+- [x] 1. Database indexes: projects(status), swarm_runs(project_id, started_at), swarm_runs(status)
+- [x] 2. Fix swarm-phase.json MaxPhases=3 → 24
+- [x] 3. Log search date range filter: from_date/to_date params with timestamp parsing
+- [x] 4. Swarm stdin input: POST /api/swarm/input, _swarm_processes dict, stdin=PIPE, echo to buffer
+- [x] 5. WebSocket log streaming: incremental file position tracking in watcher.py
+- [x] 6. API key auth middleware: LU_API_KEY, Bearer/X-API-Key headers, skip health/docs/ws
+- [x] 7. Verification: 250 backend tests passing, 0 failures, backend-ready.signal created

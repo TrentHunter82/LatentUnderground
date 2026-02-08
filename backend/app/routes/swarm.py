@@ -37,6 +37,9 @@ _MAX_OUTPUT_LINES = 500
 _drain_threads: dict[int, list[threading.Thread]] = {}
 _drain_stop_events: dict[int, threading.Event] = {}
 
+# Store Popen objects for stdin access (keyed by project_id)
+_swarm_processes: dict[int, subprocess.Popen] = {}
+
 
 async def cancel_drain_tasks(project_id: int | None = None):
     """Signal drain threads to stop. If project_id is None, stop all."""
@@ -45,11 +48,13 @@ async def cancel_drain_tasks(project_id: int | None = None):
         if evt:
             evt.set()
         _drain_threads.pop(project_id, None)
+        _swarm_processes.pop(project_id, None)
         return
     for evt in _drain_stop_events.values():
         evt.set()
     _drain_stop_events.clear()
     _drain_threads.clear()
+    _swarm_processes.clear()
 
 
 def _drain_stream_sync(project_id: int, stream, label: str, stop_event: threading.Event):
@@ -80,6 +85,11 @@ class SwarmLaunchRequest(BaseModel):
 
 class SwarmStopRequest(BaseModel):
     project_id: int
+
+
+class SwarmInputRequest(BaseModel):
+    project_id: int
+    text: str = Field(max_length=1000)
 
 
 @router.post("/launch")
@@ -113,12 +123,14 @@ async def launch_swarm(req: SwarmLaunchRequest, db: aiosqlite.Connection = Depen
     process = subprocess.Popen(
         args,
         cwd=str(folder),
+        stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
 
     # Cancel any existing drain threads for this project, then start new ones
     await cancel_drain_tasks(req.project_id)
+    _swarm_processes[req.project_id] = process
     with _buffers_lock:
         _output_buffers[req.project_id] = []
     stop_event = threading.Event()
@@ -168,6 +180,7 @@ async def stop_swarm(req: SwarmStopRequest, db: aiosqlite.Connection = Depends(g
     if threads:
         for t in threads:
             t.join(timeout=2)
+    _swarm_processes.pop(req.project_id, None)
     with _buffers_lock:
         _output_buffers.pop(req.project_id, None)
 
@@ -200,6 +213,39 @@ async def stop_swarm(req: SwarmStopRequest, db: aiosqlite.Connection = Depends(g
 
     logger.info("Swarm stopped for project %d", req.project_id)
     return {"status": "stopped", "project_id": req.project_id}
+
+
+@router.post("/input")
+async def swarm_input(req: SwarmInputRequest, db: aiosqlite.Connection = Depends(get_db)):
+    """Send text input to a running swarm process's stdin."""
+    row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (req.project_id,))).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project = dict(row)
+    if project["status"] != "running":
+        raise HTTPException(status_code=400, detail="Swarm is not running")
+
+    process = _swarm_processes.get(req.project_id)
+    if not process or process.poll() is not None:
+        raise HTTPException(status_code=400, detail="Swarm process has exited")
+
+    try:
+        process.stdin.write((req.text + "\n").encode("utf-8"))
+        process.stdin.flush()
+    except (BrokenPipeError, OSError) as e:
+        logger.error("Failed to write to stdin for project %d: %s", req.project_id, e)
+        raise HTTPException(status_code=500, detail="Failed to write to process stdin")
+
+    # Echo the input in the output buffer
+    with _buffers_lock:
+        buf = _output_buffers.setdefault(req.project_id, [])
+        buf.append(f"[stdin] {req.text}")
+        if len(buf) > _MAX_OUTPUT_LINES:
+            del buf[: len(buf) - _MAX_OUTPUT_LINES]
+
+    logger.info("Sent stdin input to project %d: %s", req.project_id, req.text[:50])
+    return {"status": "sent", "project_id": req.project_id}
 
 
 @router.get("/status/{project_id}")

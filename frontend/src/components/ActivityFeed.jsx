@@ -1,13 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { getLogs } from '../lib/api'
-
-const agentColors = {
-  'Claude-1': 'neon-cyan',
-  'Claude-2': 'neon-magenta',
-  'Claude-3': 'neon-green',
-  'Claude-4': 'neon-amber',
-  'supervisor': 'text-zinc-400',
-}
+import { AGENT_NEON_COLORS } from '../lib/constants'
 
 export default function ActivityFeed({ projectId, wsEvents }) {
   const [logs, setLogs] = useState([])
@@ -22,7 +15,7 @@ export default function ActivityFeed({ projectId, wsEvents }) {
         )
         setLogs(flat.slice(-100))
       })
-      .catch(() => {})
+      .catch((e) => console.warn('Failed to load activity:', e))
   }, [projectId])
 
   // Append WebSocket log events
@@ -52,7 +45,7 @@ export default function ActivityFeed({ projectId, wsEvents }) {
         )}
         {logs.map((entry, i) => (
           <div key={`${entry.agent}-${i}`} className="leading-relaxed">
-            <span className={`font-medium ${agentColors[entry.agent] || 'text-zinc-500'}`}>
+            <span className={`font-medium ${AGENT_NEON_COLORS[entry.agent] || 'text-zinc-500'}`}>
               [{entry.agent}]
             </span>{' '}
             <span className="text-zinc-400">{entry.text}</span>

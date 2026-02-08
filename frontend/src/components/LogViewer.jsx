@@ -1,15 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { getLogs } from '../lib/api'
-
-const agents = ['Claude-1', 'Claude-2', 'Claude-3', 'Claude-4', 'supervisor']
-
-const agentColors = {
-  'Claude-1': { label: 'neon-cyan', bg: 'bg-crt-cyan/5' },
-  'Claude-2': { label: 'neon-magenta', bg: 'bg-crt-magenta/5' },
-  'Claude-3': { label: 'neon-green', bg: 'bg-crt-green/5' },
-  'Claude-4': { label: 'neon-amber', bg: 'bg-crt-amber/5' },
-  'supervisor': { label: 'text-zinc-400', bg: 'bg-zinc-500/5' },
-}
+import { AGENT_NAMES, AGENT_LOG_COLORS } from '../lib/constants'
 
 const levels = ['all', 'INFO', 'WARN', 'ERROR', 'DEBUG']
 const levelRegex = /\b(INFO|WARN|ERROR|DEBUG)\b/
@@ -34,7 +25,9 @@ export default function LogViewer({ projectId, wsEvents }) {
         }))
       )
       setLogs(flat)
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to load logs:', e)
+    }
   }, [projectId])
 
   useEffect(() => {
@@ -60,7 +53,7 @@ export default function LogViewer({ projectId, wsEvents }) {
     }
   }, [logs, autoScroll])
 
-  const filtered = logs.filter((l) => {
+  const filtered = useMemo(() => logs.filter((l) => {
     if (filter !== 'all' && l.agent !== filter) return false
     if (levelFilter !== 'all') {
       const match = l.text.match(levelRegex)
@@ -70,7 +63,7 @@ export default function LogViewer({ projectId, wsEvents }) {
       return l.text.toLowerCase().includes(searchText.toLowerCase())
     }
     return true
-  })
+  }), [logs, filter, levelFilter, searchText])
 
   const handleCopy = () => {
     const text = filtered.map((l) => `[${l.agent}] ${l.text}`).join('\n')
@@ -100,12 +93,12 @@ export default function LogViewer({ projectId, wsEvents }) {
         >
           All
         </button>
-        {agents.map((a) => (
+        {AGENT_NAMES.map((a) => (
           <button
             key={a}
             onClick={() => setFilter(a)}
             className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer border-0 font-mono ${
-              filter === a ? 'bg-retro-grid text-zinc-100' : `${agentColors[a]?.label || 'text-zinc-500'} hover:bg-retro-grid bg-transparent`
+              filter === a ? 'bg-retro-grid text-zinc-100' : `${AGENT_LOG_COLORS[a]?.label || 'text-zinc-500'} hover:bg-retro-grid bg-transparent`
             }`}
           >
             {a}
@@ -151,6 +144,7 @@ export default function LogViewer({ projectId, wsEvents }) {
         <button
           onClick={handleCopy}
           title="Copy logs"
+          aria-label="Copy logs"
           className="p-1 rounded text-zinc-500 hover:text-crt-green hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -161,6 +155,7 @@ export default function LogViewer({ projectId, wsEvents }) {
         <button
           onClick={handleDownload}
           title="Download logs"
+          aria-label="Download logs"
           className="p-1 rounded text-zinc-500 hover:text-crt-green hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -179,7 +174,7 @@ export default function LogViewer({ projectId, wsEvents }) {
           <div className="text-zinc-600 text-center py-8">No logs</div>
         )}
         {filtered.map((entry) => {
-          const color = agentColors[entry.agent] || { label: 'text-zinc-500', bg: '' }
+          const color = AGENT_LOG_COLORS[entry.agent] || { label: 'text-zinc-500', bg: '' }
           return (
             <div key={entry.id} className={`py-0.5 px-2 rounded ${color.bg}`}>
               <span className={`font-semibold ${color.label}`}>[{entry.agent}]</span>{' '}

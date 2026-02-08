@@ -124,21 +124,32 @@ class TestFolderWatcherHandleChange:
         assert event["agent"] == "Claude-1"
         assert len(event["lines"]) == 4
 
-    async def test_log_file_truncates_to_5_lines(self, watcher):
-        """Log events should only include the last 5 lines."""
+    async def test_log_file_incremental_read(self, watcher):
+        """Log events should include only new lines since last read."""
         w, broadcast, folder = watcher
         logs_dir = folder / "logs"
         logs_dir.mkdir()
         log_file = logs_dir / "Claude-2.log"
-        lines = [f"Line {i}" for i in range(20)]
-        log_file.write_text("\n".join(lines))
 
+        # First write: 5 lines
+        lines = [f"Line {i}" for i in range(5)]
+        log_file.write_text("\n".join(lines))
         await w._handle_change(Change.modified, str(log_file))
 
         event = broadcast.call_args[0][0]
         assert len(event["lines"]) == 5
-        assert event["lines"][0] == "Line 15"
-        assert event["lines"][-1] == "Line 19"
+        assert event["lines"][0] == "Line 0"
+
+        # Second write: append 3 more lines
+        with open(log_file, "a") as f:
+            f.write("\nLine 5\nLine 6\nLine 7")
+        broadcast.reset_mock()
+        await w._handle_change(Change.modified, str(log_file))
+
+        event = broadcast.call_args[0][0]
+        assert len(event["lines"]) == 3
+        assert event["lines"][0] == "Line 5"
+        assert event["lines"][-1] == "Line 7"
 
     async def test_unrecognized_file_no_event(self, watcher):
         """Changes to unrecognized files should not emit events."""

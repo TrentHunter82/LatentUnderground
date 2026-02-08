@@ -40,7 +40,9 @@ export function useWebSocket(onMessage) {
       try {
         const data = JSON.parse(e.data)
         onMessageRef.current?.(data)
-      } catch {}
+      } catch (err) {
+        console.warn('Failed to parse WebSocket message:', err)
+      }
     }
 
     ws.onclose = () => {

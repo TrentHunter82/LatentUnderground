@@ -72,4 +72,10 @@ async def init_db():
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         """)
+
+        # Indexes for common query patterns
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_swarm_runs_project_started ON swarm_runs(project_id, started_at)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_swarm_runs_status ON swarm_runs(status)")
+
         await db.commit()

@@ -14,6 +14,8 @@ class FolderWatcher:
         self.folder = Path(folder)
         self.broadcast = broadcast
         self._task: asyncio.Task | None = None
+        # Track byte positions for incremental log reading (path_str -> byte offset)
+        self._file_positions: dict[str, int] = {}
 
     async def start(self):
         self._task = asyncio.create_task(self._watch())
@@ -90,13 +92,25 @@ class FolderWatcher:
 
         elif parts[0] == "logs" and path.suffix == ".log":
             try:
-                lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-                recent = lines[-5:] if len(lines) > 5 else lines
-                event = {
-                    "type": "log",
-                    "agent": path.stem,
-                    "lines": recent,
-                }
+                key = path_str
+                last_pos = self._file_positions.get(key, 0)
+                file_size = path.stat().st_size
+                if file_size < last_pos:
+                    # File was truncated/rotated, reset position
+                    last_pos = 0
+                if file_size > last_pos:
+                    with open(path, "r", encoding="utf-8", errors="replace") as f:
+                        f.seek(last_pos)
+                        new_data = f.read()
+                        new_pos = f.tell()
+                    self._file_positions[key] = new_pos
+                    new_lines = [l for l in new_data.splitlines() if l.strip()]
+                    if new_lines:
+                        event = {
+                            "type": "log",
+                            "agent": path.stem,
+                            "lines": new_lines,
+                        }
             except Exception:
                 pass
 

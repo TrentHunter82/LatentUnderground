@@ -53,3 +53,6 @@ CORS_ORIGINS: list[str] = [
 FRONTEND_DIST: Path = Path(os.environ.get(
     "LU_FRONTEND_DIST", str(_PROJECT_ROOT / "frontend" / "dist")
 ))
+
+# API key for authentication (empty = auth disabled)
+API_KEY: str = os.environ.get("LU_API_KEY", "")

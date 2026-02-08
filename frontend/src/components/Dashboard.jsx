@@ -170,6 +170,7 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
             onClick={handleExport}
             className="p-2 rounded text-zinc-500 hover:text-crt-green hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
             title="Export project"
+            aria-label="Export project"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
               <path d="M8 2v8M5 7l3 3 3-3M3 12v1.5h10V12" />
@@ -179,6 +180,7 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
             onClick={() => setConfirmDelete(true)}
             className="p-2 rounded text-zinc-500 hover:text-signal-red hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
             title="Delete project"
+            aria-label="Delete project"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
               <path d="M2 4h12M5.33 4V2.67a1.33 1.33 0 011.34-1.34h2.66a1.33 1.33 0 011.34 1.34V4M6.67 7.33v4M9.33 7.33v4" />

@@ -1,13 +1,15 @@
+import hmac
 import logging
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import aiosqlite
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import config
 from .database import DB_PATH, init_db
@@ -21,6 +23,42 @@ _start_time = time.time()
 
 # Path to the built frontend
 FRONTEND_DIST = config.FRONTEND_DIST
+
+# Paths that skip authentication
+_AUTH_SKIP_PATHS = {"/api/health", "/docs", "/redoc", "/openapi.json"}
+
+
+class APIKeyMiddleware(BaseHTTPMiddleware):
+    """Optional API key authentication. Disabled when LU_API_KEY is empty."""
+
+    async def dispatch(self, request: Request, call_next):
+        api_key = config.API_KEY
+        if not api_key:
+            return await call_next(request)
+
+        # Skip auth for public paths and WebSocket upgrades
+        path = request.url.path
+        if path in _AUTH_SKIP_PATHS or path == "/ws":
+            return await call_next(request)
+        # Skip for frontend static files
+        if not path.startswith("/api/"):
+            return await call_next(request)
+
+        # Check Authorization: Bearer <key> or X-API-Key: <key>
+        provided_key = None
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            provided_key = auth_header[7:]
+        if not provided_key:
+            provided_key = request.headers.get("x-api-key")
+
+        if not provided_key or not hmac.compare_digest(provided_key, api_key):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid or missing API key"},
+            )
+
+        return await call_next(request)
 
 
 def _ensure_directories():
@@ -102,6 +140,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(APIKeyMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
