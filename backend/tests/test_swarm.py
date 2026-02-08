@@ -84,6 +84,11 @@ class TestSwarmLaunch:
         })
         pid = resp.json()["id"]
 
+        # Remove scaffolded swarm.ps1 (project creation auto-copies it)
+        scaffolded = empty_folder / "swarm.ps1"
+        if scaffolded.exists():
+            scaffolded.unlink()
+
         resp = await client.post("/api/swarm/launch", json={"project_id": pid})
         assert resp.status_code == 400
         assert "swarm.ps1 not found" in resp.json()["detail"]

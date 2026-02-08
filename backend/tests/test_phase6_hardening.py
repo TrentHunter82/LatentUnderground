@@ -50,6 +50,13 @@ class TestSwarmLaunchValidation:
     @pytest.mark.asyncio
     async def test_boundary_values_accepted(self, client, created_project):
         """agent_count=1 and max_phases=1 pass validation (404 on swarm.ps1 is fine)."""
+        # Remove scaffolded swarm.ps1 so launch fails at script check, not validation
+        from pathlib import Path
+        folder = Path(created_project["folder_path"])
+        scaffolded = folder / "swarm.ps1"
+        if scaffolded.exists():
+            scaffolded.unlink()
+
         resp = await client.post("/api/swarm/launch", json={
             "project_id": created_project["id"],
             "agent_count": 1,
