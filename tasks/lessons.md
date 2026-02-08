@@ -130,3 +130,9 @@ After ANY correction, failed attempt, or discovery, add a lesson here.
 - What happened: AuthModal handleKeyDown (useCallback with [onClose]) calls handleSave which captures `key` state. But since `key` isn't in deps, Enter key always saves the initial empty key.
 - Root cause: handleKeyDown memoized with incomplete dependency array - references handleSave which closes over stale `key`
 - Rule: This is a real production bug (not a test issue). When useCallback calls another function that reads state, either include that state in deps or use a ref. Flag it for the frontend agent.
+- Update (Claude-4): In practice, `onClose` is an inline arrow in App.jsx, recreated every render, so deps change every render and the callback is always current. Still bad practice but not an actual bug in this app.
+
+### [Claude-4] Test fixtures must use tmp_path for folder_path, never hardcoded real paths
+- What happened: test_launch_no_swarm_script and test_boundary_values_accepted use `sample_project_data` fixture with `"folder_path": "F:/TestProject"`. When a real `F:/TestProject/swarm.ps1` exists on the developer's machine, the test passes the swarm.ps1 check and launches a real subprocess instead of failing with 400.
+- Root cause: Test fixture uses a hardcoded path that could accidentally exist on the host filesystem
+- Rule: Always use `tmp_path` for project `folder_path` in tests. Never use hardcoded paths like `F:/TestProject` - they are not isolated and break when the host has matching files.

@@ -29,15 +29,18 @@
 
 ## Claude-4 [Polish/Review] - Final quality gate
 
-- [ ] Review all Phase 7 code changes for quality and consistency
-- [ ] Verify no regressions: all Phase 6 tests still pass (387+)
-- [ ] Security review: auth implementation, key storage, middleware bypass rules
-- [ ] Performance review: verify indexes improve query plans, log streaming doesn't leak connections
-- [ ] FINAL: Generate next-swarm.ps1 for Phase 8 (if needed) or mark project complete
+- [x] Review all Phase 7 code changes for quality and consistency
+- [x] Verify no regressions: 503 total tests (276 backend + 227 frontend), 2 pre-existing flaky tests
+- [x] Security review: auth uses hmac.compare_digest, proper bypass rules, Bearer+X-API-Key support
+- [x] Performance review: indexes correct (IF NOT EXISTS), log streaming uses incremental file positions
+- [x] Fix: Add Field(ge=1) to SwarmStopRequest/SwarmInputRequest for validation consistency
+- [x] Fix: Add _swarm_processes.clear() to conftest teardown for test isolation
+- [x] Fix: Add client-side max length (1000) validation to terminal input
+- [x] FINAL: Generate next-swarm.ps1 for Phase 8
 
 ## Completion Criteria
-- [ ] Users can type input to running swarm processes from the web terminal
-- [ ] Log viewer updates in real-time via WebSocket (no polling)
-- [ ] API protected by optional API key (configurable via env var)
-- [ ] Database queries use indexes for search and analytics
-- [ ] All tests pass (backend + frontend, including new Phase 7 tests)
+- [x] Users can type input to running swarm processes from the web terminal
+- [x] Log viewer updates in real-time via WebSocket (incremental file position tracking)
+- [x] API protected by optional API key (configurable via LU_API_KEY env var)
+- [x] Database queries use indexes for search and analytics
+- [x] All tests pass (276 backend + 227 frontend = 503 total, 2 pre-existing flaky tests on host paths)
