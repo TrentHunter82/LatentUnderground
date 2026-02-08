@@ -146,3 +146,32 @@ All Phase 5 tasks done. See TASKS.md.
 - [x] 5. WebSocket log streaming: incremental file position tracking in watcher.py
 - [x] 6. API key auth middleware: LU_API_KEY, Bearer/X-API-Key headers, skip health/docs/ws
 - [x] 7. Verification: 250 backend tests passing, 0 failures, backend-ready.signal created
+
+## Claude-3 - Phase 7 Test Plan
+
+### Task 1: Stdin input endpoint tests (test_swarm_input.py) - DONE
+- [x] 8 tests: not found, not running, no process, process exited, success, echo buffer, broken pipe, text too long
+
+### Task 2: Auth middleware tests (test_auth_middleware.py) - DONE
+- [x] 8 tests: disabled, valid Bearer, valid X-API-Key, invalid key, missing key, health bypass, docs bypass, non-API bypass
+
+### Task 3: Database index tests (test_database_indexes.py) - DONE
+- [x] 3 tests: indexes created, columns correct, idempotent
+
+### Task 4: Log search date range tests (test_log_date_range.py) - DONE
+- [x] 7 tests: from_date, to_date, both, invalid from, invalid to, date-only format, no-timestamp included
+
+### Task 5: Frontend tests (phase7-components.test.jsx + phase7-api.test.js) - DONE
+- [x] TerminalInput: 8 tests (render, disabled, enabled, send button, Enter key, echo, error, clear)
+- [x] AuthModal: 8 tests (hidden, visible, save, clear, cancel, Esc, Enter, stored key)
+- [x] LogViewer date range: 3 tests (inputs, clear button, searchLogs call)
+- [x] Live log indicator: 2 tests (LIVE shown, ws lines appended)
+- [x] Keyboard shortcuts: 2 tests (Ctrl+N, Escape)
+- [x] API functions: 8 tests (sendSwarmInput, Bearer header, 401, searchLogs params, auth helpers)
+
+### Task 6: Verification - DONE
+- [x] Backend: 276 passed (250 existing + 26 new), zero failures
+- [x] Frontend: 227 passed + 5 skipped (196 existing + 31 new), zero failures
+- [x] Grand total: 503 passing, 0 failures
+- [x] tests-passing.signal updated
+- [x] TASKS.md marked complete

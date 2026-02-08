@@ -120,3 +120,13 @@ After ANY correction, failed attempt, or discovery, add a lesson here.
 - What happened: ProjectView tab accessibility tests failed with "No startWatch export" because the vi.mock for ../lib/api didn't include startWatch, which Dashboard (a child of ProjectView) imports
 - Root cause: vi.mock replaces the entire module. Any export used by any child component in the render tree must be mocked, not just what the direct component uses
 - Rule: When mocking a shared module like api.js, grep all components in the render tree for their imports and include every export in the mock. Use `vi.mock(import("..."), async (importOriginal) => ...)` pattern when uncertain.
+
+### [Claude-3] Async loadLogs() races with synchronous WebSocket state updates
+- What happened: LogViewer test passed wsEvents at initial render, but the ws-appended lines were overwritten when the async loadLogs() resolved and called setLogs([])
+- Root cause: useEffect for initial load runs an async fetch. useEffect for wsEvents fires synchronously. The fetch resolves later and replaces state.
+- Rule: When testing components with both async data loading and synchronous prop-driven state updates, render first with null props, await the async effect, then re-render with the prop data.
+
+### [Claude-3] useCallback stale closure when deps don't include referenced state
+- What happened: AuthModal handleKeyDown (useCallback with [onClose]) calls handleSave which captures `key` state. But since `key` isn't in deps, Enter key always saves the initial empty key.
+- Root cause: handleKeyDown memoized with incomplete dependency array - references handleSave which closes over stale `key`
+- Rule: This is a real production bug (not a test issue). When useCallback calls another function that reads state, either include that state in deps or use a ref. Flag it for the frontend agent.
