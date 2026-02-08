@@ -1,9 +1,29 @@
 import json
+import logging
+import shutil
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 import aiosqlite
 from ..database import get_db
 from ..models.project import ProjectCreate, ProjectUpdate, ProjectOut, ProjectConfig
+
+logger = logging.getLogger("latent.projects")
+
+# Root of the Latent Underground installation (where swarm.ps1 lives)
+_LU_ROOT = Path(__file__).parent.parent.parent.parent
+
+# Scripts to copy into new project folders
+_SCAFFOLD_SCRIPTS = ["swarm.ps1", "stop-swarm.ps1", "swarm.bat"]
+
+# Directories to create in new project folders
+_SCAFFOLD_DIRS = [
+    ".claude/heartbeats",
+    ".claude/signals",
+    ".claude/handoffs",
+    ".claude/prompts",
+    "tasks",
+    "logs",
+]
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -20,6 +40,17 @@ async def create_project(project: ProjectCreate, db: aiosqlite.Connection = Depe
     folder = Path(project.folder_path)
     if not folder.is_absolute():
         raise HTTPException(status_code=400, detail="folder_path must be an absolute path")
+
+    # Scaffold the project directory
+    folder.mkdir(parents=True, exist_ok=True)
+    for subdir in _SCAFFOLD_DIRS:
+        (folder / subdir).mkdir(parents=True, exist_ok=True)
+    for script in _SCAFFOLD_SCRIPTS:
+        src = _LU_ROOT / script
+        dest = folder / script
+        if src.exists() and not dest.exists():
+            shutil.copy2(src, dest)
+            logger.info("Scaffolded %s into %s", script, folder)
 
     cursor = await db.execute(
         """INSERT INTO projects (name, goal, project_type, tech_stack, complexity, requirements, folder_path)

@@ -63,7 +63,7 @@ async def app(tmp_db, tmp_path):
     """Create a FastAPI test app with test database."""
     from app import database
     from app.routes.files import _last_write
-    from app.routes.swarm import _output_buffers, cancel_drain_tasks
+    from app.routes.swarm import _output_buffers, _swarm_processes, cancel_drain_tasks
 
     original_db_path = database.DB_PATH
     database.DB_PATH = tmp_db
@@ -84,9 +84,10 @@ async def app(tmp_db, tmp_path):
 
     yield _app
 
-    # Stop any drain threads and clear buffers on teardown
+    # Stop any drain threads and clear all module-level state on teardown
     await cancel_drain_tasks()
     _output_buffers.clear()
+    _swarm_processes.clear()
     database.DB_PATH = original_db_path
 
 

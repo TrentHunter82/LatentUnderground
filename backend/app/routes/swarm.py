@@ -84,11 +84,11 @@ class SwarmLaunchRequest(BaseModel):
 
 
 class SwarmStopRequest(BaseModel):
-    project_id: int
+    project_id: int = Field(ge=1)
 
 
 class SwarmInputRequest(BaseModel):
-    project_id: int
+    project_id: int = Field(ge=1)
     text: str = Field(max_length=1000)
 
 

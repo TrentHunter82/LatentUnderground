@@ -93,6 +93,11 @@ export default function TerminalOutput({ projectId, fetchOutput, isRunning }) {
   const handleSendInput = async () => {
     const text = inputText.trim()
     if (!text) return
+    if (text.length > 1000) {
+      setInputError('Input must be 1000 characters or less')
+      setTimeout(() => setInputError(null), 3000)
+      return
+    }
 
     setInputError(null)
     setInputText('')
