@@ -21,6 +21,7 @@
 #   - Fix flaky tests (hardcoded fixture paths)
 #   - Frontend performance: virtualized log rendering, debounced search
 #   - Production polish: error boundaries, loading states, empty states
+#   - All agents: web research + skill discovery baked into swarm.ps1 prompts (auto-applied every phase)
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
