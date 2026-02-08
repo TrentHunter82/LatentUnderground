@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
 from starlette.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import aiosqlite
 from ..database import get_db
 
@@ -30,6 +30,7 @@ router = APIRouter(prefix="/api/swarm", tags=["swarm"])
 
 # In-memory output buffers for swarm processes, keyed by project_id
 _output_buffers: dict[int, list[str]] = {}
+_buffers_lock = threading.Lock()
 _MAX_OUTPUT_LINES = 500
 
 # Track background drain threads for cleanup on stop/shutdown
@@ -53,15 +54,16 @@ async def cancel_drain_tasks(project_id: int | None = None):
 
 def _drain_stream_sync(project_id: int, stream, label: str, stop_event: threading.Event):
     """Read lines from a subprocess stream in a background thread."""
-    buf = _output_buffers.setdefault(project_id, [])
     try:
         for line in iter(stream.readline, b""):
             if stop_event.is_set():
                 break
             text = line.decode("utf-8", errors="replace").rstrip()
-            buf.append(f"[{label}] {text}")
-            if len(buf) > _MAX_OUTPUT_LINES:
-                del buf[: len(buf) - _MAX_OUTPUT_LINES]
+            with _buffers_lock:
+                buf = _output_buffers.setdefault(project_id, [])
+                buf.append(f"[{label}] {text}")
+                if len(buf) > _MAX_OUTPUT_LINES:
+                    del buf[: len(buf) - _MAX_OUTPUT_LINES]
     except Exception:
         logger.error("_drain_stream failed for project %d [%s]", project_id, label, exc_info=True)
     finally:
@@ -72,8 +74,8 @@ class SwarmLaunchRequest(BaseModel):
     project_id: int
     resume: bool = False
     no_confirm: bool = True
-    agent_count: int = 4
-    max_phases: int = 3
+    agent_count: int = Field(default=4, ge=1, le=16)
+    max_phases: int = Field(default=24, ge=1, le=24)
 
 
 class SwarmStopRequest(BaseModel):
@@ -117,7 +119,8 @@ async def launch_swarm(req: SwarmLaunchRequest, db: aiosqlite.Connection = Depen
 
     # Cancel any existing drain threads for this project, then start new ones
     await cancel_drain_tasks(req.project_id)
-    _output_buffers[req.project_id] = []
+    with _buffers_lock:
+        _output_buffers[req.project_id] = []
     stop_event = threading.Event()
     _drain_stop_events[req.project_id] = stop_event
     stdout_thread = threading.Thread(
@@ -157,9 +160,16 @@ async def stop_swarm(req: SwarmStopRequest, db: aiosqlite.Connection = Depends(g
     folder = Path(project["folder_path"])
     stop_script = folder / "stop-swarm.ps1"
 
-    # Cancel drain tasks and clean up output buffer for this project
-    await cancel_drain_tasks(req.project_id)
-    _output_buffers.pop(req.project_id, None)
+    # Signal drain threads to stop and wait briefly for final output
+    evt = _drain_stop_events.pop(req.project_id, None)
+    if evt:
+        evt.set()
+    threads = _drain_threads.pop(req.project_id, None)
+    if threads:
+        for t in threads:
+            t.join(timeout=2)
+    with _buffers_lock:
+        _output_buffers.pop(req.project_id, None)
 
     if stop_script.exists():
         process = subprocess.Popen(
@@ -227,6 +237,7 @@ async def swarm_status(project_id: int, db: aiosqlite.Connection = Depends(get_d
                 content = f.read_text(encoding="utf-8-sig").strip()
                 agents.append({"name": f.stem, "last_heartbeat": content})
             except Exception:
+                logger.debug("Failed to read heartbeat %s", f, exc_info=True)
                 agents.append({"name": f.stem, "last_heartbeat": None})
 
     # Read signals
@@ -243,14 +254,17 @@ async def swarm_status(project_id: int, db: aiosqlite.Connection = Depends(get_d
     tasks_file = folder / "tasks" / "TASKS.md"
     task_progress = {"total": 0, "done": 0, "percent": 0}
     if tasks_file.exists():
-        content = tasks_file.read_text()
-        total = len(re.findall(r"- \[[ x]\]", content))
-        done = len(re.findall(r"- \[x\]", content))
-        task_progress = {
-            "total": total,
-            "done": done,
-            "percent": round((done / total) * 100, 1) if total > 0 else 0,
-        }
+        try:
+            content = tasks_file.read_text()
+            total = len(re.findall(r"- \[[ x]\]", content))
+            done = len(re.findall(r"- \[x\]", content))
+            task_progress = {
+                "total": total,
+                "done": done,
+                "percent": round((done / total) * 100, 1) if total > 0 else 0,
+            }
+        except Exception:
+            logger.debug("Failed to read tasks file %s", tasks_file, exc_info=True)
 
     # Read phase info
     phase_info = None
@@ -259,7 +273,7 @@ async def swarm_status(project_id: int, db: aiosqlite.Connection = Depends(get_d
         try:
             phase_info = json.loads(phase_file.read_text())
         except Exception:
-            pass
+            logger.debug("Failed to read phase file %s", phase_file, exc_info=True)
 
     return {
         "project_id": project_id,
@@ -280,8 +294,9 @@ async def swarm_output(project_id: int, offset: int = 0, db: aiosqlite.Connectio
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    buf = _output_buffers.get(project_id, [])
-    lines = buf[offset:]
+    with _buffers_lock:
+        buf = _output_buffers.get(project_id, [])
+        lines = buf[offset:]
     return {
         "project_id": project_id,
         "offset": offset,
@@ -302,11 +317,14 @@ async def swarm_output_stream(project_id: int, request: Request, db: aiosqlite.C
         while True:
             if await request.is_disconnected():
                 break
-            buf = _output_buffers.get(project_id, [])
-            if offset < len(buf):
-                for line in buf[offset:]:
+            with _buffers_lock:
+                buf = _output_buffers.get(project_id, [])
+                new_lines = buf[offset:]
+                buf_len = len(buf)
+            if new_lines:
+                for line in new_lines:
                     yield f"data: {json.dumps({'line': line})}\n\n"
-                offset = len(buf)
+                offset = buf_len
             else:
                 # If no active drain threads (swarm not running), we're done
                 threads = _drain_threads.get(project_id, [])

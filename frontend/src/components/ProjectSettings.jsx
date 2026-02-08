@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 
 export default function ProjectSettings({ projectId, initialConfig, onSave }) {
   const [agentCount, setAgentCount] = useState(4)
-  const [maxPhases, setMaxPhases] = useState(3)
+  const [maxPhases, setMaxPhases] = useState(24)
   const [customPrompts, setCustomPrompts] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -10,7 +10,7 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
   useEffect(() => {
     if (initialConfig) {
       setAgentCount(initialConfig.agent_count ?? 4)
-      setMaxPhases(initialConfig.max_phases ?? 3)
+      setMaxPhases(initialConfig.max_phases ?? 24)
       setCustomPrompts(initialConfig.custom_prompts ?? '')
     }
   }, [initialConfig])

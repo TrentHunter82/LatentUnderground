@@ -3,13 +3,13 @@
 # Usage: .\swarm.ps1 [-Resume] [-NoConfirm] [-AgentCount 4] [-MaxPhases 3]
 # Double-click: Use swarm.bat wrapper
 # Auto-chain: When a phase completes, supervisor automatically launches the next swarm
-#             up to MaxPhases (default 3). Override with -MaxPhases N.
+#             up to MaxPhases (default 24). Override with -MaxPhases N.
 
 param(
     [switch]$Resume,
     [switch]$NoConfirm,
     [int]$AgentCount = 4,
-    [int]$MaxPhases = 3
+    [int]$MaxPhases = 24
 )
 
 $ErrorActionPreference = "Stop"
@@ -464,7 +464,7 @@ $supervisorScript = @'
 param(
     [int]$CheckInterval = 30,
     [int]$StaleThreshold = 120,
-    [int]$MaxPhases = 3
+    [int]$MaxPhases = 24
 )
 
 $logFile = "logs/supervisor.log"
@@ -918,5 +918,5 @@ Write-Host ""
 Write-Host "  Control:" -ForegroundColor White
 Write-Host "    .\stop-swarm.ps1     - Stop all agents" -ForegroundColor Gray
 Write-Host "    .\swarm.ps1 -Resume  - Resume after stop" -ForegroundColor Gray
-Write-Host "    -MaxPhases N         - Change auto-chain limit (default: 3)" -ForegroundColor Gray
+Write-Host "    -MaxPhases N         - Change auto-chain limit (default: 24)" -ForegroundColor Gray
 Write-Host ""

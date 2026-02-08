@@ -1,7 +1,7 @@
 ﻿param(
     [int]$CheckInterval = 30,
     [int]$StaleThreshold = 120,
-    [int]$MaxPhases = 3
+    [int]$MaxPhases = 24
 )
 
 $logFile = "logs/supervisor.log"
