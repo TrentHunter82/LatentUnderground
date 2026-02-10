@@ -5,6 +5,7 @@ default listing, unarchiving restores them, swarm history is preserved through
 the cycle, and edge cases are handled correctly.
 """
 
+import aiosqlite
 import pytest
 
 
@@ -182,3 +183,55 @@ class TestArchivalWithHistory:
 
         resp = await client.get(f"/api/swarm/status/{pid}")
         assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_archived_project_preserves_swarm_runs(self, client, created_project, tmp_db):
+        """Swarm runs created before archival should be preserved and queryable."""
+        pid = created_project["id"]
+
+        # Insert swarm runs directly into the test DB
+        async with aiosqlite.connect(tmp_db) as db:
+            await db.execute(
+                "INSERT INTO swarm_runs (project_id, status, tasks_completed, task_summary) "
+                "VALUES (?, 'completed', 5, 'Built auth system')",
+                (pid,),
+            )
+            await db.execute(
+                "INSERT INTO swarm_runs (project_id, status, tasks_completed, task_summary) "
+                "VALUES (?, 'completed', 3, 'Added tests')",
+                (pid,),
+            )
+            await db.commit()
+
+        # Archive the project
+        resp = await client.post(f"/api/projects/{pid}/archive")
+        assert resp.status_code == 200
+
+        # History should still return both runs
+        resp = await client.get(f"/api/swarm/history/{pid}")
+        assert resp.status_code == 200
+        runs = resp.json()["runs"]
+        assert len(runs) == 2
+
+        # Stats should reflect the completed runs
+        resp = await client.get(f"/api/projects/{pid}/stats")
+        assert resp.status_code == 200
+        stats = resp.json()
+        assert stats["total_runs"] == 2
+        assert stats["tasks_completed"] >= 8  # 5 + 3
+
+    @pytest.mark.asyncio
+    async def test_include_archived_query_param(self, client, created_project):
+        """GET /api/projects?include_archived=true should include archived projects."""
+        pid = created_project["id"]
+        await client.post(f"/api/projects/{pid}/archive")
+
+        # Default excludes
+        resp = await client.get("/api/projects")
+        assert pid not in [p["id"] for p in resp.json()]
+
+        # With include_archived=true
+        resp = await client.get("/api/projects?include_archived=true")
+        assert resp.status_code == 200
+        ids = [p["id"] for p in resp.json()]
+        assert pid in ids
