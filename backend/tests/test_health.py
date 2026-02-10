@@ -22,7 +22,7 @@ async def test_health_has_all_fields(client):
     data = resp.json()
     assert set(data.keys()) == {"status", "db", "app", "version", "uptime_seconds", "active_processes"}
     assert data["app"] == "Latent Underground"
-    assert data["version"] == "0.1.0"
+    assert data["version"] == "0.11.0"
 
 
 @pytest.mark.asyncio
@@ -38,4 +38,4 @@ async def test_health_degraded_on_db_failure(client):
     assert data["status"] == "degraded"
     assert data["db"] == "error"
     assert data["app"] == "Latent Underground"
-    assert data["version"] == "0.1.0"
+    assert data["version"] == "0.11.0"
