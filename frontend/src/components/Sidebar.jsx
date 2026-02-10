@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { deleteProject } from '../lib/api'
+import { deleteProject, archiveProject, unarchiveProject } from '../lib/api'
 import ConfirmDialog from './ConfirmDialog'
 import { useToast } from './Toast'
+import { useDebounce } from '../hooks/useDebounce'
 
 const statusColors = {
   running: 'bg-emerald-500',
@@ -18,7 +19,7 @@ const statusGlow = {
 
 const statusFilters = ['all', 'running', 'stopped', 'created']
 
-export default function Sidebar({ projects, onRefresh, collapsed, onToggle }) {
+export default function Sidebar({ projects, onRefresh, collapsed, onToggle, showArchived, onShowArchivedChange }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
@@ -26,11 +27,12 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle }) {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const debouncedSearch = useDebounce(search, 300)
 
   const filteredProjects = projects.filter((p) => {
     if (statusFilter !== 'all' && p.status !== statusFilter) return false
-    if (search) {
-      const q = search.toLowerCase()
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase()
       return (p.name || '').toLowerCase().includes(q) || (p.goal || '').toLowerCase().includes(q)
     }
     return true
@@ -85,9 +87,10 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search projects..."
+            aria-label="Search projects"
             className="retro-input w-full px-2.5 py-1.5 text-xs"
           />
-          <div className="flex gap-1">
+          <div className="flex gap-1 items-center">
             {statusFilters.map((s) => (
               <button
                 key={s}
@@ -99,6 +102,15 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle }) {
                 {s === 'all' ? 'All' : s}
               </button>
             ))}
+            <label className="flex items-center gap-1 ml-auto cursor-pointer select-none" title="Show archived projects">
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={(e) => onShowArchivedChange?.(e.target.checked)}
+                className="accent-crt-green w-3 h-3 cursor-pointer"
+              />
+              <span className="text-[10px] text-zinc-500 font-mono">Archived</span>
+            </label>
           </div>
         </div>
 
@@ -117,11 +129,13 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle }) {
               No matching projects
             </div>
           )}
-          {filteredProjects.map((p) => (
-            <div key={p.id} className="group relative mb-0.5">
+          {filteredProjects.map((p) => {
+            const isArchived = !!p.archived_at
+            return (
+            <div key={p.id} className={`group relative mb-0.5 ${isArchived ? 'opacity-50' : ''}`}>
               <Link
                 to={`/projects/${p.id}`}
-                className={`block px-3 py-2 pr-8 rounded no-underline transition-colors ${
+                className={`block px-3 py-2 pr-14 rounded no-underline transition-colors ${
                   activeId === p.id
                     ? 'bg-retro-grid text-zinc-100 border-l-2 border-crt-green'
                     : 'text-zinc-400 hover:bg-retro-grid/50 hover:text-zinc-200'
@@ -130,27 +144,59 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle }) {
                 <div className="flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full shrink-0 ${statusColors[p.status] || 'bg-zinc-600'} ${statusGlow[p.status] || ''}`} />
                   <span className="text-sm truncate font-mono">{p.name}</span>
+                  {isArchived && (
+                    <span className="text-[8px] font-mono uppercase tracking-wider text-crt-amber/70 bg-crt-amber/10 px-1 py-0.5 rounded shrink-0">Archived</span>
+                  )}
                 </div>
                 <div className="ml-4 text-[11px] text-zinc-600 truncate">{p.goal}</div>
               </Link>
-              <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(p) }}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded text-zinc-600 hover:text-signal-red hover:bg-retro-grid bg-transparent border-0 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
-                aria-label={`Delete ${p.name}`}
-                title={`Delete ${p.name}`}
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M2 4h12M5.33 4V2.67a1.33 1.33 0 011.34-1.34h2.66a1.33 1.33 0 011.34 1.34V4" />
-                  <path d="M3.33 4l.67 9.33a1.33 1.33 0 001.33 1.34h5.34a1.33 1.33 0 001.33-1.34L12.67 4" />
-                </svg>
-              </button>
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={async (e) => {
+                    e.preventDefault(); e.stopPropagation()
+                    try {
+                      if (isArchived) {
+                        await unarchiveProject(p.id)
+                        toast('Project unarchived', 'success')
+                      } else {
+                        await archiveProject(p.id)
+                        toast('Project archived', 'success')
+                      }
+                      onRefresh?.()
+                    } catch (err) {
+                      toast(`${isArchived ? 'Unarchive' : 'Archive'} failed: ${err.message}`, 'error')
+                    }
+                  }}
+                  className="p-1 rounded text-zinc-600 hover:text-crt-amber hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
+                  aria-label={`${isArchived ? 'Unarchive' : 'Archive'} ${p.name}`}
+                  title={`${isArchived ? 'Unarchive' : 'Archive'} ${p.name}`}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1.5 3.5h13v3h-13z" />
+                    <path d="M2.5 6.5v7h11v-7" />
+                    <path d="M6 9h4" />
+                  </svg>
+                </button>
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(p) }}
+                  className="p-1 rounded text-zinc-600 hover:text-signal-red hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
+                  aria-label={`Delete ${p.name}`}
+                  title={`Delete ${p.name}`}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M2 4h12M5.33 4V2.67a1.33 1.33 0 011.34-1.34h2.66a1.33 1.33 0 011.34 1.34V4" />
+                    <path d="M3.33 4l.67 9.33a1.33 1.33 0 001.33 1.34h5.34a1.33 1.33 0 001.33-1.34L12.67 4" />
+                  </svg>
+                </button>
+              </div>
             </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Footer */}
         <div className="p-3 border-t border-retro-border text-[10px] text-zinc-600 text-center whitespace-nowrap font-mono">
-          Latent Underground v0.1
+          Latent Underground v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.1'}
         </div>
       </aside>
 
@@ -169,7 +215,10 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle }) {
             onRefresh?.()
             if (activeId === targetId) navigate('/')
           } catch (e) {
-            toast(`Delete failed: ${e.message}`, 'error')
+            toast(`Delete failed: ${e.message}`, 'error', 4000, {
+              label: 'Retry',
+              onClick: () => deleteProject(targetId).then(() => { toast('Project deleted', 'success'); onRefresh?.() }).catch((e2) => toast(`Delete failed: ${e2.message}`, 'error'))
+            })
           }
         }}
         onCancel={() => setDeleteTarget(null)}

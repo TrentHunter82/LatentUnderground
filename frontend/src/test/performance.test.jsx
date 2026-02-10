@@ -4,9 +4,10 @@ import { render, screen, act } from '@testing-library/react'
 // --- LogViewer Performance ---
 import LogViewer from '../components/LogViewer'
 
-// Mock api.getLogs
+// Mock api
 vi.mock('../lib/api', () => ({
   getLogs: vi.fn(),
+  searchLogs: vi.fn(() => Promise.resolve({ results: [] })),
 }))
 
 import { getLogs } from '../lib/api'
@@ -24,9 +25,8 @@ describe('LogViewer Performance', () => {
     })
     const elapsed = performance.now() - start
 
-    // Should render all 1000 lines
+    // Virtual scroll renders partial rows - first visible rows should be present
     expect(screen.getByText('Log line 0')).toBeInTheDocument()
-    expect(screen.getByText('Log line 999')).toBeInTheDocument()
     // Should render in reasonable time (< 2000ms)
     expect(elapsed).toBeLessThan(2000)
   })
@@ -53,11 +53,11 @@ describe('LogViewer Performance', () => {
       rerender(<LogViewer projectId={1} wsEvents={wsEvent} />)
     })
 
-    // Buffer should be capped at 1000
-    // The last WS line should be present
-    expect(screen.getByText('WS line 9')).toBeInTheDocument()
-    // Early initial lines may be trimmed (995 + 10 = 1005, trimmed to 1000)
-    // So Initial 0 through Initial 4 should be gone
+    // Buffer should be capped at 1000 (995 + 10 = 1005, sliced to 1000)
+    // Early initial lines should be trimmed: Initial 0-4 gone
+    // Virtual scroll only renders partial rows, so check the first visible row
+    // Initial 5 should be the new first item
+    expect(screen.getByText('Initial 5')).toBeInTheDocument()
     expect(screen.queryByText('Initial 0')).not.toBeInTheDocument()
   })
 

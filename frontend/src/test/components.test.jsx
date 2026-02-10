@@ -282,7 +282,9 @@ vi.mock('../lib/api', () => ({
   launchSwarm: vi.fn(),
   stopSwarm: vi.fn(),
   createProject: vi.fn(),
+  createTemplate: vi.fn(),
   getLogs: vi.fn().mockResolvedValue({ logs: [] }),
+  searchLogs: vi.fn(() => Promise.resolve({ results: [] })),
   deleteProject: vi.fn(),
   getTemplates: vi.fn(() => Promise.resolve([])),
 }))
@@ -367,7 +369,11 @@ vi.mock('react-router-dom', () => ({
 import NewProject from '../components/NewProject'
 
 function renderNewProject(props = {}) {
-  return render(<NewProject onProjectChange={vi.fn()} {...props} />)
+  return render(
+    <ToastProvider>
+      <NewProject onProjectChange={vi.fn()} {...props} />
+    </ToastProvider>
+  )
 }
 
 describe('NewProject', () => {
@@ -436,7 +442,8 @@ describe('NewProject', () => {
 
     await act(async () => { fireEvent.click(screen.getByText('Create Project')) })
 
-    expect(screen.getByText('Name required')).toBeInTheDocument()
+    // Error appears in both inline div and toast
+    expect(screen.getAllByText('Name required').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows loading state during submission', async () => {
@@ -526,9 +533,11 @@ describe('LogViewer', () => {
       )
     })
 
-    // The buffer should have been sliced to 1000; "Line 0" through "Line 2" should be gone
+    // Buffer sliced to 1000: Line 0-3 trimmed (999+5=1004, keep last 1000)
+    // Virtual scroll renders partial view, so check first visible rows
+    // Line 4 should be the new first item and visible
+    expect(screen.getByText('Line 4')).toBeInTheDocument()
     expect(screen.queryByText('Line 0')).not.toBeInTheDocument()
-    expect(screen.getByText('E')).toBeInTheDocument()
   })
 })
 

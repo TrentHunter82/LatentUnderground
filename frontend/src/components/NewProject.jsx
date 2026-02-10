@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createProject, launchSwarm, getTemplates } from '../lib/api'
+import { createProject, launchSwarm, getTemplates, createTemplate } from '../lib/api'
+import { DEFAULT_TEMPLATE_PRESETS } from '../lib/constants'
+import { useToast } from './Toast'
+import FolderBrowser from './FolderBrowser'
+import TemplateManager from './TemplateManager'
 
 const complexityOptions = ['Simple', 'Medium', 'Complex']
 
@@ -22,10 +26,31 @@ export default function NewProject({ onProjectChange }) {
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [templateConfig, setTemplateConfig] = useState(null)
   const [form, setForm] = useState({ ...defaultForm })
+  const [showBrowser, setShowBrowser] = useState(false)
+  const [showManager, setShowManager] = useState(false)
 
-  useEffect(() => {
-    getTemplates().then(setTemplates).catch(() => {})
-  }, [])
+  const toast = useToast()
+
+  const refreshTemplates = () => {
+    getTemplates().then(setTemplates).catch((err) => console.warn('Failed to load templates:', err.message))
+  }
+
+  useEffect(() => { refreshTemplates() }, [])
+
+  const loadDefaultPresets = async () => {
+    try {
+      for (const preset of DEFAULT_TEMPLATE_PRESETS) {
+        await createTemplate(preset)
+      }
+      refreshTemplates()
+      toast('Default templates loaded', 'success')
+    } catch (err) {
+      toast(`Failed to load presets: ${err.message}`, 'error', 4000, {
+        label: 'Retry',
+        onClick: loadDefaultPresets,
+      })
+    }
+  }
 
   const handleTemplateChange = (e) => {
     const id = e.target.value
@@ -65,6 +90,7 @@ export default function NewProject({ onProjectChange }) {
       navigate(`/projects/${project.id}`)
     } catch (err) {
       setError(err.message)
+      toast(err.message, 'error', 4000, { label: 'Retry', onClick: () => handleSubmit(e) })
     } finally {
       setLoading(false)
     }
@@ -87,6 +113,7 @@ export default function NewProject({ onProjectChange }) {
       navigate(`/projects/${project.id}`)
     } catch (err) {
       setError(err.message)
+      toast(err.message, 'error', 4000, { label: 'Retry', onClick: () => handleLaunchNew(e) })
     } finally {
       setLoading(false)
     }
@@ -108,29 +135,56 @@ export default function NewProject({ onProjectChange }) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {templates.length > 0 && (
-            <div>
-              <label className={labelClass}>Start from Template</label>
-              <select
-                value={selectedTemplateId}
-                onChange={handleTemplateChange}
-                className={`${inputClass} cursor-pointer`}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={`${labelClass} mb-0`}>Start from Template</label>
+              <button
+                type="button"
+                onClick={() => setShowManager((v) => !v)}
+                className="text-[10px] text-zinc-500 hover:text-crt-green bg-transparent border-0 cursor-pointer font-mono transition-colors"
               >
-                <option value="">Custom (no template)</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}{t.description ? ` — ${t.description}` : ''}
-                  </option>
-                ))}
-              </select>
-              {templateConfig && (
-                <p className="text-xs text-zinc-600 mt-1 font-mono">
-                  {templateConfig.agent_count && `${templateConfig.agent_count} agents`}
-                  {templateConfig.agent_count && templateConfig.max_phases && ' · '}
-                  {templateConfig.max_phases && `${templateConfig.max_phases} phases`}
-                </p>
-              )}
+                {showManager ? 'Hide Manager' : 'Manage Templates'}
+              </button>
             </div>
+            {templates.length > 0 && (
+              <>
+                <select
+                  value={selectedTemplateId}
+                  onChange={handleTemplateChange}
+                  className={`${inputClass} cursor-pointer`}
+                >
+                  <option value="">Custom (no template)</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}{t.description ? ` — ${t.description}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {templateConfig && (
+                  <p className="text-xs text-zinc-600 mt-1 font-mono">
+                    {templateConfig.agent_count && `${templateConfig.agent_count} agents`}
+                    {templateConfig.agent_count && templateConfig.max_phases && ' · '}
+                    {templateConfig.max_phases && `${templateConfig.max_phases} phases`}
+                  </p>
+                )}
+              </>
+            )}
+            {templates.length === 0 && !showManager && (
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-zinc-600 font-mono m-0">No templates yet.</p>
+                <button
+                  type="button"
+                  onClick={loadDefaultPresets}
+                  className="text-xs text-crt-green hover:text-crt-cyan bg-transparent border-0 cursor-pointer font-mono transition-colors"
+                >
+                  Load defaults
+                </button>
+              </div>
+            )}
+          </div>
+
+          {showManager && (
+            <TemplateManager onTemplatesChange={setTemplates} />
           )}
 
           <div>
@@ -210,13 +264,23 @@ export default function NewProject({ onProjectChange }) {
 
           <div>
             <label className={labelClass}>Project Folder Path</label>
-            <input
-              className={inputClass}
-              placeholder="C:/Projects/my-app"
-              value={form.folder_path}
-              onChange={set('folder_path')}
-              required
-            />
+            <div className="flex gap-2">
+              <input
+                className={`${inputClass} flex-1`}
+                placeholder="C:/Projects/my-app"
+                value={form.folder_path}
+                onChange={set('folder_path')}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowBrowser(true)}
+                className="px-3 py-2 rounded bg-retro-grid hover:bg-retro-border text-zinc-400 hover:text-crt-green text-sm font-mono border border-retro-border cursor-pointer transition-colors shrink-0"
+                title="Browse for folder"
+              >
+                Browse
+              </button>
+            </div>
           </div>
 
           {/* Action buttons */}
@@ -239,6 +303,12 @@ export default function NewProject({ onProjectChange }) {
           </div>
         </form>
       </div>
+
+      <FolderBrowser
+        open={showBrowser}
+        onSelect={(path) => setForm((f) => ({ ...f, folder_path: path }))}
+        onClose={() => setShowBrowser(false)}
+      />
     </div>
   )
 }

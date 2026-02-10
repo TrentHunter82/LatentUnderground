@@ -32,3 +32,36 @@ export const AGENT_LOG_COLORS = {
   'Claude-4': { label: 'neon-amber', bg: 'bg-crt-amber/5' },
   'supervisor': { label: 'text-zinc-400', bg: 'bg-zinc-500/5' },
 }
+
+export const KEYBOARD_SHORTCUTS = [
+  { keys: 'Ctrl+K', description: 'Focus search', group: 'Navigation' },
+  { keys: 'Escape', description: 'Close modal/dialog', group: 'Navigation' },
+  { keys: 'Ctrl+N', description: 'New project', group: 'Actions' },
+  { keys: 'Ctrl+?', description: 'Show keyboard shortcuts', group: 'Actions' },
+  { keys: '←  →', description: 'Switch tabs', group: 'Views' },
+  { keys: 'Home', description: 'First tab', group: 'Views' },
+  { keys: 'End', description: 'Last tab', group: 'Views' },
+]
+
+export const DEFAULT_TEMPLATE_PRESETS = [
+  {
+    name: 'Quick Research',
+    description: 'Fast research and analysis with minimal agent count',
+    config: { agent_count: 2, max_phases: 3, model: 'sonnet' },
+  },
+  {
+    name: 'Code Review',
+    description: 'Thorough code review with testing and security analysis',
+    config: { agent_count: 4, max_phases: 6, model: 'sonnet' },
+  },
+  {
+    name: 'Feature Build',
+    description: 'Full feature development with design, implementation, and testing',
+    config: { agent_count: 4, max_phases: 12, model: 'opus' },
+  },
+  {
+    name: 'Debugging',
+    description: 'Focused debugging session with log analysis and fix verification',
+    config: { agent_count: 3, max_phases: 8, model: 'sonnet' },
+  },
+]

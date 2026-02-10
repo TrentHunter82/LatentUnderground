@@ -192,6 +192,7 @@ vi.mock('../lib/api', () => ({
   writeFile: vi.fn(),
   startWatch: vi.fn(() => Promise.resolve()),
   getTemplates: vi.fn(() => Promise.resolve([])),
+  createTemplate: vi.fn(),
 }))
 
 import ProjectView from '../components/ProjectView'
@@ -332,7 +333,7 @@ import NewProject from '../components/NewProject'
 
 describe('NewProject Form Accessibility', () => {
   it('all inputs have associated labels', () => {
-    render(<NewProject onProjectChange={vi.fn()} />)
+    render(<ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider>)
     // Check that labels exist for major fields
     expect(screen.getByText('Project Name')).toBeInTheDocument()
     expect(screen.getByText('Goal')).toBeInTheDocument()
@@ -344,7 +345,7 @@ describe('NewProject Form Accessibility', () => {
   })
 
   it('required fields have required attribute', () => {
-    render(<NewProject onProjectChange={vi.fn()} />)
+    render(<ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider>)
     const nameInput = screen.getByPlaceholderText('My Awesome App')
     expect(nameInput).toHaveAttribute('required')
 
@@ -356,14 +357,14 @@ describe('NewProject Form Accessibility', () => {
   })
 
   it('submit button is a button element', () => {
-    render(<NewProject onProjectChange={vi.fn()} />)
+    render(<ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider>)
     const btn = screen.getByText('Create Project')
     expect(btn.tagName).toBe('BUTTON')
     expect(btn).toHaveAttribute('type', 'submit')
   })
 
   it('complexity options are buttons', () => {
-    render(<NewProject onProjectChange={vi.fn()} />)
+    render(<ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider>)
     const simpleBtn = screen.getByText('Simple')
     const mediumBtn = screen.getByText('Medium')
     const complexBtn = screen.getByText('Complex')
@@ -373,7 +374,7 @@ describe('NewProject Form Accessibility', () => {
   })
 
   it('complexity buttons have type="button" to prevent form submit', () => {
-    render(<NewProject onProjectChange={vi.fn()} />)
+    render(<ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider>)
     const simpleBtn = screen.getByText('Simple')
     expect(simpleBtn).toHaveAttribute('type', 'button')
   })
@@ -383,7 +384,7 @@ describe('NewProject Form Accessibility', () => {
     const { createProject } = await import('../lib/api')
     createProject.mockImplementation(() => new Promise(() => {}))
 
-    render(<NewProject onProjectChange={vi.fn()} />)
+    render(<ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider>)
 
     // Fill required fields
     fireEvent.change(screen.getByPlaceholderText('My Awesome App'), { target: { value: 'Test' } })

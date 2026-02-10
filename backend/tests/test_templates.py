@@ -1,22 +1,6 @@
-"""Tests for swarm template CRUD endpoints.
-
-Templates allow saving/loading project configs as reusable presets.
-These tests will activate once Claude-1 implements the templates table and routes.
-"""
+"""Tests for swarm template CRUD endpoints."""
 
 import pytest
-
-# Check if templates route exists
-try:
-    from app.routes import templates  # noqa: F401
-    TEMPLATES_AVAILABLE = True
-except (ImportError, ModuleNotFoundError):
-    TEMPLATES_AVAILABLE = False
-
-pytestmark = pytest.mark.skipif(
-    not TEMPLATES_AVAILABLE,
-    reason="Swarm templates not yet implemented (waiting for Claude-1)"
-)
 
 
 class TestTemplateCreate:
@@ -134,3 +118,69 @@ class TestTemplateDelete:
     async def test_delete_nonexistent_template(self, client):
         resp = await client.delete("/api/templates/99999")
         assert resp.status_code == 404
+
+
+class TestTemplateEdgeCases:
+    """Edge cases for template operations."""
+
+    async def test_update_nonexistent_template(self, client):
+        """PATCH on non-existent template returns 404."""
+        resp = await client.patch("/api/templates/99999", json={"name": "Ghost"})
+        assert resp.status_code == 404
+
+    async def test_update_with_no_fields(self, client):
+        """PATCH with all None fields is a no-op but returns current template."""
+        # Create template first
+        create_resp = await client.post("/api/templates", json={
+            "name": "NoOp Test",
+            "config": {"agent_count": 4},
+        })
+        tid = create_resp.json()["id"]
+
+        resp = await client.patch(f"/api/templates/{tid}", json={})
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "NoOp Test"
+
+    async def test_update_description_only(self, client):
+        """PATCH with only description updates just that field."""
+        create_resp = await client.post("/api/templates", json={
+            "name": "Desc Update",
+            "description": "Original desc",
+            "config": {"agent_count": 2},
+        })
+        tid = create_resp.json()["id"]
+
+        resp = await client.patch(f"/api/templates/{tid}", json={
+            "description": "New description",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["description"] == "New description"
+        assert resp.json()["name"] == "Desc Update"  # unchanged
+
+    async def test_create_with_empty_config(self, client):
+        """Create template with empty config dict."""
+        resp = await client.post("/api/templates", json={
+            "name": "Empty Config",
+            "config": {},
+        })
+        assert resp.status_code == 201
+        assert resp.json()["config"] == {}
+
+    async def test_create_with_nested_config(self, client):
+        """Create template with deeply nested config."""
+        resp = await client.post("/api/templates", json={
+            "name": "Nested Config",
+            "config": {"agent_count": 4, "extra": {"key": "value", "list": [1, 2, 3]}},
+        })
+        assert resp.status_code == 201
+        assert resp.json()["config"]["extra"]["list"] == [1, 2, 3]
+
+    async def test_list_ordering(self, client):
+        """Templates listed in reverse chronological order."""
+        await client.post("/api/templates", json={"name": "First", "config": {}})
+        await client.post("/api/templates", json={"name": "Second", "config": {}})
+
+        resp = await client.get("/api/templates")
+        names = [t["name"] for t in resp.json()]
+        assert names[0] == "Second"  # most recent first
+        assert names[1] == "First"

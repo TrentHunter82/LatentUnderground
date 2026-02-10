@@ -12,13 +12,14 @@ from starlette.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import aiosqlite
 from ..database import get_db
+from .webhooks import emit_webhook_event
 
 logger = logging.getLogger("latent.swarm")
 
 
 def _pid_alive(pid: int | None) -> bool:
     """Check if a process with the given PID is still running."""
-    if pid is None:
+    if not pid or pid <= 0:
         return False
     try:
         os.kill(pid, 0)  # Signal 0 doesn't kill, just checks existence
@@ -159,6 +160,7 @@ async def launch_swarm(req: SwarmLaunchRequest, db: aiosqlite.Connection = Depen
     await db.commit()
 
     logger.info("Swarm launched for project %d (pid=%d)", req.project_id, process.pid)
+    await emit_webhook_event("swarm_launched", req.project_id, {"pid": process.pid})
     return {"status": "launched", "pid": process.pid, "project_id": req.project_id}
 
 
@@ -212,6 +214,7 @@ async def stop_swarm(req: SwarmStopRequest, db: aiosqlite.Connection = Depends(g
     await db.commit()
 
     logger.info("Swarm stopped for project %d", req.project_id)
+    await emit_webhook_event("swarm_stopped", req.project_id, {})
     return {"status": "stopped", "project_id": req.project_id}
 
 
@@ -271,6 +274,7 @@ async def swarm_status(project_id: int, db: aiosqlite.Connection = Depends(get_d
             (project_id,),
         )
         await db.commit()
+        await emit_webhook_event("swarm_crashed", project_id, {"stale_pid": project.get("swarm_pid")})
         project["status"] = "stopped"
         project["swarm_pid"] = None
 
@@ -334,19 +338,26 @@ async def swarm_status(project_id: int, db: aiosqlite.Connection = Depends(get_d
 
 
 @router.get("/output/{project_id}")
-async def swarm_output(project_id: int, offset: int = 0, db: aiosqlite.Connection = Depends(get_db)):
-    """Get captured stdout/stderr from the swarm process."""
+async def swarm_output(project_id: int, offset: int = 0, limit: int = 200, db: aiosqlite.Connection = Depends(get_db)):
+    """Get captured stdout/stderr from the swarm process with pagination."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # Cap limit to reasonable range
+    limit = min(max(limit, 1), _MAX_OUTPUT_LINES)
+
     with _buffers_lock:
         buf = _output_buffers.get(project_id, [])
-        lines = buf[offset:]
+        total = len(buf)
+        lines = buf[offset:offset + limit]
     return {
         "project_id": project_id,
         "offset": offset,
+        "limit": limit,
+        "total": total,
         "next_offset": offset + len(lines),
+        "has_more": offset + len(lines) < total,
         "lines": lines,
     }
 

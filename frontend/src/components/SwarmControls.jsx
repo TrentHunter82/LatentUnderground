@@ -25,7 +25,7 @@ export default function SwarmControls({ projectId, status, onAction }) {
       toast(resume ? 'Swarm resumed' : 'Swarm launched', 'success')
       onAction?.()
     } catch (e) {
-      toast(`Launch failed: ${e.message}`, 'error')
+      toast(`Launch failed: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: () => handleLaunch(resume) })
     } finally {
       setLoading(false)
     }
@@ -39,7 +39,7 @@ export default function SwarmControls({ projectId, status, onAction }) {
       toast('Swarm stopped', 'success')
       onAction?.()
     } catch (e) {
-      toast(`Stop failed: ${e.message}`, 'error')
+      toast(`Stop failed: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: handleStop })
     } finally {
       setLoading(false)
     }

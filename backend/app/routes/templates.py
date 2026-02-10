@@ -33,7 +33,8 @@ def _row_to_dict(row: aiosqlite.Row) -> dict:
     d = dict(row)
     try:
         d["config"] = json.loads(d["config"])
-    except (json.JSONDecodeError, TypeError):
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.warning("Failed to parse config for template %s: %s", d.get("id"), e)
         d["config"] = {}
     return d
 

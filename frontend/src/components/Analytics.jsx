@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getSwarmHistory, getProjectStats } from '../lib/api'
+import { AnalyticsSkeleton } from './Skeleton'
 
 const statusColors = {
   completed: '#80C8B0',
@@ -133,11 +134,7 @@ export default function Analytics({ projectId }) {
   }, [projectId])
 
   if (loading) {
-    return (
-      <div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse">
-        Loading analytics...
-      </div>
-    )
+    return <AnalyticsSkeleton />
   }
 
   if (runs.length === 0) {
@@ -151,7 +148,7 @@ export default function Analytics({ projectId }) {
   }
 
   return (
-    <div className="p-4 space-y-4 overflow-y-auto h-full">
+    <div className="p-4 space-y-4 overflow-y-auto h-full animate-fade-in">
       {/* Summary chips */}
       <div className="flex gap-3 flex-wrap">
         <div className="retro-panel border border-retro-border rounded px-4 py-2 text-center">

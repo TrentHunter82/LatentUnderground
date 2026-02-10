@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import rehypeHighlight from 'rehype-highlight'
 import { getFile, putFile } from '../lib/api'
 import { useToast } from './Toast'
 
@@ -19,7 +18,18 @@ export default function FileEditor({ projectId, wsEvents }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [lastModified, setLastModified] = useState(null)
+  const [rehypePlugin, setRehypePlugin] = useState(null)
   const toast = useToast()
+
+  // Lazy-load rehype-highlight (pulls in highlight.js ~179KB) on first render
+  const loadedRef = useRef(false)
+  useEffect(() => {
+    if (loadedRef.current) return
+    loadedRef.current = true
+    import('rehype-highlight').then((mod) => {
+      setRehypePlugin(() => mod.default)
+    }).catch(() => {})
+  }, [])
 
   const loadFile = useCallback(async () => {
     try {
@@ -33,6 +43,7 @@ export default function FileEditor({ projectId, wsEvents }) {
       setContent('')
       setOriginal('')
       setLastModified(null)
+      toast(`Failed to load file: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: loadFile })
     }
   }, [activeFile, projectId])
 
@@ -63,7 +74,7 @@ export default function FileEditor({ projectId, wsEvents }) {
       toast('File saved', 'success', 2000)
     } catch (e) {
       setError(e.message)
-      toast(`Save failed: ${e.message}`, 'error')
+      toast(`Save failed: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: handleSave })
     } finally {
       setSaving(false)
     }
@@ -163,7 +174,7 @@ export default function FileEditor({ projectId, wsEvents }) {
           />
         ) : (
           <div className="markdown-body text-sm text-zinc-300">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>{content || '*Empty file*'}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugin ? [rehypePlugin] : []}>{content || '*Empty file*'}</ReactMarkdown>
           </div>
         )}
       </div>

@@ -48,10 +48,10 @@ async def test_filter_by_status_running(client, created_project):
 
 
 @pytest.mark.asyncio
-async def test_sort_by_name(client):
+async def test_sort_by_name(client, tmp_path):
     """GET /api/projects?sort=name returns alphabetically sorted projects."""
-    await client.post("/api/projects", json={"name": "Zebra", "goal": "Z", "folder_path": "F:/Z"})
-    await client.post("/api/projects", json={"name": "Alpha", "goal": "A", "folder_path": "F:/A"})
+    await client.post("/api/projects", json={"name": "Zebra", "goal": "Z", "folder_path": str(tmp_path / "Z")})
+    await client.post("/api/projects", json={"name": "Alpha", "goal": "A", "folder_path": str(tmp_path / "A")})
     resp = await client.get("/api/projects?sort=name")
     assert resp.status_code == 200
     names = [p["name"] for p in resp.json()]

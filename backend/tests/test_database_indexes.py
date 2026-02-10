@@ -26,6 +26,8 @@ async def test_indexes_created(tmp_path):
         assert "idx_projects_status" in index_names
         assert "idx_swarm_runs_project_started" in index_names
         assert "idx_swarm_runs_status" in index_names
+        assert "idx_swarm_runs_project_ended" in index_names
+        assert "idx_templates_created" in index_names
     finally:
         database.DB_PATH = original
 
@@ -59,6 +61,18 @@ async def test_index_columns_correct(tmp_path):
                 "SELECT tbl_name FROM sqlite_master WHERE type='index' AND name='idx_swarm_runs_status'"
             )).fetchall()
             assert rows[0][0] == "swarm_runs"
+
+            # Check idx_swarm_runs_project_ended is on swarm_runs table
+            rows = await (await db.execute(
+                "SELECT tbl_name FROM sqlite_master WHERE type='index' AND name='idx_swarm_runs_project_ended'"
+            )).fetchall()
+            assert rows[0][0] == "swarm_runs"
+
+            # Check idx_templates_created is on swarm_templates table
+            rows = await (await db.execute(
+                "SELECT tbl_name FROM sqlite_master WHERE type='index' AND name='idx_templates_created'"
+            )).fetchall()
+            assert rows[0][0] == "swarm_templates"
     finally:
         database.DB_PATH = original
 
@@ -79,6 +93,6 @@ async def test_indexes_idempotent(tmp_path):
             rows = await (await db.execute(
                 "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
             )).fetchall()
-            assert len(rows) == 3
+            assert len(rows) == 6  # projects_status, swarm_runs_project_started, swarm_runs_status, swarm_runs_project_ended, templates_created, webhooks_enabled
     finally:
         database.DB_PATH = original

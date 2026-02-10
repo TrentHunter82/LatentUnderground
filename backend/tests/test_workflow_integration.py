@@ -104,7 +104,7 @@ class TestWorkflowWithWebSocket:
                     resp2 = json.loads(ws2.receive_text())
                     assert resp2["type"] == "pong"
 
-    async def test_project_lifecycle_ordering(self, app):
+    async def test_project_lifecycle_ordering(self, app, tmp_path):
         """Verify project list order: newest first."""
         from httpx import ASGITransport, AsyncClient
         import asyncio
@@ -116,7 +116,7 @@ class TestWorkflowWithWebSocket:
                 resp = await client.post("/api/projects", json={
                     "name": f"Project {i}",
                     "goal": f"Goal {i}",
-                    "folder_path": f"F:/project_{i}",
+                    "folder_path": str(tmp_path / f"project_{i}"),
                 })
                 assert resp.status_code == 201
 

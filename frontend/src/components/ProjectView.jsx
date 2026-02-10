@@ -1,13 +1,16 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react'
 import Dashboard from './Dashboard'
-import FileEditor from './FileEditor'
-import LogViewer from './LogViewer'
-import SwarmHistory from './SwarmHistory'
 import TerminalOutput from './TerminalOutput'
-import Analytics from './Analytics'
 import ProjectSettings from './ProjectSettings'
+import WebhookManager from './WebhookManager'
 import { useParams } from 'react-router-dom'
 import { getProject, getSwarmHistory, getSwarmOutput, updateProjectConfig } from '../lib/api'
+import { useSafeToast } from './Toast'
+
+const LogViewer = lazy(() => import('./LogViewer'))
+const SwarmHistory = lazy(() => import('./SwarmHistory'))
+const FileEditor = lazy(() => import('./FileEditor'))
+const Analytics = lazy(() => import('./Analytics'))
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -21,13 +24,23 @@ const tabs = [
 
 export default function ProjectView({ wsEvents, onProjectChange }) {
   const { id } = useParams()
+  const toast = useSafeToast()
   const projectId = Number(id)
   const [activeTab, setActiveTab] = useState('dashboard')
   const [project, setProject] = useState(null)
 
   useEffect(() => {
-    getProject(projectId).then(setProject).catch((e) => console.warn('Failed to load project:', e))
-  }, [projectId])
+    let mounted = true
+    getProject(projectId).then(p => { if (mounted) setProject(p) }).catch((e) => {
+      if (!mounted) return
+      console.warn('Failed to load project:', e)
+      toast(`Failed to load project: ${e.message}`, 'error', 4000, {
+        label: 'Retry',
+        onClick: () => getProject(projectId).then(setProject).catch(() => {})
+      })
+    })
+    return () => { mounted = false }
+  }, [projectId, toast])
 
   const initialConfig = useMemo(() => {
     if (!project?.config) return null
@@ -79,19 +92,23 @@ export default function ProjectView({ wsEvents, onProjectChange }) {
       </div>
 
       {/* Tab content */}
-      <div role="tabpanel" id={`tabpanel-${activeTab}`} aria-labelledby={`tab-${activeTab}`} className="flex-1 min-h-0 bg-zinc-950">
+      <div role="tabpanel" id={`tabpanel-${activeTab}`} aria-labelledby={`tab-${activeTab}`} key={activeTab} className="flex-1 min-h-0 bg-zinc-950 animate-fade-in">
         {activeTab === 'dashboard' && (
           <Dashboard wsEvents={wsEvents} onProjectChange={onProjectChange} />
         )}
         {activeTab === 'files' && (
-          <div className="p-4 h-full">
-            <FileEditor projectId={projectId} wsEvents={wsEvents} />
-          </div>
+          <Suspense fallback={<div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse">Loading editor...</div>}>
+            <div className="p-4 h-full">
+              <FileEditor projectId={projectId} wsEvents={wsEvents} />
+            </div>
+          </Suspense>
         )}
         {activeTab === 'history' && (
-          <div className="p-4 h-full overflow-y-auto">
-            <SwarmHistory projectId={projectId} fetchHistory={getSwarmHistory} />
-          </div>
+          <Suspense fallback={<div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse">Loading history...</div>}>
+            <div className="p-4 h-full overflow-y-auto">
+              <SwarmHistory projectId={projectId} fetchHistory={getSwarmHistory} />
+            </div>
+          </Suspense>
         )}
         {activeTab === 'output' && (
           <div className="p-4 h-full">
@@ -99,16 +116,21 @@ export default function ProjectView({ wsEvents, onProjectChange }) {
           </div>
         )}
         {activeTab === 'logs' && (
-          <div className="p-4 h-full">
-            <LogViewer projectId={projectId} wsEvents={wsEvents} />
-          </div>
+          <Suspense fallback={<div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse">Loading logs...</div>}>
+            <div className="p-4 h-full">
+              <LogViewer projectId={projectId} wsEvents={wsEvents} />
+            </div>
+          </Suspense>
         )}
         {activeTab === 'analytics' && (
-          <Analytics projectId={projectId} />
+          <Suspense fallback={<div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse">Loading analytics...</div>}>
+            <Analytics projectId={projectId} />
+          </Suspense>
         )}
         {activeTab === 'settings' && (
-          <div className="p-4 h-full overflow-y-auto">
+          <div className="p-4 h-full overflow-y-auto space-y-4">
             <ProjectSettings projectId={projectId} initialConfig={initialConfig} onSave={updateProjectConfig} />
+            <WebhookManager projectId={projectId} />
           </div>
         )}
       </div>

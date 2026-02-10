@@ -68,11 +68,15 @@ async def list_projects(
     search: str = "",
     status: str | None = None,
     sort: str = "created_at",
+    include_archived: bool = False,
     db: aiosqlite.Connection = Depends(get_db),
 ):
     """List projects with optional search, status filter, and sort."""
     conditions = []
     params = []
+
+    if not include_archived:
+        conditions.append("archived_at IS NULL")
 
     if search:
         conditions.append("(name LIKE ? OR goal LIKE ?)")
@@ -245,3 +249,37 @@ async def delete_project(project_id: int, db: aiosqlite.Connection = Depends(get
         raise HTTPException(status_code=404, detail="Project not found")
     await db.execute("DELETE FROM projects WHERE id = ?", (project_id,))
     await db.commit()
+
+
+@router.post("/{project_id}/archive")
+async def archive_project(project_id: int, db: aiosqlite.Connection = Depends(get_db)):
+    """Archive a project to hide it from the default project list."""
+    row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if dict(row).get("archived_at"):
+        raise HTTPException(status_code=400, detail="Project is already archived")
+    await db.execute(
+        "UPDATE projects SET archived_at = datetime('now'), updated_at = datetime('now') WHERE id = ?",
+        (project_id,),
+    )
+    await db.commit()
+    row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
+    return dict(row)
+
+
+@router.post("/{project_id}/unarchive")
+async def unarchive_project(project_id: int, db: aiosqlite.Connection = Depends(get_db)):
+    """Unarchive a project to show it in the default project list."""
+    row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not dict(row).get("archived_at"):
+        raise HTTPException(status_code=400, detail="Project is not archived")
+    await db.execute(
+        "UPDATE projects SET archived_at = NULL, updated_at = datetime('now') WHERE id = ?",
+        (project_id,),
+    )
+    await db.commit()
+    row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
+    return dict(row)

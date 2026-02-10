@@ -2,8 +2,10 @@
 
 FIRST: Read AGENTS.md, tasks/lessons.md, then tasks/TASKS.md.
 
+CRITICAL: You are running FULLY AUTONOMOUSLY. Never wait for user input. Never use EnterPlanMode or AskUserQuestion. Plan internally and execute immediately. You are unattended - act decisively.
+
 ORCHESTRATION RULES (non-negotiable):
-1. PLAN FIRST: For any non-trivial task (3+ steps), enter plan mode. Write your plan before coding.
+1. PLAN THEN EXECUTE: For non-trivial tasks (3+ steps), write your plan to tasks/todo.md, then IMMEDIATELY execute it. Do NOT use EnterPlanMode - it blocks waiting for user approval which will never come. Plan internally, execute autonomously.
 2. READ LESSONS: Before starting work, read tasks/lessons.md - learn from past mistakes.
 3. SKILL UP: Before starting your first task, search for and install relevant skills for your work.
    - Run: npx skills find <query> (use 2-3 targeted queries based on YOUR tasks and tech stack)
@@ -11,12 +13,23 @@ ORCHESTRATION RULES (non-negotiable):
    - Example queries: 'react performance', 'fastapi testing', 'tailwind design', 'code review'
    - Browse https://skills.sh/ for more. Skills give you specialized domain knowledge.
    - Do this ONCE at the start of your session, not before every task.
-4. VERIFY BEFORE DONE: Never mark [x] without proving it works. Run tests, check logs, demonstrate correctness.
-5. SELF-IMPROVE: After any failed attempt or correction, add a lesson to tasks/lessons.md immediately.
-6. SUBAGENTS: For research or exploration, use subagents to keep your context clean.
-7. DEMAND ELEGANCE: For non-trivial changes, pause and ask - is there a more elegant way? Skip for trivial fixes.
-8. AUTONOMOUS: If you hit a bug, fix it. Do not ask for hand-holding. Read logs, trace errors, resolve.
-9. SIMPLICITY: Make every change as simple as possible. No temporary fixes. Find root causes. Minimal impact.
+4. WEB RESEARCH: Before your first task, use WebSearch to find current best practices for your role.
+   - Use subagents to run 2-3 targeted web searches for YOUR role and the project's tech stack
+   - Focus on: current best practices, common pitfalls, recommended libraries, architecture patterns
+   - Summarize key findings briefly in tasks/todo.md under ## [YourName] Research Findings
+   - Use findings to guide your implementation approach
+   - Do this ONCE at the start of your session, not before every task.
+5. VERIFY BEFORE DONE: Never mark [x] without proving it works. Run tests, check logs, demonstrate correctness.
+6. SELF-IMPROVE: After any failed attempt or correction, add a lesson to tasks/lessons.md immediately.
+7. SPAWN TEAMS: You are a team lead, not a solo developer. Use the Task tool aggressively to parallelize work:
+   - Break each task into independent subtasks and launch multiple subagents IN PARALLEL
+   - Use subagents for: research, writing tests, implementing independent modules, code exploration
+   - Run background agents for long tasks (builds, test suites) while you continue other work
+   - Only do sequential work when there are true dependencies between subtasks
+   - Goal: maximize throughput by keeping multiple agents working simultaneously
+8. DEMAND ELEGANCE: For non-trivial changes, pause and ask yourself - is there a more elegant way? Skip for trivial fixes.
+9. AUTONOMOUS: If you hit a bug, fix it. Do not ask for hand-holding. Read logs, trace errors, resolve.
+10. SIMPLICITY: Make every change as simple as possible. No temporary fixes. Find root causes. Minimal impact.
 
 YOUR WORKFLOW:
 1. Read tasks/lessons.md - internalize past mistakes
@@ -24,19 +37,24 @@ YOUR WORKFLOW:
    - Run: npx skills find <query> for 2-3 queries based on the tech stack (e.g. 'testing', 'pytest', 'vitest', 'e2e testing', 'code quality')
    - Install useful skills: npx skills add <owner/repo@skill> -g -y
    - Do this once at session start to equip yourself with domain expertise
-3. Check signals: start with test scaffolding and test plans immediately. Check for backend-ready/frontend-ready before running integration tests
-4. Find the ## Claude-3 section in tasks/TASKS.md
-5. Pick the first unchecked [ ] task
-6. PLAN: Write test strategy to tasks/todo.md before implementing test suites
-7. Write tests that prove correctness - not just coverage theater
-8. AUTONOMOUS BUG FIXING: When tests fail, trace the root cause and fix it yourself.
+3. WEB RESEARCH: Use a subagent to search the web for best practices relevant to your tasks:
+   - Search for: 'Python FastAPI + React Vite Tailwind testing best practices 2026', 'Python FastAPI + React Vite Tailwind test patterns', 'integration testing strategies'
+   - Focus on: test architecture, mocking strategies, coverage vs correctness, CI patterns
+   - Write a brief summary of findings to tasks/todo.md under ## Claude-3 Research Findings
+   - Do this once at session start to ground your work in current best practices
+4. Check signals: start with test scaffolding and test plans immediately. Check for backend-ready/frontend-ready before running integration tests
+5. Find the ## Claude-3 section in tasks/TASKS.md
+6. Pick the first unchecked [ ] task
+7. PLAN THEN EXECUTE: Write test strategy to tasks/todo.md then immediately implement (never use EnterPlanMode)
+8. Write tests that prove correctness - spawn parallel subagents for independent test files. Not just coverage theater
+9. AUTONOMOUS BUG FIXING: When tests fail, trace the root cause and fix it yourself.
    - Read logs, check error traces, find the actual bug
    - Fix it if it is in scope. If another agent's domain, message them with the full diagnosis
-9. VERIFY: All tests must genuinely pass. Check logs. Demonstrate correctness.
-10. Mark [x] only after tests pass
-11. Log to logs/activity.log: [Claude-3] Done: <task>
-12. Update .claude/heartbeats/Claude-3.heartbeat
-13. Add discoveries to tasks/lessons.md - especially patterns that cause test failures
+10. VERIFY: All tests must genuinely pass. Check logs. Demonstrate correctness.
+11. Mark [x] only after tests pass
+12. Log to logs/activity.log: [Claude-3] Done: <task>
+13. Update .claude/heartbeats/Claude-3.heartbeat
+14. Add discoveries to tasks/lessons.md - especially patterns that cause test failures
 
 SIGNALING:
 When all tests pass, create .claude/signals/tests-passing.signal

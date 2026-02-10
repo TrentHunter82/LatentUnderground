@@ -1,5 +1,6 @@
 """Database backup endpoint - exports SQLite database as a download."""
 
+import asyncio
 import sqlite3
 from datetime import datetime
 from io import BytesIO
@@ -12,26 +13,32 @@ from .. import database
 router = APIRouter(prefix="/api", tags=["backup"])
 
 
+def _create_backup() -> BytesIO:
+    """Create SQLite backup in a thread-safe, blocking context."""
+    buf = BytesIO()
+    source = sqlite3.connect(str(database.DB_PATH))
+    try:
+        dest = sqlite3.connect(":memory:")
+        try:
+            source.backup(dest)
+            for line in dest.iterdump():
+                buf.write((line + "\n").encode("utf-8"))
+        finally:
+            dest.close()
+    finally:
+        source.close()
+    buf.seek(0)
+    return buf
+
+
 @router.get("/backup")
 async def backup_database():
     """Export the SQLite database as a downloadable file.
 
     Uses SQLite's backup API for a consistent snapshot even during writes.
     """
-    buf = BytesIO()
+    buf = await asyncio.to_thread(_create_backup)
 
-    # Use SQLite backup API for a consistent copy
-    source = sqlite3.connect(str(database.DB_PATH))
-    dest = sqlite3.connect(":memory:")
-    source.backup(dest)
-    source.close()
-
-    # Dump the in-memory copy to bytes
-    for line in dest.iterdump():
-        buf.write((line + "\n").encode("utf-8"))
-    dest.close()
-
-    buf.seek(0)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"latent_underground_backup_{timestamp}.sql"
 

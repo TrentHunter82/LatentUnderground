@@ -73,6 +73,8 @@ async def search_logs(
     db: aiosqlite.Connection = Depends(get_db),
 ):
     """Search log files with text, agent, level, and date range filters."""
+    limit = min(limit, 1000)
+    offset = max(offset, 0)
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")

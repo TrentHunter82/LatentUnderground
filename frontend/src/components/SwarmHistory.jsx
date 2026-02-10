@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { HistorySkeleton } from './Skeleton'
+import { useSafeToast } from './Toast'
 
 function formatDuration(seconds) {
   if (seconds == null) return '—'
@@ -23,6 +25,7 @@ const statusColors = {
 }
 
 export default function SwarmHistory({ projectId, fetchHistory }) {
+  const toast = useSafeToast()
   const [runs, setRuns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -35,17 +38,18 @@ export default function SwarmHistory({ projectId, fetchHistory }) {
         setRuns(data.runs || [])
         setError(null)
       })
-      .catch((e) => setError(e.message))
+      .catch((e) => {
+        setError(e.message)
+        toast(`Failed to load history: ${e.message}`, 'error', 4000, {
+          label: 'Retry',
+          onClick: () => fetchHistory(projectId).then((data) => { setRuns(data.runs || []); setError(null) }).catch(() => {})
+        })
+      })
       .finally(() => setLoading(false))
   }, [projectId, fetchHistory])
 
   if (loading) {
-    return (
-      <div className="retro-panel rounded p-4">
-        <h3 className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-medium mb-3 m-0 font-mono">Run History</h3>
-        <div className="text-zinc-600 text-sm py-4 text-center font-mono">Loading...</div>
-      </div>
-    )
+    return <HistorySkeleton />
   }
 
   if (error) {
@@ -58,7 +62,7 @@ export default function SwarmHistory({ projectId, fetchHistory }) {
   }
 
   return (
-    <div className="retro-panel retro-panel-glow rounded p-4">
+    <div className="retro-panel retro-panel-glow rounded p-4 animate-fade-in">
       <h3 className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-medium mb-3 m-0 font-mono">Run History</h3>
       {runs.length === 0 ? (
         <div className="text-zinc-600 text-sm py-4 text-center font-mono">No runs yet</div>

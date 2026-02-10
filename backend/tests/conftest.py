@@ -4,6 +4,9 @@ import json
 import os
 from pathlib import Path
 
+# Disable rate limiting in tests (must be set before app imports)
+os.environ.setdefault("LU_RATE_LIMIT_RPM", "0")
+
 import aiosqlite
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -27,6 +30,7 @@ async def tmp_db(tmp_path):
                 status TEXT NOT NULL DEFAULT 'created',
                 swarm_pid INTEGER,
                 config TEXT DEFAULT '{}',
+                archived_at TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
@@ -52,6 +56,19 @@ async def tmp_db(tmp_path):
                 config TEXT NOT NULL DEFAULT '{}',
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS webhooks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL,
+                events TEXT NOT NULL DEFAULT '[]',
+                secret TEXT,
+                project_id INTEGER,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             )
         """)
         await db.commit()
@@ -100,7 +117,7 @@ async def client(app):
 
 
 @pytest.fixture()
-def sample_project_data():
+def sample_project_data(tmp_path):
     """Return sample project creation data."""
     return {
         "name": "Test Swarm Project",
@@ -109,17 +126,17 @@ def sample_project_data():
         "tech_stack": "Python FastAPI, React",
         "complexity": "Medium",
         "requirements": "Must have tests",
-        "folder_path": "F:/TestProject",
+        "folder_path": str(tmp_path / "TestProject").replace("\\", "/"),
     }
 
 
 @pytest.fixture()
-def sample_project_minimal():
+def sample_project_minimal(tmp_path):
     """Return minimal project creation data (only required fields)."""
     return {
         "name": "Minimal Project",
         "goal": "Test minimal creation",
-        "folder_path": "F:/MinimalProject",
+        "folder_path": str(tmp_path / "MinimalProject").replace("\\", "/"),
     }
 
 

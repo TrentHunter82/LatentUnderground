@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getSwarmStatus, getProject, deleteProject, startWatch, getProjectStats, getSwarmHistory } from '../lib/api'
+import { getSwarmStatus, getProject, deleteProject, archiveProject, unarchiveProject, startWatch, getProjectStats, getSwarmHistory } from '../lib/api'
 import SwarmControls from './SwarmControls'
 import AgentGrid from './AgentGrid'
 import SignalPanel from './SignalPanel'
@@ -38,6 +38,7 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
       setError(null)
     } catch (e) {
       setError(e.message)
+      toast(e.message, 'error', 4000, { label: 'Retry', onClick: refresh })
     }
   }, [projectId])
 
@@ -112,7 +113,7 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
       URL.revokeObjectURL(url)
       toast('Project exported', 'success')
     } catch (e) {
-      toast(`Export failed: ${e.message}`, 'error')
+      toast(`Export failed: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: handleExport })
     }
   }
 
@@ -124,7 +125,24 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
       onProjectChange?.()
       navigate('/')
     } catch (e) {
-      toast(`Delete failed: ${e.message}`, 'error')
+      toast(`Delete failed: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: handleDelete })
+    }
+  }
+
+  const handleArchiveToggle = async () => {
+    const isArchived = !!project.archived_at
+    try {
+      if (isArchived) {
+        await unarchiveProject(projectId)
+        toast('Project unarchived', 'success')
+      } else {
+        await archiveProject(projectId)
+        toast('Project archived', 'success')
+      }
+      refresh()
+      onProjectChange?.()
+    } catch (e) {
+      toast(`${isArchived ? 'Unarchive' : 'Archive'} failed: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: handleArchiveToggle })
     }
   }
 
@@ -155,7 +173,12 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
               )}
               <span>{stats.total_tasks_completed} tasks completed</span>
               {runs.length > 1 && (
-                <Sparkline data={runs.map(r => r.tasks_completed || 0)} />
+                <>
+                  <span className="text-zinc-600" title="Task completion trend">tasks</span>
+                  <Sparkline data={runs.map(r => r.tasks_completed || 0)} />
+                  <span className="text-zinc-600" title="Run duration trend">duration</span>
+                  <Sparkline data={runs.map(r => r.duration_seconds || 0)} color="#E87838" />
+                </>
               )}
             </div>
           )}
@@ -175,6 +198,26 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
               <path d="M8 2v8M5 7l3 3 3-3M3 12v1.5h10V12" />
             </svg>
+          </button>
+          <button
+            onClick={handleArchiveToggle}
+            className="p-2 rounded text-zinc-500 hover:text-crt-amber hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
+            title={project.archived_at ? 'Unarchive project' : 'Archive project'}
+            aria-label={project.archived_at ? 'Unarchive project' : 'Archive project'}
+          >
+            {project.archived_at ? (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1.5 3.5h13v3h-13z" />
+                <path d="M2.5 6.5v7h11v-7" />
+                <path d="M6.5 10l1.5-1.5L9.5 10" />
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1.5 3.5h13v3h-13z" />
+                <path d="M2.5 6.5v7h11v-7" />
+                <path d="M6 9h4" />
+              </svg>
+            )}
           </button>
           <button
             onClick={() => setConfirmDelete(true)}

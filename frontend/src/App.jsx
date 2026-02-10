@@ -1,22 +1,31 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { Routes, Route, useNavigate } from 'react-router-dom'
-import { getProjects } from './lib/api'
+import { getProjects, getProjectsWithArchived } from './lib/api'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useHealthCheck } from './hooks/useHealthCheck'
 import { useNotifications } from './hooks/useNotifications'
 import Sidebar from './components/Sidebar'
 import Home from './components/Home'
-import NewProject from './components/NewProject'
-import ProjectView from './components/ProjectView'
 import ErrorBoundary from './components/ErrorBoundary'
 import ThemeToggle from './components/ThemeToggle'
-import AuthModal from './components/AuthModal'
+
+// Lazy-load route components and modals for bundle splitting
+const NewProject = lazy(() => import('./components/NewProject'))
+const ProjectView = lazy(() => import('./components/ProjectView'))
+const AuthModal = lazy(() => import('./components/AuthModal'))
+const SettingsPanel = lazy(() => import('./components/SettingsPanel'))
+const ShortcutCheatsheet = lazy(() => import('./components/ShortcutCheatsheet'))
+const OnboardingModal = lazy(() => import('./components/OnboardingModal'))
 
 export default function App() {
   const [projects, setProjects] = useState([])
   const [wsEvent, setWsEvent] = useState(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [showShortcuts, setShowShortcuts] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
   const navigate = useNavigate()
 
   const { connected } = useWebSocket(setWsEvent)
@@ -55,8 +64,13 @@ export default function App() {
       } else if (isMod && e.key === 'n') {
         e.preventDefault()
         navigate('/projects/new')
+      } else if (isMod && (e.key === '?' || (e.shiftKey && e.key === '/'))) {
+        e.preventDefault()
+        setShowShortcuts((v) => !v)
       } else if (e.key === 'Escape') {
         setShowAuth(false)
+        setShowSettings(false)
+        setShowShortcuts(false)
       }
     }
     window.addEventListener('keydown', handler)
@@ -65,16 +79,23 @@ export default function App() {
 
   const refreshProjects = useCallback(async () => {
     try {
-      const data = await getProjects()
+      const data = showArchived ? await getProjectsWithArchived(true) : await getProjects()
       setProjects(data)
     } catch (e) {
       console.warn('Failed to refresh projects:', e)
     }
-  }, [])
+  }, [showArchived])
 
   useEffect(() => {
     refreshProjects()
   }, [refreshProjects])
+
+  // Show onboarding when no projects and not previously dismissed
+  useEffect(() => {
+    if (projects.length === 0 && !localStorage.getItem('lu_onboarding_complete')) {
+      setShowOnboarding(true)
+    }
+  }, [projects])
 
   const toggleSidebar = () => setSidebarCollapsed((c) => !c)
 
@@ -85,6 +106,8 @@ export default function App() {
         onRefresh={refreshProjects}
         collapsed={sidebarCollapsed}
         onToggle={toggleSidebar}
+        showArchived={showArchived}
+        onShowArchivedChange={setShowArchived}
       />
 
       <main className="flex-1 flex flex-col min-h-0 relative">
@@ -102,14 +125,25 @@ export default function App() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowAuth(true)}
+              onClick={() => setShowShortcuts(true)}
               className="p-1.5 rounded-md text-zinc-500 hover:text-crt-green hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
-              title="API Key"
-              aria-label="Configure API key"
+              title="Keyboard shortcuts (Ctrl+?)"
+              aria-label="Keyboard shortcuts"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <path d="M10 5a3 3 0 11-6 0 3 3 0 016 0zM2 14a5 5 0 0110 0" />
-                <path d="M12 4l2 2-3 3-2-2 3-3z" />
+                <rect x="1" y="4" width="14" height="9" rx="1.5" />
+                <path d="M4 7h1M7 7h2M11 7h1M5 10h6" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-1.5 rounded-md text-zinc-500 hover:text-crt-green hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
+              title="Settings"
+              aria-label="Open settings"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M6.86 2.07a1.12 1.12 0 012.28 0l.23 1.14a.67.67 0 00.88.47l1.07-.48a1.12 1.12 0 011.61 1.14l-.25 1.13a.67.67 0 00.47.78l1.14.38a1.12 1.12 0 01.2 2.09l-1.01.6a.67.67 0 00-.25.9l.55 1.03a1.12 1.12 0 01-1.14 1.61l-1.13-.25a.67.67 0 00-.78.47l-.38 1.14a1.12 1.12 0 01-2.09.2l-.6-1.01a.67.67 0 00-.9-.25l-1.03.55a1.12 1.12 0 01-1.61-1.14l.25-1.13a.67.67 0 00-.47-.78l-1.14-.38a1.12 1.12 0 01-.2-2.09l1.01-.6a.67.67 0 00.25-.9L3.48 4.4a1.12 1.12 0 011.14-1.61l1.13.25a.67.67 0 00.78-.47z" />
+                <circle cx="8" cy="8" r="2" />
               </svg>
             </button>
             <ThemeToggle />
@@ -148,15 +182,26 @@ export default function App() {
         </div>
 
         <ErrorBoundary>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/projects/new" element={<NewProject onProjectChange={refreshProjects} />} />
-            <Route path="/projects/:id" element={<ProjectView wsEvents={wsEvent} onProjectChange={refreshProjects} />} />
-          </Routes>
+          <Suspense fallback={<div className="flex-1 flex items-center justify-center text-zinc-500 font-mono text-sm">Loading...</div>}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/projects/new" element={<NewProject onProjectChange={refreshProjects} />} />
+              <Route path="/projects/:id" element={<ProjectView wsEvents={wsEvent} onProjectChange={refreshProjects} />} />
+            </Routes>
+          </Suspense>
         </ErrorBoundary>
       </main>
 
-      <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
+      <Suspense fallback={null}>
+        {showAuth && <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />}
+        {showSettings && <SettingsPanel
+          open={showSettings}
+          onClose={() => setShowSettings(false)}
+          onOpenAuth={() => { setShowSettings(false); setShowAuth(true) }}
+        />}
+        {showShortcuts && <ShortcutCheatsheet open={showShortcuts} onClose={() => setShowShortcuts(false)} />}
+        {showOnboarding && <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />}
+      </Suspense>
     </div>
   )
 }

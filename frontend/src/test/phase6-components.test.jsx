@@ -126,31 +126,39 @@ describe('Sidebar Search', () => {
     expect(screen.getByPlaceholderText('Search projects...')).toBeInTheDocument()
   })
 
-  it('filters projects by name', () => {
+  it('filters projects by name', async () => {
     renderSidebar()
     fireEvent.change(screen.getByPlaceholderText('Search projects...'), { target: { value: 'Alpha' } })
-    expect(screen.getByText('Alpha Project')).toBeInTheDocument()
-    expect(screen.queryByText('Beta Project')).not.toBeInTheDocument()
-    expect(screen.queryByText('Gamma')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('Alpha Project')).toBeInTheDocument()
+      expect(screen.queryByText('Beta Project')).not.toBeInTheDocument()
+      expect(screen.queryByText('Gamma')).not.toBeInTheDocument()
+    })
   })
 
-  it('filters projects by goal', () => {
+  it('filters projects by goal', async () => {
     renderSidebar()
     fireEvent.change(screen.getByPlaceholderText('Search projects...'), { target: { value: 'gamma system' } })
-    expect(screen.getByText('Gamma')).toBeInTheDocument()
-    expect(screen.queryByText('Alpha Project')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('Gamma')).toBeInTheDocument()
+      expect(screen.queryByText('Alpha Project')).not.toBeInTheDocument()
+    })
   })
 
-  it('shows empty state when search matches nothing', () => {
+  it('shows empty state when search matches nothing', async () => {
     renderSidebar()
     fireEvent.change(screen.getByPlaceholderText('Search projects...'), { target: { value: 'zzzzz' } })
-    expect(screen.getByText('No matching projects')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('No matching projects')).toBeInTheDocument()
+    })
   })
 
-  it('search is case-insensitive', () => {
+  it('search is case-insensitive', async () => {
     renderSidebar()
     fireEvent.change(screen.getByPlaceholderText('Search projects...'), { target: { value: 'alpha' } })
-    expect(screen.getByText('Alpha Project')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('Alpha Project')).toBeInTheDocument()
+    })
   })
 })
 

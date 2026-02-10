@@ -82,8 +82,37 @@ export const getProjectStats = (projectId) => request(`/projects/${projectId}/st
 export const updateProjectConfig = (projectId, config) =>
   request(`/projects/${projectId}/config`, { method: 'PATCH', body: JSON.stringify(config) })
 
+// Browse directories
+export const browseDirectory = (path = '') => {
+  const params = new URLSearchParams()
+  if (path) params.set('path', path)
+  return request(`/browse?${params}`)
+}
+
 // Templates
 export const getTemplates = () => request('/templates')
+export const getTemplate = (id) => request(`/templates/${id}`)
+export const createTemplate = (data) => request('/templates', { method: 'POST', body: JSON.stringify(data) })
+export const updateTemplate = (id, data) => request(`/templates/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+export const deleteTemplate = (id) => request(`/templates/${id}`, { method: 'DELETE' })
+
+// Webhooks
+export const getWebhooks = () => request('/webhooks')
+export const createWebhook = (data) => request('/webhooks', { method: 'POST', body: JSON.stringify(data) })
+export const updateWebhook = (id, data) => request(`/webhooks/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+export const deleteWebhook = (id) => request(`/webhooks/${id}`, { method: 'DELETE' })
+
+// Project archival
+export const archiveProject = (id) => request(`/projects/${id}/archive`, { method: 'POST' })
+export const unarchiveProject = (id) => request(`/projects/${id}/unarchive`, { method: 'POST' })
+
+// Projects with archive filter
+export const getProjectsWithArchived = (includeArchived = false) => {
+  const params = new URLSearchParams()
+  if (includeArchived) params.set('include_archived', 'true')
+  const qs = params.toString()
+  return request(`/projects${qs ? '?' + qs : ''}`)
+}
 
 // Watchers
 export const startWatch = (projectId) => request(`/watch/${projectId}`, { method: 'POST' })

@@ -56,3 +56,19 @@ FRONTEND_DIST: Path = Path(os.environ.get(
 
 # API key for authentication (empty = auth disabled)
 API_KEY: str = os.environ.get("LU_API_KEY", "")
+
+# Rate limiting: max POST requests per minute per client IP per endpoint (0 = disabled)
+RATE_LIMIT_RPM: int = int(os.environ.get("LU_RATE_LIMIT_RPM", "30"))
+
+# Structured logging: "json" for JSON lines, "text" for human-readable (default)
+LOG_FORMAT: str = os.environ.get("LU_LOG_FORMAT", "text")
+
+# Log retention: auto-delete project log files older than N days on startup (0 = disabled)
+LOG_RETENTION_DAYS: int = int(os.environ.get("LU_LOG_RETENTION_DAYS", "0"))
+
+# Automatic backups: interval in hours (0 = disabled), max backups to keep
+BACKUP_INTERVAL_HOURS: int = int(os.environ.get("LU_BACKUP_INTERVAL_HOURS", "0"))
+BACKUP_KEEP: int = int(os.environ.get("LU_BACKUP_KEEP", "5"))
+
+# Request logging: log all HTTP requests with method, path, status, duration (default disabled)
+REQUEST_LOG: bool = os.environ.get("LU_REQUEST_LOG", "").lower() in ("1", "true", "yes")

@@ -1,0 +1,35 @@
+# Latent Underground - systemd service file
+# Install: sudo cp deploy/latent-underground.service /etc/systemd/system/
+# Enable:  sudo systemctl enable --now latent-underground
+
+[Unit]
+Description=Latent Underground - Claude Swarm GUI
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=latent
+Group=latent
+WorkingDirectory=/opt/latent-underground/backend
+ExecStart=/opt/latent-underground/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Environment
+EnvironmentFile=-/opt/latent-underground/backend/.env
+Environment=LU_HOST=127.0.0.1
+Environment=LU_PORT=8000
+Environment=LU_LOG_FORMAT=json
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/latent-underground/backend
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

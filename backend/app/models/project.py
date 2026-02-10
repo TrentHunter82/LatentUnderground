@@ -41,5 +41,6 @@ class ProjectOut(BaseModel):
     status: str
     swarm_pid: Optional[int] = None
     config: Optional[str] = None
+    archived_at: Optional[str] = None
     created_at: str
     updated_at: str

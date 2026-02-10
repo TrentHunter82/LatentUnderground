@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 
 const ToastContext = createContext(null)
 
@@ -6,18 +6,36 @@ let toastId = 0
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
+  const timeoutsRef = useRef(new Map())
 
-  const addToast = useCallback((message, type = 'error', duration = 4000) => {
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout)
+      timeoutsRef.current.clear()
+    }
+  }, [])
+
+  const addToast = useCallback((message, type = 'error', duration = 4000, action = null) => {
     const id = ++toastId
-    setToasts((prev) => [...prev, { id, message, type }])
-    setTimeout(() => {
+    const effectiveDuration = action && type === 'error' ? 10000 : duration
+    setToasts((prev) => [...prev, { id, message, type, action }])
+    const tid = setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id))
-    }, duration)
+      timeoutsRef.current.delete(id)
+    }, effectiveDuration)
+    timeoutsRef.current.set(id, tid)
   }, [])
 
   const dismiss = useCallback((id) => {
+    clearTimeout(timeoutsRef.current.get(id))
+    timeoutsRef.current.delete(id)
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
+
+  const handleAction = useCallback((id, onClick) => {
+    onClick()
+    dismiss(id)
+  }, [dismiss])
 
   return (
     <ToastContext.Provider value={addToast}>
@@ -36,6 +54,14 @@ export function ToastProvider({ children }) {
             }`}
           >
             <span className="flex-1">{t.message}</span>
+            {t.action && (
+              <button
+                onClick={() => handleAction(t.id, t.action.onClick)}
+                className="btn-neon text-xs px-2 py-0.5"
+              >
+                {t.action.label}
+              </button>
+            )}
             <button
               onClick={() => dismiss(t.id)}
               className="text-current opacity-60 hover:opacity-100 bg-transparent border-0 cursor-pointer text-lg leading-none p-0"
@@ -53,4 +79,11 @@ export function useToast() {
   const addToast = useContext(ToastContext)
   if (!addToast) throw new Error('useToast must be used within ToastProvider')
   return addToast
+}
+
+const noop = () => {}
+
+/** Like useToast but returns a no-op if outside ToastProvider (safe for tests) */
+export function useSafeToast() {
+  return useContext(ToastContext) || noop
 }

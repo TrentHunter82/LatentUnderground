@@ -10,25 +10,25 @@ class TestInputValidation:
     """Verify the API rejects invalid inputs with clear error responses."""
 
     @pytest.mark.anyio
-    async def test_create_project_empty_name_rejected(self, client):
+    async def test_create_project_empty_name_rejected(self, client, tmp_path):
         """Pydantic requires name to be a string, but an empty string should still work
         (it's up to the app whether to reject it). An actually missing name should fail."""
         resp = await client.post("/api/projects", json={
             "goal": "A goal",
-            "folder_path": "F:/SomeProject",
+            "folder_path": str(tmp_path / "SomeProject"),
         })
         assert resp.status_code == 422  # Pydantic validation error
         body = resp.json()
         assert "detail" in body
 
     @pytest.mark.anyio
-    async def test_create_project_long_name_accepted(self, client):
+    async def test_create_project_long_name_accepted(self, client, tmp_path):
         """Absurdly long strings should not crash the server."""
         long_name = "A" * 10000
         resp = await client.post("/api/projects", json={
             "name": long_name,
             "goal": "test",
-            "folder_path": "F:/LongNameProject",
+            "folder_path": str(tmp_path / "LongNameProject"),
         })
         # Should succeed (no length limit enforced) or at least not 500
         assert resp.status_code in (201, 400, 422)

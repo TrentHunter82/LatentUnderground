@@ -8,7 +8,9 @@ describe('SwarmHistory', () => {
   it('shows loading state initially', () => {
     const fetchHistory = vi.fn(() => new Promise(() => {})) // never resolves
     render(<SwarmHistory projectId={1} fetchHistory={fetchHistory} />)
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
+    // Skeleton loading state shows animated placeholder bones
+    const bones = document.querySelectorAll('.animate-pulse')
+    expect(bones.length).toBeGreaterThan(0)
   })
 
   it('shows empty state when no runs', async () => {

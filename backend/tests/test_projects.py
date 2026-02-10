@@ -28,23 +28,23 @@ class TestCreateProject:
         data = resp.json()
         assert data["name"] == "Minimal Project"
         assert data["goal"] == "Test minimal creation"
-        assert data["folder_path"] == "F:/MinimalProject"
+        assert data["folder_path"] == sample_project_minimal["folder_path"]
         # Defaults should be applied
         assert data["project_type"] == "Web Application (frontend + backend)"
         assert data["complexity"] == "Medium"
         assert data["requirements"] == ""
 
-    async def test_create_project_missing_name(self, client):
+    async def test_create_project_missing_name(self, client, tmp_path):
         resp = await client.post("/api/projects", json={
             "goal": "Test",
-            "folder_path": "F:/Test",
+            "folder_path": str(tmp_path / "Test"),
         })
         assert resp.status_code == 422
 
-    async def test_create_project_missing_goal(self, client):
+    async def test_create_project_missing_goal(self, client, tmp_path):
         resp = await client.post("/api/projects", json={
             "name": "Test",
-            "folder_path": "F:/Test",
+            "folder_path": str(tmp_path / "Test"),
         })
         assert resp.status_code == 422
 

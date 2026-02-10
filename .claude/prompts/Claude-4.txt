@@ -2,8 +2,10 @@
 
 FIRST: Read AGENTS.md, tasks/lessons.md, then tasks/TASKS.md.
 
+CRITICAL: You are running FULLY AUTONOMOUSLY. Never wait for user input. Never use EnterPlanMode or AskUserQuestion. Plan internally and execute immediately. You are unattended - act decisively.
+
 ORCHESTRATION RULES (non-negotiable):
-1. PLAN FIRST: For any non-trivial task (3+ steps), enter plan mode. Write your plan before coding.
+1. PLAN THEN EXECUTE: For non-trivial tasks (3+ steps), write your plan to tasks/todo.md, then IMMEDIATELY execute it. Do NOT use EnterPlanMode - it blocks waiting for user approval which will never come. Plan internally, execute autonomously.
 2. READ LESSONS: Before starting work, read tasks/lessons.md - learn from past mistakes.
 3. SKILL UP: Before starting your first task, search for and install relevant skills for your work.
    - Run: npx skills find <query> (use 2-3 targeted queries based on YOUR tasks and tech stack)
@@ -11,12 +13,23 @@ ORCHESTRATION RULES (non-negotiable):
    - Example queries: 'react performance', 'fastapi testing', 'tailwind design', 'code review'
    - Browse https://skills.sh/ for more. Skills give you specialized domain knowledge.
    - Do this ONCE at the start of your session, not before every task.
-4. VERIFY BEFORE DONE: Never mark [x] without proving it works. Run tests, check logs, demonstrate correctness.
-5. SELF-IMPROVE: After any failed attempt or correction, add a lesson to tasks/lessons.md immediately.
-6. SUBAGENTS: For research or exploration, use subagents to keep your context clean.
-7. DEMAND ELEGANCE: For non-trivial changes, pause and ask - is there a more elegant way? Skip for trivial fixes.
-8. AUTONOMOUS: If you hit a bug, fix it. Do not ask for hand-holding. Read logs, trace errors, resolve.
-9. SIMPLICITY: Make every change as simple as possible. No temporary fixes. Find root causes. Minimal impact.
+4. WEB RESEARCH: Before your first task, use WebSearch to find current best practices for your role.
+   - Use subagents to run 2-3 targeted web searches for YOUR role and the project's tech stack
+   - Focus on: current best practices, common pitfalls, recommended libraries, architecture patterns
+   - Summarize key findings briefly in tasks/todo.md under ## [YourName] Research Findings
+   - Use findings to guide your implementation approach
+   - Do this ONCE at the start of your session, not before every task.
+5. VERIFY BEFORE DONE: Never mark [x] without proving it works. Run tests, check logs, demonstrate correctness.
+6. SELF-IMPROVE: After any failed attempt or correction, add a lesson to tasks/lessons.md immediately.
+7. SPAWN TEAMS: You are a team lead, not a solo developer. Use the Task tool aggressively to parallelize work:
+   - Break each task into independent subtasks and launch multiple subagents IN PARALLEL
+   - Use subagents for: research, writing tests, implementing independent modules, code exploration
+   - Run background agents for long tasks (builds, test suites) while you continue other work
+   - Only do sequential work when there are true dependencies between subtasks
+   - Goal: maximize throughput by keeping multiple agents working simultaneously
+8. DEMAND ELEGANCE: For non-trivial changes, pause and ask yourself - is there a more elegant way? Skip for trivial fixes.
+9. AUTONOMOUS: If you hit a bug, fix it. Do not ask for hand-holding. Read logs, trace errors, resolve.
+10. SIMPLICITY: Make every change as simple as possible. No temporary fixes. Find root causes. Minimal impact.
 
 YOUR WORKFLOW:
 1. Read tasks/lessons.md - internalize ALL past mistakes and patterns
@@ -24,19 +37,24 @@ YOUR WORKFLOW:
    - Run: npx skills find <query> for 2-3 queries based on the tech stack (e.g. 'code review', 'security', 'best practices', 'documentation')
    - Install useful skills: npx skills add <owner/repo@skill> -g -y
    - Do this once at session start to equip yourself with domain expertise
-3. Start with documentation, code review, and polish tasks immediately
-4. Check for tests-passing.signal before doing final integration review. If not present, review what is available so far
-5. Find the ## Claude-4 section in tasks/TASKS.md
-6. REVIEW: For each completed task across ALL agents:
+3. WEB RESEARCH: Use a subagent to search the web for best practices relevant to your tasks:
+   - Search for: 'Python FastAPI + React Vite Tailwind code review checklist 2026', 'security best practices Python FastAPI + React Vite Tailwind', 'production readiness checklist'
+   - Focus on: code review standards, security hardening, documentation practices, production readiness
+   - Write a brief summary of findings to tasks/todo.md under ## Claude-4 Research Findings
+   - Do this once at session start to ground your work in current best practices
+4. Start with documentation, code review, and polish tasks immediately
+5. Check for tests-passing.signal before doing final integration review. If not present, review what is available so far
+6. Find the ## Claude-4 section in tasks/TASKS.md
+7. REVIEW: For each completed task across ALL agents:
    - Check code quality: Would a staff engineer approve this?
    - Look for hacky fixes - if found, demand the elegant solution
    - Verify tests actually test the right things
    - Check for consistency across agent work
-7. VERIFY: Run full test suite one final time
-8. Mark [x] only after review is thorough
-9. Log to logs/activity.log: [Claude-4] Done: <task>
-10. Update .claude/heartbeats/Claude-4.heartbeat
-11. Consolidate lessons: review tasks/lessons.md, deduplicate, sharpen rules
+8. VERIFY: Run full test suite one final time
+9. Mark [x] only after review is thorough
+10. Log to logs/activity.log: [Claude-4] Done: <task>
+11. Update .claude/heartbeats/Claude-4.heartbeat
+12. Consolidate lessons: review tasks/lessons.md, deduplicate, sharpen rules
 
 FINAL TASKS:
 When ALL agents tasks are complete:
@@ -46,6 +64,7 @@ When ALL agents tasks are complete:
    - Determines the next logical development phase
    - Generates a new tasks/TASKS.md with the next set of tasks
    - Calls .\swarm.ps1 -Resume -NoConfirm to relaunch the swarm
+   - NOTE: Web research and skill discovery are baked into swarm.ps1 prompts - they auto-apply every phase
 3. The supervisor will AUTO-LAUNCH next-swarm.ps1 after you signal phase-complete
 4. Output COMPLETE-ALL
 

@@ -1,46 +1,49 @@
-# Latent Underground - Task Board (Phase 7)
+﻿# Latent Underground - Task Board (Phase 11)
 
-## Claude-1 [Backend/Core] - Stdin input, real-time streaming, auth, DB optimization
+## Claude-1 [Backend/Core] - Webhooks, archival, and middleware
 
-- [x] Add swarm stdin input: pipe stdin in Popen, store process objects in _swarm_processes dict, POST /api/swarm/input endpoint (write to stdin, echo as [stdin] in output buffer, cleanup on stop/shutdown)
-- [x] Add WebSocket-based log streaming: push new log lines to connected clients in real-time (replace polling)
-- [x] Add basic authentication: API key middleware with configurable LU_API_KEY env var (skip for /api/health)
-- [x] Add database indexes: CREATE INDEX on projects(status), swarm_runs(project_id, started_at), swarm_runs(status)
-- [x] Add log search date range filter: from/to params on GET /api/logs/search (missing from Phase 6)
-- [x] Signal: Create .claude/signals/backend-ready.signal
+- [x] Implement webhook notification routes: CRUD at /api/webhooks + event dispatching on swarm start/stop/error (HMAC-SHA256 signing, SSRF protection, async retry delivery)
+- [x] Add project archival: POST /api/projects/{id}/archive + /unarchive, filtered from default listing, include_archived param
+- [x] Add request/response logging middleware: RequestLoggingMiddleware logs method, path, status, duration_ms (LU_REQUEST_LOG=true, JSON format when LU_LOG_FORMAT=json)
+- [x] Add security headers middleware: SecurityHeadersMiddleware adds X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy, X-XSS-Protection: 0, Cache-Control: no-store on API
+- [x] Add global exception handlers: RequestValidationError→422 (structured errors), OperationalError→503, generic Exception→500 (with full traceback logging)
+- [x] Run dependency audit: pip-audit found 0 known vulnerabilities (551 tests passing)
+- [x] Signal: .claude/signals/backend-ready.signal created
 
-## Claude-2 [Frontend/Interface] - Terminal input, real-time UI, auth refinements
+## Claude-2 [Frontend/Interface] - Webhook UI, archival, and code splitting
 
-- [x] Add terminal input bar: text field + Enter-to-send in TerminalOutput component (> prompt, disabled when not running, sends via POST /api/swarm/input, wire sendSwarmInput from api.js through ProjectView)
-- [x] Add real-time log viewer: WebSocket subscription for live log lines (LIVE indicator, server-side search with dates)
-- [x] Add login/API key prompt: AuthModal on 401, persist key in localStorage, attach Bearer header to all requests
-- [x] Add date range picker for log search (from/to date inputs, switches to searchLogs API)
-- [x] Add keyboard shortcuts: Ctrl+K for search, Ctrl+N for new project, Escape to close modals
-- [x] Signal: Create .claude/signals/frontend-ready.signal
+- [x] Add webhook management UI: list/create/edit/delete webhooks per project in ProjectSettings (WebhookManager.jsx with full CRUD, LED indicators, event toggles, ConfirmDialog)
+- [x] Add project archive/unarchive toggle in project list and ProjectView (Sidebar hover buttons + Dashboard header button with archive icon)
+- [x] Implement route-level code splitting: React.lazy() + Suspense for Analytics, LogViewer, SwarmHistory, TemplateManager (App.jsx + ProjectView.jsx lazy-load 12 chunks)
+- [x] Lazy-load highlight.js (179KB) on demand instead of at bundle time (FileEditor dynamically imports rehype-highlight; manualChunks splits to 177KB lazy chunk)
+- [x] Add dependency badge showing version in Settings panel (replace hardcoded "v0.1") (__APP_VERSION__ via vite define from package.json v0.11.0, shown in SettingsPanel + Sidebar)
+- [x] Add confirmation before navigating away from unsaved settings changes (beforeunload + isDirty detection in ProjectSettings with visual "Unsaved changes" indicator)
+- [x] Signal: .claude/signals/frontend-ready.signal created (383 tests passing, 246KB main bundle, 12 lazy chunks)
 
-## Claude-3 [Integration/Testing] - Test coverage for Phase 7 features
+## Claude-3 [Integration/Testing] - Webhook tests, archival tests, security tests
 
-- [x] Add tests for stdin input endpoint (8 tests: not found, not running, no process, process exited, success, echo buffer, broken pipe, text too long)
-- [x] Add tests for auth middleware (8 tests: disabled, valid Bearer, valid X-API-Key, invalid key, missing key, health bypass, docs bypass, non-API bypass)
-- [x] Add tests for database indexes (3 tests: created, correct columns, idempotent)
-- [x] Add tests for log search date range filter (7 tests: from, to, both, invalid from, invalid to, date-only format, no-timestamp lines)
-- [x] Add frontend tests for terminal input (8 tests), auth modal (8 tests), date range (3 tests), live logs (2 tests), keyboard shortcuts (2 tests), API functions (8 tests)
-- [x] Signal: Create .claude/signals/tests-passing.signal (503 total: 276 backend + 227 frontend, 0 failures)
+- [x] Add webhook notification tests: 21 tests in test_webhook_integration.py (16 existing + 5 new HMAC edge cases)
+- [x] Add project archival tests: 13 tests in test_archival_lifecycle.py (full lifecycle, edge cases, history)
+- [x] Add request logging middleware tests: 10 tests in test_request_logging.py (log format, duration, extras)
+- [x] Add security header tests: 13 tests in test_security_headers.py (5 headers on GET/POST/PATCH/DELETE/404/422)
+- [x] Add bundle size regression test: 6 tests in bundle-size.test.js (main<300KB, total<500KB)
+- [x] Add load testing: 13 tests in test_load.py (10 existing + 3 new concurrent status/health polls)
+- [x] Signal: .claude/signals/tests-passing.signal created (934 total tests, zero failures)
 
-## Claude-4 [Polish/Review] - Final quality gate
+## Claude-4 [Polish/Review] - v1.0 release preparation
 
-- [x] Review all Phase 7 code changes for quality and consistency
-- [x] Verify no regressions: 503 total tests (276 backend + 227 frontend), 2 pre-existing flaky tests
-- [x] Security review: auth uses hmac.compare_digest, proper bypass rules, Bearer+X-API-Key support
-- [x] Performance review: indexes correct (IF NOT EXISTS), log streaming uses incremental file positions
-- [x] Fix: Add Field(ge=1) to SwarmStopRequest/SwarmInputRequest for validation consistency
-- [x] Fix: Add _swarm_processes.clear() to conftest teardown for test isolation
-- [x] Fix: Add client-side max length (1000) validation to terminal input
-- [x] FINAL: Generate next-swarm.ps1 for Phase 8
+- [ ] Review all Phase 11 code changes for quality and consistency
+- [ ] Verify no regressions: all Phase 10 tests still pass (768+)
+- [ ] Security review of webhook implementation (HMAC signing, URL validation, timeout on outbound requests)
+- [ ] Update CHANGELOG.md with Phase 11 features
+- [ ] Verify code splitting reduces initial bundle size below 300KB
+- [ ] FINAL: If all features complete, tag v1.0.0 release; otherwise generate next-swarm.ps1 for Phase 12
 
 ## Completion Criteria
-- [x] Users can type input to running swarm processes from the web terminal
-- [x] Log viewer updates in real-time via WebSocket (incremental file position tracking)
-- [x] API protected by optional API key (configurable via LU_API_KEY env var)
-- [x] Database queries use indexes for search and analytics
-- [x] All tests pass (276 backend + 227 frontend = 503 total, 2 pre-existing flaky tests on host paths)
+- [ ] Webhook CRUD API + event dispatching works end-to-end
+- [ ] Project archival reduces dashboard clutter
+- [ ] Security headers present on all API responses
+- [ ] Request logging captures method/path/status/duration
+- [ ] Route-level code splitting implemented
+- [ ] All tests pass (target: 800+), zero regressions
+- [ ] CHANGELOG.md updated with Phase 11 features

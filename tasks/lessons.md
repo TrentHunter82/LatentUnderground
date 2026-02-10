@@ -136,3 +136,34 @@ After ANY correction, failed attempt, or discovery, add a lesson here.
 - What happened: test_launch_no_swarm_script and test_boundary_values_accepted use `sample_project_data` fixture with `"folder_path": "F:/TestProject"`. When a real `F:/TestProject/swarm.ps1` exists on the developer's machine, the test passes the swarm.ps1 check and launches a real subprocess instead of failing with 400.
 - Root cause: Test fixture uses a hardcoded path that could accidentally exist on the host filesystem
 - Rule: Always use `tmp_path` for project `folder_path` in tests. Never use hardcoded paths like `F:/TestProject` - they are not isolated and break when the host has matching files.
+
+### [Claude-2] ResizeObserver not available in jsdom - polyfill in test setup
+- What happened: Adding ResizeObserver to LogViewer for virtual scroll container sizing caused ALL LogViewer tests to crash with `ReferenceError: ResizeObserver is not defined`
+- Root cause: jsdom doesn't implement ResizeObserver. Any component using it will crash during test rendering.
+- Rule: When using browser APIs not in jsdom (ResizeObserver, IntersectionObserver, matchMedia), add a polyfill in the test setup file. Always check that new browser APIs work in tests before committing.
+- Update (Claude-4): The mock must also (1) set on both `globalThis` AND `window`, (2) call the constructor callback on `observe()` with reasonable defaults, (3) be unconditional (no `if undefined` guards). Fixed in setup.js.
+
+### [Claude-2] Debounce in components breaks synchronous test assertions
+- What happened: Adding 300ms debounce to Sidebar search caused tests to fail because `fireEvent.change` + immediate `expect` doesn't wait for the debounced value
+- Root cause: `useDebounce` uses setTimeout internally. The debounced value updates asynchronously.
+- Rule: When adding debounce to search inputs, update all tests that assert on filtered results to use `await waitFor(() => expect(...))` instead of synchronous assertions.
+
+### [Claude-4] Toast setTimeout creates memory leak without cleanup tracking
+- What happened: ToastProvider used bare `setTimeout` for auto-dismiss without storing timeout IDs. If component unmounted or toast was manually dismissed, the timeout callback still fired against stale state.
+- Root cause: setTimeout returns an ID that must be tracked for cleanup. Common in notification components.
+- Rule: When using setTimeout for auto-dismiss behavior, store IDs in a `useRef(new Map())`. Clear specific timeouts on manual dismiss. Clear all on unmount.
+
+### [Claude-4] Swarm agents may not activate - plan for partial phase completion
+- What happened: Phase 10 backend and testing agents (Claude-1, Claude-3) never activated. Their heartbeats never updated from start time. All backend tasks had to be deferred.
+- Root cause: Swarm launch may fail to start all agents due to context limits, rate limits, or process management issues.
+- Rule: Claude-4 (reviewer) should always plan for partial phase completion. Generate next-swarm.ps1 that carries forward incomplete tasks rather than blocking on missing work.
+
+### [Claude-3] Python str.encode() cannot handle raw surrogate pairs
+- What happened: Test used `\ud83d\ude80` (surrogate pair for rocket emoji) in a payload string. `_sign_payload` called `.encode()` which raised `UnicodeEncodeError: surrogates not allowed`
+- Root cause: Python string literals with `\uD800-\uDFFF` create strings with raw surrogates. These are valid in JSON wire format but not encodable by Python's UTF-8 codec.
+- Rule: In Python tests, use actual Unicode characters (`\u2605`) or pre-encoded JSON strings, never raw surrogate pairs (`\ud83d\ude80`). JSON parsers handle surrogates internally but Python source code cannot.
+
+### [Claude-1] `from .module import NAME` creates a frozen copy - use `module.NAME` for testability
+- What happened: `from .database import DB_PATH` in main.py created a module-level copy of the Path object. When tests changed `database.DB_PATH = tmp_db`, `_reconcile_running_projects()` still used the original path because it referenced the module-local `DB_PATH` copy.
+- Root cause: Python's `from X import Y` binds `Y` as a local name. Reassigning `X.Y` later doesn't update the local binding in other modules.
+- Rule: For values that tests need to override (DB paths, config), use `from . import module` and reference `module.ATTR` at call time. This ensures runtime reads the current value, not the import-time snapshot.

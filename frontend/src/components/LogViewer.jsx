@@ -1,12 +1,20 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { getLogs, searchLogs } from '../lib/api'
 import { AGENT_NAMES, AGENT_LOG_COLORS } from '../lib/constants'
+import { useDebounce } from '../hooks/useDebounce'
+import { LogViewerSkeleton } from './Skeleton'
+import { useSafeToast } from './Toast'
 
 const levels = ['all', 'INFO', 'WARN', 'ERROR', 'DEBUG']
 const levelRegex = /\b(INFO|WARN|ERROR|DEBUG)\b/
+const ROW_HEIGHT = 22
+const OVERSCAN = 15
+const VIRTUALIZE_THRESHOLD = 200
 
 export default function LogViewer({ projectId, wsEvents }) {
+  const toast = useSafeToast()
   const [logs, setLogs] = useState([])
+  const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
   const [autoScroll, setAutoScroll] = useState(true)
   const [searchText, setSearchText] = useState('')
@@ -17,6 +25,9 @@ export default function LogViewer({ projectId, wsEvents }) {
   const containerRef = useRef(null)
   const lastWsTime = useRef(0)
   const [isLive, setIsLive] = useState(false)
+  const [scrollTop, setScrollTop] = useState(0)
+  const [containerHeight, setContainerHeight] = useState(400)
+  const debouncedSearch = useDebounce(searchText, 300)
 
   const hasDateFilter = fromDate || toDate
   const hasServerFilter = hasDateFilter
@@ -35,6 +46,9 @@ export default function LogViewer({ projectId, wsEvents }) {
       setLogs(flat)
     } catch (e) {
       console.warn('Failed to load logs:', e)
+      toast(`Failed to load logs: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: loadLogs })
+    } finally {
+      setLoading(false)
     }
   }, [projectId])
 
@@ -43,7 +57,7 @@ export default function LogViewer({ projectId, wsEvents }) {
     setIsSearching(true)
     try {
       const params = {}
-      if (searchText) params.q = searchText
+      if (debouncedSearch) params.q = debouncedSearch
       if (filter !== 'all') params.agent = filter
       if (levelFilter !== 'all') params.level = levelFilter
       if (fromDate) params.from_date = fromDate
@@ -58,10 +72,11 @@ export default function LogViewer({ projectId, wsEvents }) {
       setLogs(results)
     } catch (e) {
       console.warn('Failed to search logs:', e)
+      toast(`Log search failed: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: runSearch })
     } finally {
       setIsSearching(false)
     }
-  }, [projectId, searchText, filter, levelFilter, fromDate, toDate])
+  }, [projectId, debouncedSearch, filter, levelFilter, fromDate, toDate])
 
   useEffect(() => {
     if (hasServerFilter) {
@@ -98,13 +113,6 @@ export default function LogViewer({ projectId, wsEvents }) {
     return () => clearInterval(timer)
   }, [])
 
-  // Auto-scroll
-  useEffect(() => {
-    if (autoScroll && containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight
-    }
-  }, [logs, autoScroll])
-
   // Client-side filtering (only when not using server search)
   const filtered = useMemo(() => {
     if (hasServerFilter) return logs
@@ -114,12 +122,45 @@ export default function LogViewer({ projectId, wsEvents }) {
         const match = l.text.match(levelRegex)
         if (!match || match[1] !== levelFilter) return false
       }
-      if (searchText) {
-        return l.text.toLowerCase().includes(searchText.toLowerCase())
+      if (debouncedSearch) {
+        return l.text.toLowerCase().includes(debouncedSearch.toLowerCase())
       }
       return true
     })
-  }, [logs, filter, levelFilter, searchText, hasServerFilter])
+  }, [logs, filter, levelFilter, debouncedSearch, hasServerFilter])
+
+  // Auto-scroll
+  useEffect(() => {
+    if (autoScroll && containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight
+    }
+  }, [filtered.length, autoScroll])
+
+  // Track container size for virtual scroll
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => {
+      setContainerHeight(entry.contentRect.height)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const handleScroll = useCallback(() => {
+    if (containerRef.current) {
+      setScrollTop(containerRef.current.scrollTop)
+    }
+  }, [])
+
+  // Virtual scroll range calculation
+  const virtualRange = useMemo(() => {
+    const totalHeight = filtered.length * ROW_HEIGHT
+    const startIdx = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN)
+    const visibleCount = Math.ceil(containerHeight / ROW_HEIGHT)
+    const endIdx = Math.min(filtered.length, startIdx + visibleCount + OVERSCAN * 2)
+    return { startIdx, endIdx, totalHeight }
+  }, [filtered.length, scrollTop, containerHeight])
 
   const handleCopy = () => {
     const text = filtered.map((l) => `[${l.agent}] ${l.text}`).join('\n')
@@ -137,8 +178,12 @@ export default function LogViewer({ projectId, wsEvents }) {
     URL.revokeObjectURL(url)
   }
 
+  if (loading) {
+    return <LogViewerSkeleton />
+  }
+
   return (
-    <div className="retro-panel border border-retro-border rounded flex flex-col h-full">
+    <div className="retro-panel border border-retro-border rounded flex flex-col h-full animate-fade-in">
       {/* Agent filter row */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-retro-border flex-wrap">
         <button
@@ -258,23 +303,53 @@ export default function LogViewer({ projectId, wsEvents }) {
         </button>
       </div>
 
-      {/* Log output */}
+      {/* Log output - virtualized for large lists */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-y-auto font-mono text-xs p-3 min-h-48 bg-retro-dark"
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto font-mono text-xs min-h-48 bg-retro-dark"
       >
         {filtered.length === 0 && (
           <div className="text-zinc-600 text-center py-8">No logs</div>
         )}
-        {filtered.map((entry) => {
-          const color = AGENT_LOG_COLORS[entry.agent] || { label: 'text-zinc-500', bg: '' }
-          return (
-            <div key={entry.id} className={`py-0.5 px-2 rounded ${color.bg}`}>
-              <span className={`font-semibold ${color.label}`}>[{entry.agent}]</span>{' '}
-              <span className="text-zinc-400">{entry.text}</span>
-            </div>
-          )
-        })}
+        {filtered.length > 0 && filtered.length <= VIRTUALIZE_THRESHOLD && (
+          <div className="p-3">
+            {filtered.map((entry) => {
+              const color = AGENT_LOG_COLORS[entry.agent] || { label: 'text-zinc-500', bg: '' }
+              return (
+                <div key={entry.id} className={`py-0.5 px-2 rounded ${color.bg}`}>
+                  <span className={`font-semibold ${color.label}`}>[{entry.agent}]</span>{' '}
+                  <span className="text-zinc-400">{entry.text}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {filtered.length > VIRTUALIZE_THRESHOLD && (
+          <div style={{ height: virtualRange.totalHeight, position: 'relative' }}>
+            {filtered.slice(virtualRange.startIdx, virtualRange.endIdx).map((entry, i) => {
+              const color = AGENT_LOG_COLORS[entry.agent] || { label: 'text-zinc-500', bg: '' }
+              return (
+                <div
+                  key={entry.id}
+                  className={`px-3 rounded ${color.bg}`}
+                  style={{
+                    position: 'absolute',
+                    top: (virtualRange.startIdx + i) * ROW_HEIGHT,
+                    height: ROW_HEIGHT,
+                    left: 0,
+                    right: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span className={`font-semibold ${color.label} shrink-0`}>[{entry.agent}]</span>
+                  <span className="text-zinc-400 ml-1 truncate">{entry.text}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

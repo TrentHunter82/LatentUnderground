@@ -74,32 +74,32 @@ class TestProjectCreateValidation:
     """Verify ProjectCreate Field constraints."""
 
     @pytest.mark.asyncio
-    async def test_empty_name_rejected(self, client):
+    async def test_empty_name_rejected(self, client, tmp_path):
         """Empty name should be rejected (min_length=1)."""
         resp = await client.post("/api/projects", json={
             "name": "",
             "goal": "Valid goal",
-            "folder_path": "F:/Test",
+            "folder_path": str(tmp_path / "Test"),
         })
         assert resp.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_name_over_max_rejected(self, client):
+    async def test_name_over_max_rejected(self, client, tmp_path):
         """Name exceeding 200 chars should be rejected."""
         resp = await client.post("/api/projects", json={
             "name": "x" * 201,
             "goal": "Valid goal",
-            "folder_path": "F:/Test",
+            "folder_path": str(tmp_path / "Test"),
         })
         assert resp.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_goal_over_max_rejected(self, client):
+    async def test_goal_over_max_rejected(self, client, tmp_path):
         """Goal exceeding 2000 chars should be rejected."""
         resp = await client.post("/api/projects", json={
             "name": "Valid name",
             "goal": "x" * 2001,
-            "folder_path": "F:/Test",
+            "folder_path": str(tmp_path / "Test"),
         })
         assert resp.status_code == 422
 
