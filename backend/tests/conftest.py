@@ -6,6 +6,7 @@ from pathlib import Path
 
 # Disable rate limiting in tests (must be set before app imports)
 os.environ.setdefault("LU_RATE_LIMIT_RPM", "0")
+os.environ.setdefault("LU_RATE_LIMIT_READ_RPM", "0")
 
 import aiosqlite
 import pytest

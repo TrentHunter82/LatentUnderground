@@ -1,3 +1,6 @@
+import asyncio
+import logging
+import random
 import sqlite3
 
 import aiosqlite
@@ -6,10 +9,109 @@ from . import config
 
 DB_PATH = config.DB_PATH
 
+_logger = logging.getLogger("latent.db")
+
+
+class ConnectionPool:
+    """Lightweight async connection pool for aiosqlite.
+
+    Reuses connections to avoid per-request thread creation and PRAGMA setup overhead.
+    Falls back to direct connections if the pool is exhausted (no blocking).
+    """
+
+    def __init__(self, db_path, size: int = 4):
+        self._db_path = db_path
+        self._size = size
+        self._pool: asyncio.Queue[aiosqlite.Connection] = asyncio.Queue(maxsize=size)
+        self._created = 0
+        self._closed = False
+
+    async def _create_connection(self) -> aiosqlite.Connection:
+        """Create a new connection with pragmas pre-configured."""
+        db = await aiosqlite.connect(self._db_path)
+        db.row_factory = aiosqlite.Row
+        await db.execute("PRAGMA foreign_keys = ON")
+        await db.execute("PRAGMA busy_timeout = 5000")
+        return db
+
+    async def initialize(self):
+        """Pre-create connections to fill the pool."""
+        for _ in range(self._size):
+            conn = await self._create_connection()
+            await self._pool.put(conn)
+            self._created += 1
+        _logger.info("Connection pool initialized with %d connections", self._size)
+
+    async def acquire(self) -> aiosqlite.Connection:
+        """Get a connection from the pool, or create one if pool is empty."""
+        try:
+            return self._pool.get_nowait()
+        except asyncio.QueueEmpty:
+            # Pool exhausted - create a temporary overflow connection
+            return await self._create_connection()
+
+    async def release(self, conn: aiosqlite.Connection):
+        """Return a connection to the pool, or close if pool is full."""
+        if self._closed:
+            await conn.close()
+            return
+        try:
+            self._pool.put_nowait(conn)
+        except asyncio.QueueFull:
+            # Pool is full (overflow connection), just close it
+            await conn.close()
+
+    async def close(self):
+        """Close all pooled connections."""
+        self._closed = True
+        while not self._pool.empty():
+            try:
+                conn = self._pool.get_nowait()
+                await conn.close()
+            except asyncio.QueueEmpty:
+                break
+        _logger.info("Connection pool closed")
+
+
+# Global pool instance (initialized in lifespan, None during tests)
+_pool: ConnectionPool | None = None
+
+
+async def init_pool(db_path=None):
+    """Initialize the global connection pool."""
+    global _pool
+    path = db_path or DB_PATH
+    _pool = ConnectionPool(path)
+    await _pool.initialize()
+
+
+async def close_pool():
+    """Close the global connection pool."""
+    global _pool
+    if _pool:
+        await _pool.close()
+        _pool = None
+
 
 async def get_db():
-    """Yield an aiosqlite connection with retry on transient failures."""
-    import asyncio
+    """Yield an aiosqlite connection with retry on transient failures.
+
+    If a connection pool is available (production), borrows from the pool.
+    Otherwise falls back to direct connection (tests).
+
+    Uses exponential backoff with random jitter to prevent thundering herd
+    when multiple requests hit a locked database simultaneously.
+    """
+    # Pool path: borrow and return
+    if _pool and not _pool._closed:
+        db = await _pool.acquire()
+        try:
+            yield db
+        finally:
+            await _pool.release(db)
+        return
+
+    # Direct connection path (tests or no pool initialized)
     retries = 3
     delay = 0.1
     last_err = None
@@ -23,8 +125,10 @@ async def get_db():
         except (sqlite3.OperationalError, OSError) as exc:
             last_err = exc
             if attempt < retries - 1:
-                await asyncio.sleep(delay)
-                delay *= 3  # exponential backoff: 0.1, 0.3, 0.9
+                # Exponential backoff with jitter: base * 3^attempt + random(0, base/2)
+                jittered_delay = delay + random.uniform(0, delay * 0.5)
+                await asyncio.sleep(jittered_delay)
+                delay *= 3  # 0.1, 0.3, 0.9 base delays
             continue
     else:
         raise last_err

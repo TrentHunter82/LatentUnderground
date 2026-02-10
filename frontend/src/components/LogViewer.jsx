@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { getLogs, searchLogs } from '../lib/api'
 import { AGENT_NAMES, AGENT_LOG_COLORS } from '../lib/constants'
 import { useDebounce } from '../hooks/useDebounce'
@@ -11,7 +11,7 @@ const ROW_HEIGHT = 22
 const OVERSCAN = 15
 const VIRTUALIZE_THRESHOLD = 200
 
-export default function LogViewer({ projectId, wsEvents }) {
+export default memo(function LogViewer({ projectId, wsEvents }) {
   const toast = useSafeToast()
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -188,6 +188,8 @@ export default function LogViewer({ projectId, wsEvents }) {
       <div className="flex items-center gap-2 px-3 py-2 border-b border-retro-border flex-wrap">
         <button
           onClick={() => setFilter('all')}
+          aria-pressed={filter === 'all'}
+          aria-label="Filter by all agents"
           className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer border-0 font-mono ${
             filter === 'all' ? 'bg-retro-grid text-crt-green border border-crt-green/30' : 'text-zinc-500 hover:text-zinc-300 bg-transparent'
           }`}
@@ -198,6 +200,8 @@ export default function LogViewer({ projectId, wsEvents }) {
           <button
             key={a}
             onClick={() => setFilter(a)}
+            aria-pressed={filter === a}
+            aria-label={`Filter by ${a}`}
             className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer border-0 font-mono ${
               filter === a ? 'bg-retro-grid text-zinc-100' : `${AGENT_LOG_COLORS[a]?.label || 'text-zinc-500'} hover:bg-retro-grid bg-transparent`
             }`}
@@ -233,12 +237,15 @@ export default function LogViewer({ projectId, wsEvents }) {
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           placeholder="Search logs..."
-          className="retro-input px-2 py-1 text-xs w-40"
+          aria-label="Search logs"
+          className="retro-input px-2 py-1 text-xs w-28 sm:w-40"
         />
         {levels.map((lvl) => (
           <button
             key={lvl}
             onClick={() => setLevelFilter(lvl)}
+            aria-pressed={levelFilter === lvl}
+            aria-label={`Filter by ${lvl === 'all' ? 'all levels' : lvl + ' level'}`}
             className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer border-0 font-mono ${
               levelFilter === lvl ? 'bg-retro-grid text-crt-green border border-crt-green/30' : 'text-zinc-500 hover:text-zinc-300 bg-transparent'
             }`}
@@ -353,4 +360,4 @@ export default function LogViewer({ projectId, wsEvents }) {
       </div>
     </div>
   )
-}
+})

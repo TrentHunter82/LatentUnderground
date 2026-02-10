@@ -50,7 +50,7 @@ class TestPerApiKeyRateLimiting:
     async def test_rate_limit_uses_api_key_when_present(self):
         """RateLimitMiddleware should use API key prefix as identity."""
         from app.main import RateLimitMiddleware
-        middleware = RateLimitMiddleware(app=MagicMock(), rpm=2)
+        middleware = RateLimitMiddleware(app=MagicMock(), write_rpm=2, read_rpm=2)
 
         # Simulate request with Bearer token
         request = MagicMock()
@@ -71,7 +71,7 @@ class TestPerApiKeyRateLimiting:
     async def test_rate_limit_falls_back_to_ip(self):
         """Without API key, rate limiting should use client IP."""
         from app.main import RateLimitMiddleware
-        middleware = RateLimitMiddleware(app=MagicMock(), rpm=2)
+        middleware = RateLimitMiddleware(app=MagicMock(), write_rpm=2, read_rpm=2)
 
         request = MagicMock()
         request.method = "POST"
@@ -88,7 +88,7 @@ class TestPerApiKeyRateLimiting:
     async def test_rate_limit_uses_x_api_key_header(self):
         """RateLimitMiddleware should also work with X-API-Key header."""
         from app.main import RateLimitMiddleware
-        middleware = RateLimitMiddleware(app=MagicMock(), rpm=2)
+        middleware = RateLimitMiddleware(app=MagicMock(), write_rpm=2, read_rpm=2)
 
         request = MagicMock()
         request.method = "POST"

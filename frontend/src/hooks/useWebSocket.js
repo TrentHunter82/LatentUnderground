@@ -8,6 +8,7 @@ const JITTER_FACTOR = 0.2
 export function useWebSocket(onMessage) {
   const wsRef = useRef(null)
   const [connected, setConnected] = useState(false)
+  const [reconnecting, setReconnecting] = useState(false)
   const reconnectTimer = useRef(null)
   const onMessageRef = useRef(onMessage)
   const retriesRef = useRef(0)
@@ -29,6 +30,7 @@ export function useWebSocket(onMessage) {
 
     ws.onopen = () => {
       setConnected(true)
+      setReconnecting(false)
       retriesRef.current = 0
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current)
@@ -51,9 +53,12 @@ export function useWebSocket(onMessage) {
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
 
       if (retriesRef.current < MAX_RETRIES) {
+        setReconnecting(true)
         const delay = getBackoffDelay()
         retriesRef.current++
         reconnectTimer.current = setTimeout(connect, delay)
+      } else {
+        setReconnecting(false)
       }
     }
 
@@ -75,5 +80,5 @@ export function useWebSocket(onMessage) {
     }
   }, [])
 
-  return { connected, send }
+  return { connected, reconnecting, send }
 }

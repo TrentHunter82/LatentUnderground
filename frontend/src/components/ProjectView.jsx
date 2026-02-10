@@ -80,7 +80,7 @@ export default function ProjectView({ wsEvents, onProjectChange }) {
             tabIndex={activeTab === tab.id ? 0 : -1}
             onClick={() => setActiveTab(tab.id)}
             onKeyDown={handleTabKeyDown}
-            className={`px-4 py-2 rounded-t text-sm font-medium transition-colors cursor-pointer border-0 font-mono whitespace-nowrap ${
+            className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-t text-xs sm:text-sm font-medium transition-colors cursor-pointer border-0 font-mono whitespace-nowrap ${
               activeTab === tab.id
                 ? 'bg-retro-grid text-crt-green border-b-2 border-crt-green'
                 : 'text-zinc-500 hover:text-zinc-300 bg-transparent'
@@ -98,7 +98,7 @@ export default function ProjectView({ wsEvents, onProjectChange }) {
         )}
         {activeTab === 'files' && (
           <Suspense fallback={<div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse">Loading editor...</div>}>
-            <div className="p-4 h-full">
+            <div className="p-2 sm:p-4 h-full">
               <FileEditor projectId={projectId} wsEvents={wsEvents} />
             </div>
           </Suspense>

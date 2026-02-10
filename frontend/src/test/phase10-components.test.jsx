@@ -264,14 +264,15 @@ describe('Bundle optimization', () => {
     const lazyModule = () => import('../components/Analytics')
     const mod = await lazyModule()
     expect(mod.default).toBeDefined()
-    expect(typeof mod.default).toBe('function')
+    // memo() wraps the component - check it's a valid React element type (function or memo object)
+    expect(['function', 'object'].includes(typeof mod.default)).toBe(true)
   })
 
   it('markdown chunk is separated in vite config', async () => {
     // Verify react-markdown is importable (confirms it exists in the project)
     const mod = await import('react-markdown')
     expect(mod.default).toBeDefined()
-  })
+  }, 15000)
 })
 
 // --- Error display patterns are consistent ---

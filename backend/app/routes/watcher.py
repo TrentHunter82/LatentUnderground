@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 import aiosqlite
 
 from ..database import DB_PATH
+from ..models.responses import WatchStatusOut, ErrorDetail
 from ..routes.websocket import manager
 from ..services.watcher import FolderWatcher
 
@@ -18,7 +19,9 @@ async def cleanup_watchers():
     _watchers.clear()
 
 
-@router.post("/api/watch/{project_id}")
+@router.post("/api/watch/{project_id}", response_model=WatchStatusOut,
+             summary="Start watching",
+             responses={404: {"model": ErrorDetail, "description": "Project not found"}})
 async def start_watching(project_id: int):
     """Start filesystem watcher for a project folder."""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -38,7 +41,9 @@ async def start_watching(project_id: int):
     return {"status": "watching", "folder": folder}
 
 
-@router.post("/api/unwatch/{project_id}")
+@router.post("/api/unwatch/{project_id}", response_model=WatchStatusOut,
+             summary="Stop watching",
+             responses={404: {"model": ErrorDetail, "description": "Project not found"}})
 async def stop_watching(project_id: int):
     """Stop filesystem watcher for a project folder."""
     async with aiosqlite.connect(DB_PATH) as db:

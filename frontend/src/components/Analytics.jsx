@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { getSwarmHistory, getProjectStats } from '../lib/api'
 import { AnalyticsSkeleton } from './Skeleton'
 
@@ -111,30 +111,51 @@ function AgentEfficiencyBars({ stats }) {
   )
 }
 
-export default function Analytics({ projectId }) {
+export default memo(function Analytics({ projectId }) {
   const [runs, setRuns] = useState([])
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  useEffect(() => {
-    let cancelled = false
+  const loadData = useCallback(() => {
     setLoading(true)
+    setError(null)
 
     Promise.all([
-      getSwarmHistory(projectId).catch(() => ({ runs: [] })),
-      getProjectStats(projectId).catch(() => null),
+      getSwarmHistory(projectId),
+      getProjectStats(projectId),
     ]).then(([historyData, statsData]) => {
-      if (cancelled) return
       setRuns(historyData.runs || [])
       setStats(statsData)
       setLoading(false)
+    }).catch((e) => {
+      setError(e.message)
+      setLoading(false)
     })
-
-    return () => { cancelled = true }
   }, [projectId])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   if (loading) {
     return <AnalyticsSkeleton />
+  }
+
+  if (error) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="retro-panel border border-retro-border rounded p-6 text-center max-w-sm">
+          <div className="text-signal-red text-sm font-mono mb-3">{error}</div>
+          <button
+            onClick={loadData}
+            className="btn-neon px-4 py-2 rounded text-sm"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (runs.length === 0) {
@@ -176,4 +197,4 @@ export default function Analytics({ projectId }) {
       {stats && <AgentEfficiencyBars stats={stats} />}
     </div>
   )
-}
+})

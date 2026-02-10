@@ -167,3 +167,61 @@ After ANY correction, failed attempt, or discovery, add a lesson here.
 - What happened: `from .database import DB_PATH` in main.py created a module-level copy of the Path object. When tests changed `database.DB_PATH = tmp_db`, `_reconcile_running_projects()` still used the original path because it referenced the module-local `DB_PATH` copy.
 - Root cause: Python's `from X import Y` binds `Y` as a local name. Reassigning `X.Y` later doesn't update the local binding in other modules.
 - Rule: For values that tests need to override (DB paths, config), use `from . import module` and reference `module.ATTR` at call time. This ensures runtime reads the current value, not the import-time snapshot.
+
+### [Claude-4] FastAPI `dependency_overrides` is the ONLY way to mock Depends() in tests
+- What happened: Exception handler tests mocked `app.routes.projects.get_db` with `patch()` but the route still used the real function, returning 200 instead of the expected error.
+- Root cause: `Depends(get_db)` stores the original function reference when the route is defined. Patching the module attribute doesn't affect the stored reference.
+- Rule: Always use `app.dependency_overrides[get_db] = mock_fn` to override FastAPI dependencies in tests. Clean up with `app.dependency_overrides.pop(get_db, None)` in `finally` block.
+
+### [Claude-4] Starlette's BaseHTTPMiddleware wraps exceptions in ExceptionGroup
+- What happened: Generic `@app.exception_handler(Exception)` didn't catch RuntimeError when the app has multiple BaseHTTPMiddleware layers. Tests got unhandled ExceptionGroup instead of 500.
+- Root cause: BaseHTTPMiddleware uses anyio task groups internally. Exceptions from downstream routes get wrapped in ExceptionGroup, which doesn't match the `Exception` handler before ServerErrorMiddleware intercepts.
+- Rule: Test generic exception handlers by calling the handler function directly (unit test), not through the full ASGI stack. Specific exception handlers (e.g., sqlite3.OperationalError) work fine through the stack.
+
+### [Claude-4] Keep backend and frontend version numbers in sync
+- What happened: Frontend was at v0.11.0 (bumped each phase) but backend was still at v0.1.0 (never bumped). Health endpoint version mismatch caused test failures when synced.
+- Root cause: No process to bump backend version alongside frontend.
+- Rule: When bumping frontend package.json version, also bump FastAPI app version in main.py and update any hardcoded version assertions in tests.
+
+### [Claude-3/Claude-4] (Consolidated) See above: dependency_overrides and ExceptionGroup lessons
+- Duplicate entries from Claude-3 and Claude-4 merged. See lines 171-179 above.
+
+### [Claude-3] Frontend integration tests need ALL api.js exports mocked
+- What happened: vi.mock('../lib/api') requires every function that any child component imports, not just the ones the test directly uses. Missing mocks cause silent errors or "not a function" crashes.
+- Root cause: React component tree imports deeply; Dashboard imports getSwarmStatus, AgentGrid, etc.
+- Rule: When writing full-page integration tests, mock the ENTIRE api.js module with all ~30+ exports. Copy the comprehensive mock from phase12-integration.test.jsx as a template.
+
+### [Claude-3] Use getAllByText/getAllByRole when text appears in multiple components
+- What happened: "Latent Underground" appears in both Sidebar header and Home page; getByText throws on multiple matches.
+- Root cause: Full-page integration renders all visible components simultaneously.
+- Rule: In integration tests that render full App, always use getAllByText/getAllByRole and check .length >= 1, or target specific containers.
+
+### [Claude-3] Flaky timeout tests need explicit timeout parameter
+- What happened: Two pre-existing tests (End key navigation, react-markdown import) intermittently timed out at 5000ms default.
+- Root cause: After 400+ tests, resource pressure slows later tests. Dynamic imports especially affected.
+- Rule: Add explicit timeout (15000) to tests with heavy setup (renderProjectView) or dynamic imports. Syntax: `it('name', async () => { ... }, 15000)`
+
+### [Claude-4] Vitest doesn't always collect new untracked test files with `npx vitest run`
+- What happened: Running `npx vitest run` found 17 test files (383 tests), but running `npx vitest run src/test/` found 21 files (480 tests). 4 new test files were missed.
+- Root cause: Vitest's default file discovery may be affected by untracked git status or file system caching on Windows. Explicit path argument forces collection.
+- Rule: After adding new test files, always verify collection by running `npx vitest run src/test/` with explicit path. Or run individual new files to confirm they work.
+
+### [Claude-3] Don't hardcode version strings - reference the single source of truth
+- What happened: Health endpoint at main.py:534 had `"version": "0.11.0"` hardcoded, while `app = FastAPI(version="1.0.0")` was the actual version. Tests expected "1.0.0" and failed.
+- Root cause: Version was bumped in the FastAPI app constructor but never in the health endpoint's response dict.
+- Rule: Never hardcode version strings in response bodies. Always reference `app.version` or a shared constant. Grep for old version strings when bumping versions.
+
+### [Claude-4] Windows `find -delete` unreliable for .pyc cleanup; use `rm -rf __pycache__` instead
+- What happened: After bumping app version to 1.0.0, tests still saw 0.11.0. Cleared pycache with `find . -name "__pycache__" -exec rm -rf {} +` but stale .pyc persisted.
+- Root cause: Windows MINGW `find` command behaves differently from Linux. The -exec rm variant may fail silently, and .pyc files get regenerated by uv/pytest collection before the test actually runs.
+- Rule: On Windows, use `rm -rf app/__pycache__` directly on the specific directories. Always verify with `ls` that caches are actually gone. When version bumps cause mysterious test failures, suspect stale .pyc first.
+
+### [Claude-4] aria-label on span/div requires role="img" per axe 4.11
+- What happened: axe-core 4.11 enforces aria-prohibited-attr: `aria-label` cannot be used on `<span>` or `<div>` without a valid ARIA role.
+- Root cause: Earlier axe versions allowed aria-label on any element. 4.11 is stricter.
+- Rule: When using `aria-label` on decorative/indicator elements (`<span>`, `<div>`), always add `role="img"` to make it valid ARIA. This applies to LED indicators, status dots, badges.
+
+### [Claude-4] When refactoring constructor parameters, update ALL callers including tests
+- What happened: RateLimitMiddleware was changed from `rpm=` to `write_rpm=`/`read_rpm=` but 3 existing tests still used `rpm=2`, causing TypeError.
+- Root cause: Constructor signature change without searching for all call sites.
+- Rule: After changing any function/class signature, grep for ALL callers across source AND test files. Use `Grep pattern="ClassName(" path="."` to find all instantiations.

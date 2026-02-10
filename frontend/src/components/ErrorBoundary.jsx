@@ -17,7 +17,7 @@ export default class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-retro-dark flex items-center justify-center p-8">
+        <div className="min-h-screen bg-retro-dark flex items-center justify-center p-8" role="alert" aria-live="assertive">
           <div className="max-w-md w-full retro-panel border border-retro-border rounded p-6 text-center glow-magenta">
             <h1 className="text-xl font-semibold text-signal-red mb-2 font-mono">Something went wrong</h1>
             <p className="text-zinc-400 text-sm mb-4">

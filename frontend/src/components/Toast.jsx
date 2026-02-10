@@ -45,6 +45,9 @@ export function ToastProvider({ children }) {
         {toasts.map((t) => (
           <div
             key={t.id}
+            role="alert"
+            aria-live="polite"
+            aria-atomic="true"
             className={`pointer-events-auto px-4 py-3 rounded shadow-lg text-sm font-medium flex items-center gap-3 animate-slide-in max-w-sm font-mono ${
               t.type === 'error'
                 ? 'bg-signal-red/20 text-signal-red border border-signal-red/40'
@@ -65,6 +68,7 @@ export function ToastProvider({ children }) {
             <button
               onClick={() => dismiss(t.id)}
               className="text-current opacity-60 hover:opacity-100 bg-transparent border-0 cursor-pointer text-lg leading-none p-0"
+              aria-label="Dismiss notification"
             >
               &times;
             </button>

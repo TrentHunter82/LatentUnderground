@@ -64,6 +64,7 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle, show
             onClick={onToggle}
             className="p-1.5 rounded-md text-zinc-400 hover:text-crt-green hover:bg-retro-grid bg-transparent border-0 cursor-pointer lg:hidden transition-colors"
             title="Close sidebar"
+            aria-label="Close sidebar"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 4L4 12M4 4l8 8" /></svg>
           </button>
@@ -95,6 +96,8 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle, show
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
+                aria-pressed={statusFilter === s}
+                aria-label={`Filter by ${s} status`}
                 className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer border-0 font-mono capitalize ${
                   statusFilter === s ? 'bg-retro-grid text-crt-green border border-crt-green/30' : 'text-zinc-500 hover:text-zinc-300 bg-transparent'
                 }`}
@@ -142,7 +145,7 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle, show
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${statusColors[p.status] || 'bg-zinc-600'} ${statusGlow[p.status] || ''}`} />
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${statusColors[p.status] || 'bg-zinc-600'} ${statusGlow[p.status] || ''}`} aria-label={`Status: ${p.status || 'unknown'}`} />
                   <span className="text-sm truncate font-mono">{p.name}</span>
                   {isArchived && (
                     <span className="text-[8px] font-mono uppercase tracking-wider text-crt-amber/70 bg-crt-amber/10 px-1 py-0.5 rounded shrink-0">Archived</span>

@@ -171,6 +171,7 @@ export default function TemplateManager({ onTemplatesChange }) {
         <button
           onClick={startCreate}
           className="px-2.5 py-1 rounded text-xs font-mono text-crt-green hover:bg-retro-grid bg-transparent border border-crt-green/30 cursor-pointer transition-colors"
+          aria-label="Create new template"
         >
           + New
         </button>
@@ -197,7 +198,7 @@ export default function TemplateManager({ onTemplatesChange }) {
                 {tmpl.config?.agent_count ?? '?'} agents · {tmpl.config?.max_phases ?? '?'} phases
               </div>
             </div>
-            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
               <button
                 onClick={() => startEdit(tmpl)}
                 className="p-1 rounded text-zinc-500 hover:text-crt-green hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"

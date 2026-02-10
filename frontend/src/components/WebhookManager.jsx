@@ -283,7 +283,7 @@ export default function WebhookManager({ projectId }) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => handleToggleEnabled(wh)}
                   className={`px-2 py-1 rounded text-[10px] font-mono border cursor-pointer transition-colors ${

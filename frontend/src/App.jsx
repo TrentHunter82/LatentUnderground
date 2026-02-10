@@ -28,7 +28,7 @@ export default function App() {
   const [showArchived, setShowArchived] = useState(false)
   const navigate = useNavigate()
 
-  const { connected } = useWebSocket(setWsEvent)
+  const { connected, reconnecting } = useWebSocket(setWsEvent)
   const { status: healthStatus, latency } = useHealthCheck()
   const { notify } = useNotifications()
 
@@ -117,6 +117,7 @@ export default function App() {
             onClick={toggleSidebar}
             className="p-1.5 rounded-md text-zinc-400 hover:text-crt-green hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
             title={sidebarCollapsed ? 'Open sidebar' : 'Close sidebar'}
+            aria-label={sidebarCollapsed ? 'Open sidebar' : 'Close sidebar'}
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M3 5h12M3 9h12M3 13h12" />
@@ -180,6 +181,14 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* WebSocket reconnection banner */}
+        {reconnecting && (
+          <div className="px-3 py-1.5 bg-signal-amber/10 border-b border-signal-amber/30 flex items-center gap-2 text-xs font-mono text-signal-amber shrink-0" role="status" aria-live="polite">
+            <span className="w-2 h-2 rounded-full bg-signal-amber animate-pulse shrink-0" />
+            <span>Reconnecting to server...</span>
+          </div>
+        )}
 
         <ErrorBoundary>
           <Suspense fallback={<div className="flex-1 flex items-center justify-center text-zinc-500 font-mono text-sm">Loading...</div>}>

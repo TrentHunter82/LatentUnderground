@@ -233,13 +233,13 @@ export default function NewProject({ onProjectChange }) {
 
           <div>
             <label className={labelClass}>Complexity</label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {complexityOptions.map((opt) => (
                 <button
                   key={opt}
                   type="button"
                   onClick={() => setForm((f) => ({ ...f, complexity: opt }))}
-                  className={`px-4 py-2 rounded text-sm font-medium transition-colors cursor-pointer font-mono ${
+                  className={`px-3 sm:px-4 py-2 rounded text-sm font-medium transition-colors cursor-pointer font-mono ${
                     form.complexity === opt
                       ? 'btn-neon'
                       : 'bg-retro-grid text-zinc-400 hover:bg-retro-border border border-retro-border'
@@ -277,6 +277,7 @@ export default function NewProject({ onProjectChange }) {
                 onClick={() => setShowBrowser(true)}
                 className="px-3 py-2 rounded bg-retro-grid hover:bg-retro-border text-zinc-400 hover:text-crt-green text-sm font-mono border border-retro-border cursor-pointer transition-colors shrink-0"
                 title="Browse for folder"
+                aria-label="Browse for folder"
               >
                 Browse
               </button>
@@ -284,11 +285,11 @@ export default function NewProject({ onProjectChange }) {
           </div>
 
           {/* Action buttons */}
-          <div className="flex gap-3 pt-2">
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2.5 rounded bg-retro-grid hover:bg-retro-border text-zinc-200 text-sm font-medium transition-colors disabled:opacity-50 cursor-pointer border border-retro-border font-mono"
+              className="px-4 sm:px-5 py-2.5 rounded bg-retro-grid hover:bg-retro-border text-zinc-200 text-sm font-medium transition-colors disabled:opacity-50 cursor-pointer border border-retro-border font-mono"
             >
               {loading ? 'Creating...' : 'Create Project'}
             </button>
@@ -296,7 +297,7 @@ export default function NewProject({ onProjectChange }) {
               type="button"
               onClick={handleLaunchNew}
               disabled={loading}
-              className="btn-neon px-5 py-2.5 rounded text-sm disabled:opacity-50"
+              className="btn-neon px-4 sm:px-5 py-2.5 rounded text-sm disabled:opacity-50"
             >
               {loading ? 'Launching...' : 'Create & Launch'}
             </button>

@@ -12,6 +12,10 @@ from starlette.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import aiosqlite
 from ..database import get_db
+from ..models.responses import (
+    SwarmLaunchOut, SwarmStopOut, SwarmInputOut, SwarmStatusOut,
+    SwarmOutputOut, SwarmHistoryOut, ErrorDetail,
+)
 from .webhooks import emit_webhook_event
 
 logger = logging.getLogger("latent.swarm")
@@ -93,8 +97,14 @@ class SwarmInputRequest(BaseModel):
     text: str = Field(max_length=1000)
 
 
-@router.post("/launch")
+_404 = {404: {"model": ErrorDetail, "description": "Project not found"}}
+_400 = {400: {"model": ErrorDetail, "description": "Invalid request"}}
+
+
+@router.post("/launch", response_model=SwarmLaunchOut,
+             summary="Launch swarm", responses={**_404, **_400})
 async def launch_swarm(req: SwarmLaunchRequest, db: aiosqlite.Connection = Depends(get_db)):
+    """Launch a new swarm process for a project. Runs swarm.ps1 in the project folder."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (req.project_id,))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -164,8 +174,10 @@ async def launch_swarm(req: SwarmLaunchRequest, db: aiosqlite.Connection = Depen
     return {"status": "launched", "pid": process.pid, "project_id": req.project_id}
 
 
-@router.post("/stop")
+@router.post("/stop", response_model=SwarmStopOut,
+             summary="Stop swarm", responses=_404)
 async def stop_swarm(req: SwarmStopRequest, db: aiosqlite.Connection = Depends(get_db)):
+    """Stop a running swarm process. Executes stop-swarm.ps1 if present."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (req.project_id,))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -218,7 +230,8 @@ async def stop_swarm(req: SwarmStopRequest, db: aiosqlite.Connection = Depends(g
     return {"status": "stopped", "project_id": req.project_id}
 
 
-@router.post("/input")
+@router.post("/input", response_model=SwarmInputOut,
+             summary="Send swarm input", responses={**_404, **_400})
 async def swarm_input(req: SwarmInputRequest, db: aiosqlite.Connection = Depends(get_db)):
     """Send text input to a running swarm process's stdin."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (req.project_id,))).fetchone()
@@ -251,8 +264,10 @@ async def swarm_input(req: SwarmInputRequest, db: aiosqlite.Connection = Depends
     return {"status": "sent", "project_id": req.project_id}
 
 
-@router.get("/status/{project_id}")
+@router.get("/status/{project_id}", response_model=SwarmStatusOut,
+            summary="Get swarm status", responses=_404)
 async def swarm_status(project_id: int, db: aiosqlite.Connection = Depends(get_db)):
+    """Get detailed status including agents, signals, tasks, and phase info."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -337,7 +352,8 @@ async def swarm_status(project_id: int, db: aiosqlite.Connection = Depends(get_d
     }
 
 
-@router.get("/output/{project_id}")
+@router.get("/output/{project_id}", response_model=SwarmOutputOut,
+            summary="Get swarm output", responses=_404)
 async def swarm_output(project_id: int, offset: int = 0, limit: int = 200, db: aiosqlite.Connection = Depends(get_db)):
     """Get captured stdout/stderr from the swarm process with pagination."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
@@ -362,7 +378,8 @@ async def swarm_output(project_id: int, offset: int = 0, limit: int = 200, db: a
     }
 
 
-@router.get("/output/{project_id}/stream")
+@router.get("/output/{project_id}/stream", summary="Stream swarm output",
+            responses=_404)
 async def swarm_output_stream(project_id: int, request: Request, db: aiosqlite.Connection = Depends(get_db)):
     """SSE endpoint for real-time swarm output streaming."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
@@ -398,7 +415,8 @@ async def swarm_output_stream(project_id: int, request: Request, db: aiosqlite.C
     )
 
 
-@router.get("/history/{project_id}")
+@router.get("/history/{project_id}", response_model=SwarmHistoryOut,
+            summary="Get swarm history", responses=_404)
 async def swarm_history(project_id: int, db: aiosqlite.Connection = Depends(get_db)):
     """Get history of swarm runs for a project."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()

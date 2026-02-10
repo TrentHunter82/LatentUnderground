@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, memo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getSwarmStatus, getProject, deleteProject, archiveProject, unarchiveProject, startWatch, getProjectStats, getSwarmHistory } from '../lib/api'
 import SwarmControls from './SwarmControls'
@@ -11,7 +11,7 @@ import Sparkline from './Sparkline'
 import ConfirmDialog from './ConfirmDialog'
 import { useToast } from './Toast'
 
-export default function Dashboard({ wsEvents, onProjectChange }) {
+export default memo(function Dashboard({ wsEvents, onProjectChange }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const projectId = Number(id)
@@ -22,6 +22,12 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
   const [runs, setRuns] = useState([])
   const [confirmDelete, setConfirmDelete] = useState(false)
   const toast = useToast()
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   const refresh = useCallback(async () => {
     try {
@@ -31,16 +37,18 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
         getProjectStats(projectId).catch(() => null),
         getSwarmHistory(projectId).catch(() => ({ runs: [] })),
       ])
+      if (!mountedRef.current) return
       setProject(proj)
       setStatus(st)
       setStats(statsData)
       setRuns(historyData.runs || [])
       setError(null)
     } catch (e) {
+      if (!mountedRef.current) return
       setError(e.message)
       toast(e.message, 'error', 4000, { label: 'Retry', onClick: refresh })
     }
-  }, [projectId])
+  }, [projectId, toast])
 
   const intervalRef = useRef(null)
 
@@ -148,8 +156,16 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
 
   if (error && !project) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-signal-red text-sm font-mono">{error}</div>
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="retro-panel border border-retro-border rounded p-6 text-center max-w-sm">
+          <div className="text-signal-red text-sm font-mono mb-3">{error}</div>
+          <button
+            onClick={refresh}
+            className="btn-neon px-4 py-2 rounded text-sm"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     )
   }
@@ -166,19 +182,19 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
           <h1 className="text-xl font-semibold text-zinc-100 m-0 font-mono">{project.name}</h1>
           <p className="text-sm text-zinc-500 mt-1 m-0">{project.goal}</p>
           {stats && stats.total_runs > 0 && (
-            <div className="flex items-center gap-3 mt-1 text-xs text-zinc-600 font-mono">
+            <div className="flex items-center gap-3 mt-1 text-xs text-zinc-600 font-mono flex-wrap">
               <span>{stats.total_runs} run{stats.total_runs !== 1 ? 's' : ''}</span>
               {stats.avg_duration_seconds != null && (
                 <span>avg {Math.round(stats.avg_duration_seconds / 60)}m</span>
               )}
               <span>{stats.total_tasks_completed} tasks completed</span>
               {runs.length > 1 && (
-                <>
+                <span className="hidden sm:contents">
                   <span className="text-zinc-600" title="Task completion trend">tasks</span>
                   <Sparkline data={runs.map(r => r.tasks_completed || 0)} />
                   <span className="text-zinc-600" title="Run duration trend">duration</span>
                   <Sparkline data={runs.map(r => r.duration_seconds || 0)} color="#E87838" />
-                </>
+                </span>
               )}
             </div>
           )}
@@ -267,4 +283,4 @@ export default function Dashboard({ wsEvents, onProjectChange }) {
       />
     </div>
   )
-}
+})

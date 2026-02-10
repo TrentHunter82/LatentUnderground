@@ -14,18 +14,20 @@ import aiosqlite
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import config
 from . import database
-from .database import init_db
+from .database import init_db, init_pool, close_pool
 from .routes import projects, swarm, files, logs, websocket, backup, templates, browse, plugins, webhooks
 from .routes.backup import _create_backup
 from .routes.swarm import _pid_alive
 from .routes.watcher import router as watcher_router, cleanup_watchers
 from .plugins import plugin_manager
+from .models.responses import HealthOut
 
 logger = logging.getLogger("latent")
 
@@ -55,15 +57,25 @@ _AUTH_SKIP_PATHS = {"/api/health", "/docs", "/redoc", "/openapi.json"}
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Rate limit POST API endpoints to prevent accidental rapid launches."""
+    """Rate limit API endpoints with different limits for read vs write operations."""
 
-    def __init__(self, app, rpm: int = 30):
+    # Write methods get stricter limits (state-changing operations)
+    _WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+    def __init__(self, app, write_rpm: int = 30, read_rpm: int = 120):
         super().__init__(app)
-        self.rpm = rpm
+        self.write_rpm = write_rpm
+        self.read_rpm = read_rpm
         self._requests: dict[str, list[float]] = defaultdict(list)
 
     async def dispatch(self, request: Request, call_next):
-        if self.rpm <= 0 or request.method != "POST" or not request.url.path.startswith("/api/"):
+        if not request.url.path.startswith("/api/"):
+            return await call_next(request)
+
+        is_write = request.method in self._WRITE_METHODS
+        rpm = self.write_rpm if is_write else self.read_rpm
+
+        if rpm <= 0:
             return await call_next(request)
 
         # Use API key as rate limit identity when present, fall back to IP
@@ -80,10 +92,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Clean old entries
         self._requests[key] = [t for t in self._requests[key] if now - t < window]
 
-        if len(self._requests[key]) >= self.rpm:
+        if len(self._requests[key]) >= rpm:
             return JSONResponse(
                 status_code=429,
-                content={"detail": f"Rate limit exceeded. Max {self.rpm} requests per minute."},
+                content={"detail": f"Rate limit exceeded. Max {rpm} requests per minute."},
             )
 
         self._requests[key].append(now)
@@ -228,18 +240,20 @@ def _monitor_pid(project_id: int, pid: int, name: str, stop_event: threading.Eve
             )
             try:
                 conn = sqlite3.connect(str(database.DB_PATH))
-                conn.execute(
-                    "UPDATE projects SET status = 'stopped', swarm_pid = NULL, "
-                    "updated_at = datetime('now') WHERE id = ?",
-                    (project_id,),
-                )
-                conn.execute(
-                    "UPDATE swarm_runs SET ended_at = datetime('now'), status = 'crashed' "
-                    "WHERE project_id = ? AND status = 'running'",
-                    (project_id,),
-                )
-                conn.commit()
-                conn.close()
+                try:
+                    conn.execute(
+                        "UPDATE projects SET status = 'stopped', swarm_pid = NULL, "
+                        "updated_at = datetime('now') WHERE id = ?",
+                        (project_id,),
+                    )
+                    conn.execute(
+                        "UPDATE swarm_runs SET ended_at = datetime('now'), status = 'crashed' "
+                        "WHERE project_id = ? AND status = 'running'",
+                        (project_id,),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
             except Exception:
                 logger.error("Failed to update DB for dead PID %d", pid, exc_info=True)
             break
@@ -376,6 +390,7 @@ async def lifespan(app: FastAPI):
         )
     _ensure_directories()
     await init_db()
+    await init_pool()
     await _reconcile_running_projects()
     await _cleanup_old_logs()
 
@@ -410,13 +425,17 @@ async def lifespan(app: FastAPI):
     # Drain output buffers and stop drain threads
     await swarm.cancel_drain_tasks()
     await cleanup_watchers()
+
+    # Close connection pool
+    await close_pool()
+
     logger.info("Latent Underground shutdown complete")
 
 
 app = FastAPI(
     title="Latent Underground",
     description="GUI for managing Claude Swarm sessions",
-    version="0.11.0",
+    version="1.0.0",
     lifespan=lifespan,
 )
 
@@ -475,11 +494,16 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 # --- Middleware ---
 
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(APIKeyMiddleware)
 if config.REQUEST_LOG:
     app.add_middleware(RequestLoggingMiddleware)
-app.add_middleware(RateLimitMiddleware, rpm=config.RATE_LIMIT_RPM)
+app.add_middleware(
+    RateLimitMiddleware,
+    write_rpm=config.RATE_LIMIT_RPM,
+    read_rpm=config.RATE_LIMIT_READ_RPM,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
@@ -502,11 +526,12 @@ app.include_router(plugins.router)
 app.include_router(webhooks.router)
 
 
-@app.get("/api/health", tags=["system"])
+@app.get("/api/health", tags=["system"], response_model=HealthOut,
+         summary="Health check")
 async def health():
     """System health check: database status, active processes, uptime, and version."""
     uptime_seconds = int(time.time() - _start_time)
-    base = {"app": "Latent Underground", "version": "0.11.0", "uptime_seconds": uptime_seconds}
+    base = {"app": "Latent Underground", "version": app.version, "uptime_seconds": uptime_seconds}
     try:
         async with aiosqlite.connect(database.DB_PATH) as db:
             await db.execute("SELECT 1")

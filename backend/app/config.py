@@ -57,8 +57,10 @@ FRONTEND_DIST: Path = Path(os.environ.get(
 # API key for authentication (empty = auth disabled)
 API_KEY: str = os.environ.get("LU_API_KEY", "")
 
-# Rate limiting: max POST requests per minute per client IP per endpoint (0 = disabled)
+# Rate limiting: max requests per minute per client per endpoint (0 = disabled)
+# Write RPM applies to POST/PUT/PATCH/DELETE, Read RPM applies to GET
 RATE_LIMIT_RPM: int = int(os.environ.get("LU_RATE_LIMIT_RPM", "30"))
+RATE_LIMIT_READ_RPM: int = int(os.environ.get("LU_RATE_LIMIT_READ_RPM", "120"))
 
 # Structured logging: "json" for JSON lines, "text" for human-readable (default)
 LOG_FORMAT: str = os.environ.get("LU_LOG_FORMAT", "text")

@@ -15,6 +15,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from ..database import get_db
+from ..models.responses import WebhookOut, ErrorDetail
 
 logger = logging.getLogger("latent.webhooks")
 
@@ -54,18 +55,18 @@ def _validate_webhook_url(url: str) -> None:
     """Validate webhook URL to prevent SSRF attacks."""
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
-        raise HTTPException(400, "Webhook URL must use http or https scheme")
+        raise HTTPException(status_code=400, detail="Webhook URL must use http or https scheme")
     hostname = parsed.hostname
     if not hostname:
-        raise HTTPException(400, "Webhook URL must have a valid hostname")
+        raise HTTPException(status_code=400, detail="Webhook URL must have a valid hostname")
     # Block localhost and loopback
     if hostname.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
-        raise HTTPException(400, "Webhook URL cannot target localhost")
+        raise HTTPException(status_code=400, detail="Webhook URL cannot target localhost")
     # Block private/reserved IP ranges
     try:
         ip = ipaddress.ip_address(hostname)
         if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-            raise HTTPException(400, "Webhook URL cannot target private/reserved IP addresses")
+            raise HTTPException(status_code=400, detail="Webhook URL cannot target private/reserved IP addresses")
     except ValueError:
         pass  # hostname is a domain name, not an IP - that's fine
 
@@ -155,7 +156,12 @@ async def emit_webhook_event(event: str, project_id: int, payload: dict,
         logger.error("Failed to emit webhook event %s", event, exc_info=True)
 
 
-@router.post("", status_code=201)
+_404 = {404: {"model": ErrorDetail, "description": "Webhook not found"}}
+_400 = {400: {"model": ErrorDetail, "description": "Invalid request"}}
+
+
+@router.post("", status_code=201, response_model=WebhookOut,
+             summary="Create webhook", responses=_400)
 async def create_webhook(body: WebhookCreate, db: aiosqlite.Connection = Depends(get_db)):
     """Register a new webhook endpoint."""
     # Validate URL (SSRF prevention)
@@ -176,7 +182,7 @@ async def create_webhook(body: WebhookCreate, db: aiosqlite.Connection = Depends
     return _row_to_dict(row)
 
 
-@router.get("")
+@router.get("", response_model=list[WebhookOut], summary="List webhooks")
 async def list_webhooks(db: aiosqlite.Connection = Depends(get_db)):
     """List all registered webhooks."""
     rows = await (await db.execute(
@@ -185,7 +191,8 @@ async def list_webhooks(db: aiosqlite.Connection = Depends(get_db)):
     return [_row_to_dict(r) for r in rows]
 
 
-@router.get("/{webhook_id}")
+@router.get("/{webhook_id}", response_model=WebhookOut,
+            summary="Get webhook", responses=_404)
 async def get_webhook(webhook_id: int, db: aiosqlite.Connection = Depends(get_db)):
     """Get a webhook by ID."""
     row = await (await db.execute("SELECT * FROM webhooks WHERE id = ?", (webhook_id,))).fetchone()
@@ -194,7 +201,8 @@ async def get_webhook(webhook_id: int, db: aiosqlite.Connection = Depends(get_db
     return _row_to_dict(row)
 
 
-@router.patch("/{webhook_id}")
+@router.patch("/{webhook_id}", response_model=WebhookOut,
+              summary="Update webhook", responses={**_404, **_400})
 async def update_webhook(webhook_id: int, body: WebhookUpdate, db: aiosqlite.Connection = Depends(get_db)):
     """Update a webhook."""
     row = await (await db.execute("SELECT * FROM webhooks WHERE id = ?", (webhook_id,))).fetchone()
@@ -233,7 +241,8 @@ async def update_webhook(webhook_id: int, body: WebhookUpdate, db: aiosqlite.Con
     return _row_to_dict(row)
 
 
-@router.delete("/{webhook_id}", status_code=204)
+@router.delete("/{webhook_id}", status_code=204,
+               summary="Delete webhook", responses=_404)
 async def delete_webhook(webhook_id: int, db: aiosqlite.Connection = Depends(get_db)):
     """Delete a webhook."""
     row = await (await db.execute("SELECT * FROM webhooks WHERE id = ?", (webhook_id,))).fetchone()

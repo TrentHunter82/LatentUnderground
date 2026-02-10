@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from ..database import get_db
+from ..models.responses import TemplateOut, ErrorDetail
 
 logger = logging.getLogger("latent.templates")
 
@@ -39,8 +40,13 @@ def _row_to_dict(row: aiosqlite.Row) -> dict:
     return d
 
 
-@router.post("", status_code=201)
+_404 = {404: {"model": ErrorDetail, "description": "Template not found"}}
+
+
+@router.post("", status_code=201, response_model=TemplateOut,
+             summary="Create template")
 async def create_template(body: TemplateCreate, db: aiosqlite.Connection = Depends(get_db)):
+    """Create a new swarm configuration template."""
     config_json = json.dumps(body.config)
     cursor = await db.execute(
         "INSERT INTO swarm_templates (name, description, config) VALUES (?, ?, ?)",
@@ -53,16 +59,19 @@ async def create_template(body: TemplateCreate, db: aiosqlite.Connection = Depen
     return _row_to_dict(row)
 
 
-@router.get("")
+@router.get("", response_model=list[TemplateOut], summary="List templates")
 async def list_templates(db: aiosqlite.Connection = Depends(get_db)):
+    """List all saved swarm configuration templates."""
     rows = await (await db.execute(
         "SELECT * FROM swarm_templates ORDER BY created_at DESC, id DESC"
     )).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 
-@router.get("/{template_id}")
+@router.get("/{template_id}", response_model=TemplateOut,
+            summary="Get template", responses=_404)
 async def get_template(template_id: int, db: aiosqlite.Connection = Depends(get_db)):
+    """Get a single template by ID."""
     row = await (await db.execute(
         "SELECT * FROM swarm_templates WHERE id = ?", (template_id,)
     )).fetchone()
@@ -71,8 +80,10 @@ async def get_template(template_id: int, db: aiosqlite.Connection = Depends(get_
     return _row_to_dict(row)
 
 
-@router.patch("/{template_id}")
+@router.patch("/{template_id}", response_model=TemplateOut,
+              summary="Update template", responses=_404)
 async def update_template(template_id: int, body: TemplateUpdate, db: aiosqlite.Connection = Depends(get_db)):
+    """Update template fields. Only provided fields are changed."""
     row = await (await db.execute(
         "SELECT * FROM swarm_templates WHERE id = ?", (template_id,)
     )).fetchone()
@@ -106,8 +117,10 @@ async def update_template(template_id: int, body: TemplateUpdate, db: aiosqlite.
     return _row_to_dict(row)
 
 
-@router.delete("/{template_id}", status_code=204)
+@router.delete("/{template_id}", status_code=204,
+               summary="Delete template", responses=_404)
 async def delete_template(template_id: int, db: aiosqlite.Connection = Depends(get_db)):
+    """Permanently delete a template."""
     row = await (await db.execute(
         "SELECT * FROM swarm_templates WHERE id = ?", (template_id,)
     )).fetchone()

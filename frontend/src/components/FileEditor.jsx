@@ -110,7 +110,10 @@ export default function FileEditor({ projectId, wsEvents }) {
           <button
             key={f.path}
             onClick={() => setActiveFile(f.path)}
-            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer border-0 font-mono ${
+            role="tab"
+            aria-selected={activeFile === f.path}
+            aria-label={`${f.label} file`}
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs font-medium transition-colors cursor-pointer border-0 font-mono ${
               activeFile === f.path
                 ? 'bg-retro-grid text-crt-green border border-crt-green/30'
                 : 'text-zinc-500 hover:text-zinc-300 bg-transparent'
@@ -171,6 +174,7 @@ export default function FileEditor({ projectId, wsEvents }) {
             onChange={(e) => setContent(e.target.value)}
             className="retro-input w-full h-full min-h-64 rounded p-3 text-sm resize-y"
             spellCheck={false}
+            aria-label={`Edit ${editableFiles.find(f => f.path === activeFile)?.label || 'file'} content`}
           />
         ) : (
           <div className="markdown-body text-sm text-zinc-300">

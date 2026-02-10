@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from ..plugins import plugin_manager
+from ..models.responses import PluginOut, PluginToggleOut, ErrorDetail
 
 logger = logging.getLogger("latent.plugins")
 
@@ -20,13 +21,17 @@ class PluginCreateRequest(BaseModel):
     hooks: Optional[dict] = Field(default_factory=dict)
 
 
-@router.get("")
+_404 = {404: {"model": ErrorDetail, "description": "Plugin not found"}}
+
+
+@router.get("", response_model=list[PluginOut], summary="List plugins")
 async def list_plugins():
     """List all discovered plugins."""
     return [p.to_dict() for p in plugin_manager.list_plugins()]
 
 
-@router.get("/{name}")
+@router.get("/{name}", response_model=PluginOut,
+            summary="Get plugin", responses=_404)
 async def get_plugin(name: str):
     """Get a plugin by name."""
     plugin = plugin_manager.get(name)
@@ -35,7 +40,9 @@ async def get_plugin(name: str):
     return plugin.to_dict()
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=PluginOut,
+             summary="Create plugin",
+             responses={409: {"model": ErrorDetail, "description": "Plugin already exists"}})
 async def create_plugin(body: PluginCreateRequest):
     """Create a new plugin configuration file."""
     if plugin_manager.get(body.name):
@@ -49,7 +56,8 @@ async def create_plugin(body: PluginCreateRequest):
     return plugin.to_dict()
 
 
-@router.post("/{name}/enable")
+@router.post("/{name}/enable", response_model=PluginToggleOut,
+             summary="Enable plugin", responses=_404)
 async def enable_plugin(name: str):
     """Enable a plugin."""
     if not plugin_manager.enable(name):
@@ -57,7 +65,8 @@ async def enable_plugin(name: str):
     return {"name": name, "enabled": True}
 
 
-@router.post("/{name}/disable")
+@router.post("/{name}/disable", response_model=PluginToggleOut,
+             summary="Disable plugin", responses=_404)
 async def disable_plugin(name: str):
     """Disable a plugin."""
     if not plugin_manager.disable(name):
@@ -65,7 +74,8 @@ async def disable_plugin(name: str):
     return {"name": name, "enabled": False}
 
 
-@router.delete("/{name}", status_code=204)
+@router.delete("/{name}", status_code=204, summary="Delete plugin",
+               responses=_404)
 async def delete_plugin(name: str):
     """Delete a plugin."""
     if not plugin_manager.delete_plugin(name):

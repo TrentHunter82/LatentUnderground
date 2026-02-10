@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 import aiosqlite
 from ..database import get_db
+from ..models.responses import FileReadOut, FileWriteOut, ErrorDetail
 
 logger = logging.getLogger("latent.files")
 
@@ -39,8 +40,14 @@ class FileWriteRequest(BaseModel):
     project_id: int
 
 
-@router.get("/{path:path}")
+_404 = {404: {"model": ErrorDetail, "description": "Project or file not found"}}
+_403 = {403: {"model": ErrorDetail, "description": "Access denied"}}
+
+
+@router.get("/{path:path}", response_model=FileReadOut,
+            summary="Read file", responses={**_404, **_403})
 async def read_file(path: str, project_id: int, db: aiosqlite.Connection = Depends(get_db)):
+    """Read a project file. Only allowlisted paths are accessible."""
     normalized = _validate_path(path)
 
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
@@ -58,8 +65,12 @@ async def read_file(path: str, project_id: int, db: aiosqlite.Connection = Depen
     return {"path": normalized, "content": content}
 
 
-@router.put("/{path:path}")
+@router.put("/{path:path}", response_model=FileWriteOut,
+            summary="Write file",
+            responses={**_404, **_403, 413: {"model": ErrorDetail, "description": "Content too large"},
+                       429: {"model": ErrorDetail, "description": "Rate limit exceeded"}})
 async def write_file(path: str, body: FileWriteRequest, db: aiosqlite.Connection = Depends(get_db)):
+    """Write content to a project file. Only allowlisted paths are writable."""
     normalized = _validate_path(path)
 
     # Content size limit

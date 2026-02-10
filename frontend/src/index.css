@@ -542,6 +542,92 @@ html.light .markdown-body pre {
   border-color: #88A898;
 }
 
+/* === Print Stylesheet === */
+@media print {
+  /* Hide non-essential UI */
+  .crt-frame::before,
+  .crt-frame::after,
+  .retro-grid-bg {
+    background-image: none !important;
+    background: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Reset dark theme for print */
+  body {
+    background: white !important;
+    color: #1a1a1a !important;
+    font-size: 11pt;
+  }
+
+  /* Hide sidebar, top bar, controls */
+  aside,
+  [role="tablist"],
+  .btn-neon,
+  .btn-neon-danger,
+  button,
+  input[type="text"],
+  input[type="checkbox"],
+  input[type="date"],
+  .fixed {
+    display: none !important;
+  }
+
+  /* Make main content full width */
+  main {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Clean panels for print */
+  .retro-panel {
+    background: white !important;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  /* Ensure charts/SVGs print clearly */
+  svg {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Neon text becomes solid dark for readability */
+  .neon-green,
+  .neon-cyan,
+  .neon-magenta,
+  .neon-amber {
+    text-shadow: none !important;
+    color: #1a1a1a !important;
+  }
+
+  /* Status LEDs become bordered circles */
+  .led-active,
+  .led-warning,
+  .led-danger,
+  .led-inactive {
+    box-shadow: none !important;
+    border: 2px solid #333 !important;
+  }
+
+  /* Analytics summary chips */
+  .retro-panel .text-lg {
+    color: #1a1a1a !important;
+  }
+
+  /* Page margins */
+  @page {
+    margin: 1.5cm;
+  }
+
+  /* Avoid breaking inside grid items */
+  .grid > * {
+    break-inside: avoid;
+  }
+}
+
 /* === Reduced Motion === */
 @media (prefers-reduced-motion: reduce) {
   .crt-frame::before,

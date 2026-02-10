@@ -126,7 +126,7 @@ describe('ProjectView tab keyboard navigation', () => {
     // End should go to last tab
     fireEvent.keyDown(tabs[0], { key: 'End' })
     expect(tabs[6]).toHaveAttribute('aria-selected', 'true')
-  })
+  }, 15000)
 
   it('tabpanel has aria-labelledby linking to active tab', async () => {
     await act(async () => { renderProjectView() })

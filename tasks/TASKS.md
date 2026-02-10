@@ -1,49 +1,40 @@
-﻿# Latent Underground - Task Board (Phase 11)
+# Latent Underground - Task Board (Phase 13)
 
-## Claude-1 [Backend/Core] - Webhooks, archival, and middleware
+## Claude-1 [Backend/Core] - Final API polish
 
-- [x] Implement webhook notification routes: CRUD at /api/webhooks + event dispatching on swarm start/stop/error (HMAC-SHA256 signing, SSRF protection, async retry delivery)
-- [x] Add project archival: POST /api/projects/{id}/archive + /unarchive, filtered from default listing, include_archived param
-- [x] Add request/response logging middleware: RequestLoggingMiddleware logs method, path, status, duration_ms (LU_REQUEST_LOG=true, JSON format when LU_LOG_FORMAT=json)
-- [x] Add security headers middleware: SecurityHeadersMiddleware adds X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy, X-XSS-Protection: 0, Cache-Control: no-store on API
-- [x] Add global exception handlers: RequestValidationError→422 (structured errors), OperationalError→503, generic Exception→500 (with full traceback logging)
-- [x] Run dependency audit: pip-audit found 0 known vulnerabilities (551 tests passing)
-- [x] Signal: .claude/signals/backend-ready.signal created
+- [x] Add OpenAPI schema descriptions for all endpoints (verify via /docs)
+- [x] Add response model type hints on all route functions
+- [x] Ensure all error paths return consistent JSON structure (ErrorDetail model)
+- [x] Final dependency audit (pip-audit) - 0 known vulnerabilities
+- [x] Signal: Create .claude/signals/backend-ready.signal
 
-## Claude-2 [Frontend/Interface] - Webhook UI, archival, and code splitting
+## Claude-2 [Frontend/Interface] - Final UX polish
 
-- [x] Add webhook management UI: list/create/edit/delete webhooks per project in ProjectSettings (WebhookManager.jsx with full CRUD, LED indicators, event toggles, ConfirmDialog)
-- [x] Add project archive/unarchive toggle in project list and ProjectView (Sidebar hover buttons + Dashboard header button with archive icon)
-- [x] Implement route-level code splitting: React.lazy() + Suspense for Analytics, LogViewer, SwarmHistory, TemplateManager (App.jsx + ProjectView.jsx lazy-load 12 chunks)
-- [x] Lazy-load highlight.js (179KB) on demand instead of at bundle time (FileEditor dynamically imports rehype-highlight; manualChunks splits to 177KB lazy chunk)
-- [x] Add dependency badge showing version in Settings panel (replace hardcoded "v0.1") (__APP_VERSION__ via vite define from package.json v0.11.0, shown in SettingsPanel + Sidebar)
-- [x] Add confirmation before navigating away from unsaved settings changes (beforeunload + isDirty detection in ProjectSettings with visual "Unsaved changes" indicator)
-- [x] Signal: .claude/signals/frontend-ready.signal created (383 tests passing, 246KB main bundle, 12 lazy chunks)
+- [x] Fix vitest collection: all 21 test files collected by default (20 passed, 1 skipped)
+- [x] Verify all components have aria-labels and keyboard navigation (13 components fixed: Toast, SignalPanel, AgentGrid, ActivityFeed, FileEditor, ErrorBoundary, Sidebar, LogViewer, App, NewProject, TemplateManager, WebhookManager, ProjectView)
+- [x] Final responsive check on narrow viewports (responsive fixes: tab padding, button stacking, terminal height, action button visibility, search input width)
+- [x] Signal: .claude/signals/frontend-ready.signal created
 
-## Claude-3 [Integration/Testing] - Webhook tests, archival tests, security tests
+## Claude-3 [Integration/Testing] - Final test pass
 
-- [x] Add webhook notification tests: 21 tests in test_webhook_integration.py (16 existing + 5 new HMAC edge cases)
-- [x] Add project archival tests: 13 tests in test_archival_lifecycle.py (full lifecycle, edge cases, history)
-- [x] Add request logging middleware tests: 10 tests in test_request_logging.py (log format, duration, extras)
-- [x] Add security header tests: 13 tests in test_security_headers.py (5 headers on GET/POST/PATCH/DELETE/404/422)
-- [x] Add bundle size regression test: 6 tests in bundle-size.test.js (main<300KB, total<500KB)
-- [x] Add load testing: 13 tests in test_load.py (10 existing + 3 new concurrent status/health polls)
-- [x] Signal: .claude/signals/tests-passing.signal created (934 total tests, zero failures)
+- [x] Run full test suite: 1172 tests (685 backend + 487 frontend), zero failures
+- [x] Add missing edge case tests: reconnection banner (3), dashboard error retry (4), file-editor timeout fix
+- [x] Fix: health endpoint version bug (hardcoded "0.11.0" -> app.version)
+- [x] Verify production build size: 246.95KB main chunk (under 300KB target)
+- [x] Signal: .claude/signals/tests-passing.signal created (1172 total, 0 failures)
 
-## Claude-4 [Polish/Review] - v1.0 release preparation
+## Claude-4 [Polish/Review] - v1.0 release
 
-- [ ] Review all Phase 11 code changes for quality and consistency
-- [ ] Verify no regressions: all Phase 10 tests still pass (768+)
-- [ ] Security review of webhook implementation (HMAC signing, URL validation, timeout on outbound requests)
-- [ ] Update CHANGELOG.md with Phase 11 features
-- [ ] Verify code splitting reduces initial bundle size below 300KB
-- [ ] FINAL: If all features complete, tag v1.0.0 release; otherwise generate next-swarm.ps1 for Phase 12
+- [x] Final review of all Phase 13 changes (backend + frontend code reviews via subagents)
+- [x] Verify all completion criteria are met
+- [x] Update CHANGELOG.md with Phase 13 features
+- [x] Fix: _monitor_pid resource leak, Dashboard toast dep, AgentGrid/SignalPanel aria role="img"
+- [ ] Create v1.0.0 git tag (pending commit)
+- [x] Generate project retrospective
 
 ## Completion Criteria
-- [ ] Webhook CRUD API + event dispatching works end-to-end
-- [ ] Project archival reduces dashboard clutter
-- [ ] Security headers present on all API responses
-- [ ] Request logging captures method/path/status/duration
-- [ ] Route-level code splitting implemented
-- [ ] All tests pass (target: 800+), zero regressions
-- [ ] CHANGELOG.md updated with Phase 11 features
+- [x] 1100+ total tests, zero failures (1172 total: 685 backend + 487 frontend)
+- [x] Production build < 300KB main chunk (246.95KB)
+- [x] No security vulnerabilities (CRITICAL or HIGH) - pip-audit: 0 vulnerabilities
+- [x] CHANGELOG.md complete through v1.0
+- [ ] v1.0.0 tagged and ready for release (pending commit)

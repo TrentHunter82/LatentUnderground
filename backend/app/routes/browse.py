@@ -3,6 +3,7 @@ import platform
 import string
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
+from ..models.responses import BrowseOut, ErrorDetail
 
 logger = logging.getLogger("latent.browse")
 
@@ -19,7 +20,10 @@ def _get_drives() -> list[dict]:
     return drives
 
 
-@router.get("")
+@router.get("", response_model=BrowseOut, summary="Browse directories",
+            responses={404: {"model": ErrorDetail, "description": "Path not found"},
+                       400: {"model": ErrorDetail, "description": "Not a directory"},
+                       403: {"model": ErrorDetail, "description": "Permission denied"}})
 async def browse_directory(path: str = Query("", max_length=1000, description="Directory path to list")):
     """List subdirectories at a given path. Returns drive roots when path is empty on Windows."""
     # No path provided: return drive roots on Windows, home dir contents on Unix

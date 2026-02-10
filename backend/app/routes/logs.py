@@ -5,14 +5,19 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 import aiosqlite
 from ..database import get_db
+from ..models.responses import LogsOut, LogSearchOut, ErrorDetail
 
 logger = logging.getLogger("latent.logs")
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
 
 
-@router.get("")
+_404 = {404: {"model": ErrorDetail, "description": "Project not found"}}
+
+
+@router.get("", response_model=LogsOut, summary="Get logs", responses=_404)
 async def get_logs(project_id: int, lines: int = 100, db: aiosqlite.Connection = Depends(get_db)):
+    """Get recent log lines for a project, grouped by agent."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -60,7 +65,9 @@ def _parse_date_param(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
-@router.get("/search")
+@router.get("/search", response_model=LogSearchOut,
+            summary="Search logs",
+            responses={**_404, 400: {"model": ErrorDetail, "description": "Invalid date format"}})
 async def search_logs(
     project_id: int,
     q: str = "",

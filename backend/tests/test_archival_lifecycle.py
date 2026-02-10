@@ -218,7 +218,7 @@ class TestArchivalWithHistory:
         assert resp.status_code == 200
         stats = resp.json()
         assert stats["total_runs"] == 2
-        assert stats["tasks_completed"] >= 8  # 5 + 3
+        assert stats["total_tasks_completed"] >= 8  # 5 + 3
 
     @pytest.mark.asyncio
     async def test_include_archived_query_param(self, client, created_project):

@@ -39,7 +39,7 @@ export default function ActivityFeed({ projectId, wsEvents }) {
   return (
     <div className="retro-panel retro-panel-glow rounded p-4">
       <h3 className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-medium mb-3 m-0 font-mono">Activity</h3>
-      <div className="h-48 overflow-y-auto font-mono text-xs space-y-0.5 bg-retro-dark rounded p-3 border border-retro-border">
+      <div className="h-48 overflow-y-auto font-mono text-xs space-y-0.5 bg-retro-dark rounded p-3 border border-retro-border" role="log" aria-live="polite" aria-label="Activity feed">
         {logs.length === 0 && (
           <div className="text-zinc-600 text-center py-4">No activity yet</div>
         )}

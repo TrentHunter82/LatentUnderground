@@ -31,7 +31,7 @@ def _create_backup() -> BytesIO:
     return buf
 
 
-@router.get("/backup")
+@router.get("/backup", summary="Download backup")
 async def backup_database():
     """Export the SQLite database as a downloadable file.
 

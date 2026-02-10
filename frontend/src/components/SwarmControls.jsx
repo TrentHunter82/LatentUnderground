@@ -47,7 +47,7 @@ export default function SwarmControls({ projectId, status, onAction }) {
 
   return (
     <>
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         {status === 'running' ? (
           <button
             onClick={() => setConfirmStop(true)}
@@ -75,6 +75,11 @@ export default function SwarmControls({ projectId, status, onAction }) {
               </button>
             )}
           </>
+        )}
+        {loading && (
+          <div className="w-24 h-1.5 retro-progress rounded overflow-hidden" role="progressbar" aria-label="Operation in progress">
+            <div className="h-full retro-progress-fill animate-pulse" style={{ width: '100%' }} />
+          </div>
         )}
       </div>
 

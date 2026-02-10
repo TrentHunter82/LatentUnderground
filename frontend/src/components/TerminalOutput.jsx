@@ -48,6 +48,7 @@ export default function TerminalOutput({ projectId, fetchOutput, isRunning }) {
   const offsetRef = useRef(0)
   const intervalRef = useRef(null)
   const inputRef = useRef(null)
+  const errorTimerRef = useRef(null)
 
   useEffect(() => {
     if (!projectId || !fetchOutput) return
@@ -75,6 +76,7 @@ export default function TerminalOutput({ projectId, fetchOutput, isRunning }) {
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
     }
   }, [projectId, fetchOutput])
 
@@ -95,12 +97,14 @@ export default function TerminalOutput({ projectId, fetchOutput, isRunning }) {
     if (!text) return
     if (text.length > 1000) {
       setInputError('Input must be 1000 characters or less')
-      setTimeout(() => setInputError(null), 3000)
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+      errorTimerRef.current = setTimeout(() => setInputError(null), 3000)
       return
     }
 
     setInputError(null)
     setInputText('')
+    inputRef.current?.focus()
 
     // Echo locally
     setLines((prev) => {
@@ -112,7 +116,8 @@ export default function TerminalOutput({ projectId, fetchOutput, isRunning }) {
       await sendSwarmInput(projectId, text)
     } catch (e) {
       setInputError(e.message)
-      setTimeout(() => setInputError(null), 3000)
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+      errorTimerRef.current = setTimeout(() => setInputError(null), 3000)
     }
   }
 
@@ -140,7 +145,7 @@ export default function TerminalOutput({ projectId, fetchOutput, isRunning }) {
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="p-3 font-mono text-xs leading-5 overflow-y-auto max-h-96 min-h-[200px] bg-retro-dark flex-1"
+        className="p-3 font-mono text-xs leading-5 overflow-y-auto max-h-96 min-h-[120px] sm:min-h-[200px] bg-retro-dark flex-1"
         role="log"
         aria-label="Terminal output"
       >

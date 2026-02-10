@@ -1,4 +1,6 @@
-export default function TaskProgress({ tasks }) {
+import { memo } from 'react'
+
+export default memo(function TaskProgress({ tasks }) {
   const total = tasks?.total ?? 0
   const done = tasks?.done ?? 0
   const percent = tasks?.percent ?? 0
@@ -34,4 +36,4 @@ export default function TaskProgress({ tasks }) {
       )}
     </div>
   )
-}
+})

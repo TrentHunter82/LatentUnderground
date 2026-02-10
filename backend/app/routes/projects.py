@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 import aiosqlite
 from ..database import get_db
 from ..models.project import ProjectCreate, ProjectUpdate, ProjectOut, ProjectConfig
+from ..models.responses import ProjectStatsOut, ProjectAnalyticsOut, ProjectConfigUpdateOut, ErrorDetail
 
 logger = logging.getLogger("latent.projects")
 
@@ -34,8 +35,15 @@ ALLOWED_UPDATE_FIELDS = {
 }
 
 
-@router.post("", response_model=ProjectOut, status_code=201)
+_404 = {404: {"model": ErrorDetail, "description": "Project not found"}}
+_400 = {400: {"model": ErrorDetail, "description": "Invalid request"}}
+
+
+@router.post("", response_model=ProjectOut, status_code=201,
+             summary="Create project",
+             responses={400: {"model": ErrorDetail, "description": "Invalid folder path"}})
 async def create_project(project: ProjectCreate, db: aiosqlite.Connection = Depends(get_db)):
+    """Create a new project and scaffold its directory structure."""
     # Validate folder_path is an absolute path
     folder = Path(project.folder_path)
     if not folder.is_absolute():
@@ -63,7 +71,7 @@ async def create_project(project: ProjectCreate, db: aiosqlite.Connection = Depe
     return dict(row)
 
 
-@router.get("", response_model=list[ProjectOut])
+@router.get("", response_model=list[ProjectOut], summary="List projects")
 async def list_projects(
     search: str = "",
     status: str | None = None,
@@ -98,16 +106,20 @@ async def list_projects(
     return [dict(r) for r in rows]
 
 
-@router.get("/{project_id}", response_model=ProjectOut)
+@router.get("/{project_id}", response_model=ProjectOut, summary="Get project",
+            responses=_404)
 async def get_project(project_id: int, db: aiosqlite.Connection = Depends(get_db)):
+    """Get a single project by ID."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")
     return dict(row)
 
 
-@router.patch("/{project_id}", response_model=ProjectOut)
+@router.patch("/{project_id}", response_model=ProjectOut, summary="Update project",
+              responses=_404)
 async def update_project(project_id: int, update: ProjectUpdate, db: aiosqlite.Connection = Depends(get_db)):
+    """Update project fields. Only provided fields are changed."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -127,7 +139,8 @@ async def update_project(project_id: int, update: ProjectUpdate, db: aiosqlite.C
     return dict(row)
 
 
-@router.get("/{project_id}/stats")
+@router.get("/{project_id}/stats", response_model=ProjectStatsOut,
+            summary="Get project stats", responses=_404)
 async def project_stats(project_id: int, db: aiosqlite.Connection = Depends(get_db)):
     """Get aggregated stats for a project."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
@@ -164,7 +177,8 @@ async def project_stats(project_id: int, db: aiosqlite.Connection = Depends(get_
     }
 
 
-@router.get("/{project_id}/analytics")
+@router.get("/{project_id}/analytics", response_model=ProjectAnalyticsOut,
+            summary="Get project analytics", responses=_404)
 async def project_analytics(project_id: int, db: aiosqlite.Connection = Depends(get_db)):
     """Get detailed analytics for a project: run trends, efficiency, phase durations."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
@@ -223,7 +237,8 @@ async def project_analytics(project_id: int, db: aiosqlite.Connection = Depends(
     }
 
 
-@router.patch("/{project_id}/config")
+@router.patch("/{project_id}/config", response_model=ProjectConfigUpdateOut,
+              summary="Update project config", responses=_404)
 async def update_project_config(
     project_id: int, config: ProjectConfig, db: aiosqlite.Connection = Depends(get_db)
 ):
@@ -242,8 +257,10 @@ async def update_project_config(
     return {"project_id": project_id, "config": config.model_dump(exclude_none=True)}
 
 
-@router.delete("/{project_id}", status_code=204)
+@router.delete("/{project_id}", status_code=204, summary="Delete project",
+               responses=_404)
 async def delete_project(project_id: int, db: aiosqlite.Connection = Depends(get_db)):
+    """Permanently delete a project and its database records."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -251,7 +268,8 @@ async def delete_project(project_id: int, db: aiosqlite.Connection = Depends(get
     await db.commit()
 
 
-@router.post("/{project_id}/archive")
+@router.post("/{project_id}/archive", response_model=ProjectOut,
+             summary="Archive project", responses={**_404, **_400})
 async def archive_project(project_id: int, db: aiosqlite.Connection = Depends(get_db)):
     """Archive a project to hide it from the default project list."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
@@ -268,7 +286,8 @@ async def archive_project(project_id: int, db: aiosqlite.Connection = Depends(ge
     return dict(row)
 
 
-@router.post("/{project_id}/unarchive")
+@router.post("/{project_id}/unarchive", response_model=ProjectOut,
+             summary="Unarchive project", responses={**_404, **_400})
 async def unarchive_project(project_id: int, db: aiosqlite.Connection = Depends(get_db)):
     """Unarchive a project to show it in the default project list."""
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
