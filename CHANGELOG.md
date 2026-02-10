@@ -3,26 +3,33 @@
 All notable changes to the Latent Underground project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased] - Phase 11
+## [0.11.0] - Phase 11
 
 ### Added
-- Security headers middleware: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, X-XSS-Protection, Cache-Control on all responses
+- Security headers middleware: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, X-XSS-Protection, Cache-Control on all API responses
 - Global exception handlers: structured JSON error responses for RequestValidationError (422), OperationalError (503), and generic Exception (500)
 - Webhook SSRF protection: URL scheme validation (http/https only), localhost and private IP blocking
 - Webhook management UI (WebhookManager component) integrated into project settings tab
 - Project archive/unarchive toggle in Sidebar and Dashboard
 - Version badge in SettingsPanel and Sidebar showing dynamic app version
-- Security header test suite (15 tests)
-- 890+ total tests (507 backend + 383 frontend), zero failures
+- Unsaved changes confirmation in ProjectSettings (beforeunload + isDirty tracking)
+- Route-level code splitting: lazy-load LogViewer, SwarmHistory in ProjectView
+- Lazy-load highlight.js (177KB) on demand in FileEditor
+- Archival lifecycle test suite (13 tests), security header tests (13), request logging tests (10)
+- HMAC edge case tests (5 new: tampered payload, empty payload, unicode, re-serialization, large payload)
+- Concurrent load tests (3 new: status polls, health checks)
+- 934 total tests (551 backend + 383 frontend), zero failures
 
 ### Changed
 - Webhook create/update endpoints validate URL against SSRF attack vectors
 - ProjectView getProject useEffect now uses mounted flag for cleanup (prevents state update on unmount)
 - Version test uses regex matcher for forward compatibility with version bumps
+- Backend version synced to 0.11.0 (matches frontend package.json)
 
 ### Fixed
 - ProjectView.jsx missing `toast` in useEffect dependency array (stale closure risk)
 - Unused `timedelta` import removed from main.py
+- WebhookManager.jsx mounted ref guard prevents state updates after unmount
 
 ## [0.10.0] - Phase 10
 
