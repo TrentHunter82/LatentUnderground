@@ -15,7 +15,7 @@ from starlette.testclient import TestClient
 class TestWorkflowWithWebSocket:
     """Simulate a browser session: REST calls + WebSocket for live updates."""
 
-    async def test_dashboard_flow_with_websocket(self, app, mock_project_folder):
+    async def test_dashboard_flow_with_websocket(self, app, mock_project_folder, mock_launch_deps):
         """Create project, connect WS, launch swarm, verify events, stop."""
         from httpx import ASGITransport, AsyncClient
 
@@ -51,6 +51,7 @@ class TestWorkflowWithWebSocket:
             with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
                 mock_process = MagicMock()
                 mock_process.pid = 12345
+                mock_process.poll.return_value = None
                 mock_process.stdout = MagicMock()
                 mock_process.stderr = MagicMock()
                 mock_process.wait = MagicMock()

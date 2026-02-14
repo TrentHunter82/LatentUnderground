@@ -43,7 +43,7 @@ class TestFileSizeLimit:
 class TestLogging:
     """Tests for structured logging output."""
 
-    async def test_swarm_launch_logs(self, client, mock_project_folder, caplog):
+    async def test_swarm_launch_logs(self, client, mock_project_folder, mock_launch_deps, caplog):
         (mock_project_folder / "swarm.ps1").write_text("# Mock")
         resp = await client.post("/api/projects", json={
             "name": "Log Test",
@@ -55,6 +55,7 @@ class TestLogging:
         with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
             mock_process = MagicMock()
             mock_process.pid = 99999
+            mock_process.poll.return_value = None
             mock_process.stdout = MagicMock()
             mock_process.stderr = MagicMock()
             mock_popen.return_value = mock_process
@@ -108,100 +109,90 @@ class TestLogging:
         with caplog.at_level(logging.WARNING, logger="latent.swarm"):
             await client.get(f"/api/swarm/status/{pid}")
 
-        assert any("Stale PID" in r.message for r in caplog.records)
+        assert any("No live agents" in r.message or "auto-correcting" in r.message for r in caplog.records)
 
 
 class TestDrainThreadTracking:
-    """Tests for background drain thread tracking and cancellation."""
+    """Tests for per-agent drain thread tracking and cancellation."""
 
-    async def test_drain_threads_tracked_on_launch(self, client, mock_project_folder):
-        from app.routes.swarm import _drain_threads
+    async def test_agent_drain_events_cleaned_on_stop(self, client, created_project):
+        """Agent drain events are cleaned up when stop is called."""
+        from app.routes.swarm import (
+            _agent_drain_events, _agent_processes, _agent_key,
+            _cleanup_project_agents,
+        )
+        pid = created_project["id"]
+        key = _agent_key(pid, "Claude-1")
+        _agent_drain_events[key] = threading.Event()
+        _agent_processes[key] = MagicMock(poll=MagicMock(return_value=0))  # already exited
 
-        (mock_project_folder / "swarm.ps1").write_text("# Mock")
-        resp = await client.post("/api/projects", json={
-            "name": "Drain Track",
-            "goal": "Test drain tracking",
-            "folder_path": str(mock_project_folder).replace("\\", "/"),
-        })
-        pid = resp.json()["id"]
+        _cleanup_project_agents(pid)
 
-        with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
-            mock_process = MagicMock()
-            mock_process.pid = 11111
-            mock_process.stdout = MagicMock()
-            mock_process.stderr = MagicMock()
-            mock_popen.return_value = mock_process
+        assert key not in _agent_drain_events
+        assert key not in _agent_processes
 
-            await client.post("/api/swarm/launch", json={"project_id": pid})
-
-        assert pid in _drain_threads
-        assert len(_drain_threads[pid]) == 2
-        _drain_threads.pop(pid, None)
-
-    async def test_drain_threads_cleaned_on_stop(self, client, mock_project_folder):
-        from app.routes.swarm import _drain_threads, _drain_stop_events
-
-        (mock_project_folder / "swarm.ps1").write_text("# Mock")
-        resp = await client.post("/api/projects", json={
-            "name": "Drain Cancel",
-            "goal": "Test drain cancel",
-            "folder_path": str(mock_project_folder).replace("\\", "/"),
-        })
-        pid = resp.json()["id"]
-
-        with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
-            mock_process = MagicMock()
-            mock_process.pid = 22222
-            mock_process.stdout = MagicMock()
-            mock_process.stderr = MagicMock()
-            mock_process.wait = MagicMock()
-            mock_popen.return_value = mock_process
-
-            await client.post("/api/swarm/launch", json={"project_id": pid})
-            assert pid in _drain_threads
-
-            await client.post("/api/swarm/stop", json={"project_id": pid})
-
-        assert pid not in _drain_threads
-        assert pid not in _drain_stop_events
-
-    async def test_cancel_all_drain_threads(self):
-        from app.routes.swarm import _drain_stop_events, cancel_drain_tasks
+    async def test_cancel_all_drain_tasks(self):
+        """cancel_drain_tasks(None) cleans up all projects."""
+        from app.routes.swarm import (
+            _agent_drain_events, _agent_processes, _agent_key,
+            cancel_drain_tasks,
+        )
 
         evt1 = threading.Event()
         evt2 = threading.Event()
-        _drain_stop_events[100] = evt1
-        _drain_stop_events[200] = evt2
+        key1 = _agent_key(100, "Claude-1")
+        key2 = _agent_key(200, "Claude-1")
+        _agent_drain_events[key1] = evt1
+        _agent_drain_events[key2] = evt2
+        _agent_processes[key1] = MagicMock(poll=MagicMock(return_value=0))
+        _agent_processes[key2] = MagicMock(poll=MagicMock(return_value=0))
 
         await cancel_drain_tasks()
 
         assert evt1.is_set()
         assert evt2.is_set()
-        assert len(_drain_stop_events) == 0
+        assert len(_agent_drain_events) == 0
+        assert len(_agent_processes) == 0
+
+    async def test_cleanup_terminates_alive_process(self):
+        """Cleanup should terminate processes that are still alive."""
+        from app.routes.swarm import (
+            _agent_processes, _agent_key, _cleanup_project_agents,
+        )
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None  # Still alive
+        mock_proc.wait.return_value = 0
+        key = _agent_key(999, "Claude-1")
+        _agent_processes[key] = mock_proc
+
+        _cleanup_project_agents(999)
+
+        mock_proc.terminate.assert_called_once()
+        assert key not in _agent_processes
 
 
-class TestStopTimeout:
-    """Tests for stop_swarm process.wait() timeout."""
+class TestStopEndpoint:
+    """Tests for POST /api/swarm/stop."""
 
-    async def test_stop_timeout_kills_process(self, client, mock_project_folder, caplog):
-        (mock_project_folder / "stop-swarm.ps1").write_text("# Mock")
-        resp = await client.post("/api/projects", json={
-            "name": "Timeout Test",
-            "goal": "Test stop timeout",
-            "folder_path": str(mock_project_folder).replace("\\", "/"),
-        })
-        pid = resp.json()["id"]
+    async def test_stop_returns_200(self, client, created_project):
+        """Stop endpoint returns 200 and updates DB status."""
+        pid = created_project["id"]
+        resp = await client.post("/api/swarm/stop", json={"project_id": pid})
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "stopped"
 
-        with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
-            mock_process = MagicMock()
-            mock_process.wait = MagicMock(side_effect=subprocess.TimeoutExpired(cmd="stop", timeout=30))
-            mock_process.kill = MagicMock()
-            mock_popen.return_value = mock_process
+    async def test_stop_cleans_up_agents(self, client, created_project):
+        """Stop endpoint cleans up per-agent tracking data."""
+        from app.routes.swarm import (
+            _agent_processes, _agent_key, _project_output_buffers,
+        )
+        pid = created_project["id"]
+        key = _agent_key(pid, "Claude-1")
+        _agent_processes[key] = MagicMock(poll=MagicMock(return_value=0))
+        _project_output_buffers[pid] = ["test"]
 
-            with caplog.at_level(logging.WARNING, logger="latent.swarm"):
-                resp = await client.post("/api/swarm/stop", json={"project_id": pid})
-
-            assert resp.status_code == 200
-            assert resp.json()["status"] == "stopped"
-            mock_process.kill.assert_called_once()
-            assert any("timed out" in r.message for r in caplog.records)
+        resp = await client.post("/api/swarm/stop", json={"project_id": pid})
+        assert resp.status_code == 200
+        assert key not in _agent_processes
+        assert pid not in _project_output_buffers

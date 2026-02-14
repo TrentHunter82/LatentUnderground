@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, startTransition, lazy, Suspense } from 'react'
 import { Routes, Route, useNavigate } from 'react-router-dom'
-import { getProjects, getProjectsWithArchived } from './lib/api'
+import { getSwarmHistory } from './lib/api'
+import { useProjects, projectKeys } from './hooks/useProjectQuery'
+import { useQueryClient } from '@tanstack/react-query'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useHealthCheck } from './hooks/useHealthCheck'
-import { useNotifications } from './hooks/useNotifications'
 import Sidebar from './components/Sidebar'
 import Home from './components/Home'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -18,7 +19,6 @@ const ShortcutCheatsheet = lazy(() => import('./components/ShortcutCheatsheet'))
 const OnboardingModal = lazy(() => import('./components/OnboardingModal'))
 
 export default function App() {
-  const [projects, setProjects] = useState([])
   const [wsEvent, setWsEvent] = useState(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
@@ -26,21 +26,19 @@ export default function App() {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
+  const [projectHealth, setProjectHealth] = useState({})
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const { connected, reconnecting } = useWebSocket(setWsEvent)
   const { status: healthStatus, latency } = useHealthCheck()
-  const { notify } = useNotifications()
 
-  // Fire browser notification on swarm complete/failed
-  useEffect(() => {
-    if (!wsEvent) return
-    if (wsEvent.type === 'swarm_complete') {
-      notify('Swarm Complete', { body: 'All agents have finished successfully.' })
-    } else if (wsEvent.type === 'swarm_failed') {
-      notify('Swarm Failed', { body: wsEvent.error || 'The swarm encountered an error.' })
-    }
-  }, [wsEvent, notify])
+  // TanStack Query for projects list
+  const { data: projects = [] } = useProjects({ showArchived })
+
+  const refreshProjects = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: projectKeys.lists() })
+  }, [queryClient])
 
   // Listen for 401 auth-required events from api.js
   useEffect(() => {
@@ -77,18 +75,37 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [navigate])
 
-  const refreshProjects = useCallback(async () => {
-    try {
-      const data = showArchived ? await getProjectsWithArchived(true) : await getProjects()
-      setProjects(data)
-    } catch (e) {
-      console.warn('Failed to refresh projects:', e)
-    }
-  }, [showArchived])
-
+  // Compute project health from last swarm run (wrapped in startTransition for non-urgent update)
   useEffect(() => {
-    refreshProjects()
-  }, [refreshProjects])
+    if (projects.length === 0) return
+    const computeHealth = async () => {
+      const health = {}
+      await Promise.all(projects.slice(0, 20).map(async (p) => {
+        try {
+          const data = await getSwarmHistory(p.id)
+          const runs = data.runs || []
+          if (runs.length === 0) {
+            health[p.id] = 'gray'
+          } else {
+            const lastRun = runs[0]
+            if (lastRun.status === 'running') {
+              health[p.id] = 'green'
+            } else if (lastRun.status === 'failed') {
+              health[p.id] = 'red'
+            } else {
+              health[p.id] = 'green'
+            }
+          }
+        } catch {
+          health[p.id] = 'gray'
+        }
+      }))
+      startTransition(() => {
+        setProjectHealth(health)
+      })
+    }
+    computeHealth()
+  }, [projects])
 
   // Show onboarding when no projects and not previously dismissed
   useEffect(() => {
@@ -108,6 +125,7 @@ export default function App() {
         onToggle={toggleSidebar}
         showArchived={showArchived}
         onShowArchivedChange={setShowArchived}
+        projectHealth={projectHealth}
       />
 
       <main className="flex-1 flex flex-col min-h-0 relative">

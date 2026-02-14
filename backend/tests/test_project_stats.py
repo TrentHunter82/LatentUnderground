@@ -24,7 +24,7 @@ class TestProjectStats:
         resp = await client.get("/api/projects/9999/stats")
         assert resp.status_code == 404
 
-    async def test_stats_with_completed_runs(self, client, mock_project_folder):
+    async def test_stats_with_completed_runs(self, client, mock_project_folder, mock_launch_deps):
         """Stats should aggregate completed run data."""
         (mock_project_folder / "swarm.ps1").write_text("# Mock")
         (mock_project_folder / "stop-swarm.ps1").write_text("# Mock stop")
@@ -38,6 +38,7 @@ class TestProjectStats:
         with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
             mock_process = MagicMock()
             mock_process.pid = 100
+            mock_process.poll.return_value = None
             mock_process.stdout = MagicMock()
             mock_process.stderr = MagicMock()
             mock_process.wait = MagicMock()
@@ -53,7 +54,7 @@ class TestProjectStats:
         # Duration should be 0 or near 0 since launch+stop are near-instant
         assert data["avg_duration_seconds"] is not None
 
-    async def test_stats_total_runs_count(self, client, mock_project_folder):
+    async def test_stats_total_runs_count(self, client, mock_project_folder, mock_launch_deps):
         """total_runs should count all runs (running and stopped)."""
         (mock_project_folder / "swarm.ps1").write_text("# Mock")
         resp = await client.post("/api/projects", json={
@@ -66,6 +67,7 @@ class TestProjectStats:
         with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
             mock_process = MagicMock()
             mock_process.pid = 200
+            mock_process.poll.return_value = None
             mock_process.stdout = MagicMock()
             mock_process.stderr = MagicMock()
             mock_popen.return_value = mock_process

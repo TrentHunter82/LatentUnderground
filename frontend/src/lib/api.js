@@ -41,9 +41,18 @@ async function request(path, options = {}) {
   return res.json()
 }
 
+// AbortController-aware request: pass { signal } in options to cancel in-flight requests
+export function createAbortable() {
+  const controller = new AbortController()
+  return {
+    signal: controller.signal,
+    abort: () => controller.abort(),
+  }
+}
+
 // Projects
-export const getProjects = () => request('/projects')
-export const getProject = (id) => request(`/projects/${id}`)
+export const getProjects = (opts) => request('/projects', opts)
+export const getProject = (id, opts) => request(`/projects/${id}`, opts)
 export const createProject = (data) => request('/projects', { method: 'POST', body: JSON.stringify(data) })
 export const updateProject = (id, data) => request(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 export const deleteProject = (id) => request(`/projects/${id}`, { method: 'DELETE' })
@@ -51,9 +60,12 @@ export const deleteProject = (id) => request(`/projects/${id}`, { method: 'DELET
 // Swarm
 export const launchSwarm = (data) => request('/swarm/launch', { method: 'POST', body: JSON.stringify(data) })
 export const stopSwarm = (data) => request('/swarm/stop', { method: 'POST', body: JSON.stringify(data) })
-export const getSwarmStatus = (projectId) => request(`/swarm/status/${projectId}`)
-export const sendSwarmInput = (projectId, text) =>
-  request('/swarm/input', { method: 'POST', body: JSON.stringify({ project_id: projectId, text }) })
+export const getSwarmStatus = (projectId, opts) => request(`/swarm/status/${projectId}`, opts)
+export const sendSwarmInput = (projectId, text, agent = null) =>
+  request('/swarm/input', { method: 'POST', body: JSON.stringify({ project_id: projectId, text, agent }) })
+export const getSwarmAgents = (projectId, opts) => request(`/swarm/agents/${projectId}`, opts)
+export const stopSwarmAgent = (projectId, agentName) =>
+  request(`/swarm/agents/${projectId}/${agentName}/stop`, { method: 'POST' })
 
 // Files
 export const getFile = (path, projectId) => request(`/files/${path}?project_id=${projectId}`)
@@ -61,7 +73,7 @@ export const putFile = (path, content, projectId) =>
   request(`/files/${path}`, { method: 'PUT', body: JSON.stringify({ content, project_id: projectId }) })
 
 // Logs
-export const getLogs = (projectId, lines = 100) => request(`/logs?project_id=${projectId}&lines=${lines}`)
+export const getLogs = (projectId, lines = 100, opts) => request(`/logs?project_id=${projectId}&lines=${lines}`, opts)
 
 export function searchLogs(projectId, { q, agent, level, from_date, to_date } = {}) {
   const params = new URLSearchParams({ project_id: projectId })
@@ -74,11 +86,15 @@ export function searchLogs(projectId, { q, agent, level, from_date, to_date } = 
 }
 
 // Swarm History & Output
-export const getSwarmHistory = (projectId) => request(`/swarm/history/${projectId}`)
-export const getSwarmOutput = (projectId, offset = 0) => request(`/swarm/output/${projectId}?offset=${offset}`)
+export const getSwarmHistory = (projectId, opts) => request(`/swarm/history/${projectId}`, opts)
+export const getSwarmOutput = (projectId, offset = 0, agent = null, opts) => {
+  const params = new URLSearchParams({ offset })
+  if (agent) params.set('agent', agent)
+  return request(`/swarm/output/${projectId}?${params}`, opts)
+}
 
 // Project Stats & Config
-export const getProjectStats = (projectId) => request(`/projects/${projectId}/stats`)
+export const getProjectStats = (projectId, opts) => request(`/projects/${projectId}/stats`, opts)
 export const updateProjectConfig = (projectId, config) =>
   request(`/projects/${projectId}/config`, { method: 'PATCH', body: JSON.stringify(config) })
 
@@ -112,6 +128,84 @@ export const getProjectsWithArchived = (includeArchived = false) => {
   if (includeArchived) params.set('include_archived', 'true')
   const qs = params.toString()
   return request(`/projects${qs ? '?' + qs : ''}`)
+}
+
+// Agent events
+export const getAgentEvents = (projectId, { agent, event_type, from, to, limit = 100, offset = 0 } = {}, opts) => {
+  const params = new URLSearchParams()
+  if (agent) params.set('agent', agent)
+  if (event_type) params.set('event_type', event_type)
+  if (from) params.set('from', from)
+  if (to) params.set('to', to)
+  if (limit) params.set('limit', limit)
+  if (offset) params.set('offset', offset)
+  const qs = params.toString()
+  return request(`/swarm/events/${projectId}${qs ? '?' + qs : ''}`, opts)
+}
+
+// Output search
+export const searchSwarmOutput = (projectId, { q, agent, limit = 50, context } = {}, opts) => {
+  const params = new URLSearchParams()
+  if (q) params.set('q', q)
+  if (agent) params.set('agent', agent)
+  if (limit) params.set('limit', limit)
+  if (context !== undefined) params.set('context', context)
+  return request(`/swarm/output/${projectId}/search?${params}`, opts)
+}
+
+// Run comparison
+export const compareRuns = (runA, runB, opts) =>
+  request(`/swarm/runs/compare?run_a=${runA}&run_b=${runB}`, opts)
+
+// Agent directives
+export const sendDirective = (projectId, agentName, text, priority = 'normal') =>
+  request(`/swarm/agents/${projectId}/${agentName}/directive`, {
+    method: 'POST',
+    body: JSON.stringify({ text, priority }),
+  })
+
+export const getDirectiveStatus = (projectId, agentName, opts) =>
+  request(`/swarm/agents/${projectId}/${agentName}/directive`, opts)
+
+// Agent prompt
+export const updateAgentPrompt = (projectId, agentName, content) =>
+  request(`/swarm/agents/${projectId}/${agentName}/prompt`, {
+    method: 'PUT',
+    body: JSON.stringify({ prompt: content }),
+  })
+
+// Agent restart
+export const restartAgent = (projectId, agentName) =>
+  request(`/swarm/agents/${projectId}/${agentName}/restart`, { method: 'POST' })
+
+// System & Operations
+export const getSystemInfo = (opts) => request('/system', opts)
+export const getSystemHealth = (opts) => request('/health', opts)
+export const getMetrics = (opts) => request('/metrics', opts)
+export const getHealthTrends = (opts) => request('/system/health/trends', opts)
+
+// Project health & quota
+export const getProjectHealth = (projectId, opts) => request(`/projects/${projectId}/health`, opts)
+export const getProjectQuota = (projectId, opts) => request(`/projects/${projectId}/quota`, opts)
+
+// Guardrails
+export const getProjectGuardrails = (projectId, opts) => request(`/projects/${projectId}/guardrails`, opts)
+
+// Agent checkpoints
+export const getRunCheckpoints = (runId, { agent } = {}, opts) => {
+  const params = new URLSearchParams()
+  if (agent) params.set('agent', agent)
+  const qs = params.toString()
+  return request(`/swarm/runs/${runId}/checkpoints${qs ? '?' + qs : ''}`, opts)
+}
+
+// Agent logs & output tail
+export const getAgentLogs = (projectId, agentName, lines = 100, opts) =>
+  request(`/swarm/agents/${projectId}/${agentName}/logs?lines=${lines}`, opts)
+export const getOutputTail = (projectId, lines = 50, agent = null, opts) => {
+  const params = new URLSearchParams({ lines })
+  if (agent) params.set('agent', agent)
+  return request(`/swarm/output/${projectId}/tail?${params}`, opts)
 }
 
 // Watchers

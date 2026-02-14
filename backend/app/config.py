@@ -72,5 +72,23 @@ LOG_RETENTION_DAYS: int = int(os.environ.get("LU_LOG_RETENTION_DAYS", "0"))
 BACKUP_INTERVAL_HOURS: int = int(os.environ.get("LU_BACKUP_INTERVAL_HOURS", "0"))
 BACKUP_KEEP: int = int(os.environ.get("LU_BACKUP_KEEP", "5"))
 
+# Application version (single source of truth)
+APP_VERSION: str = "2.3.0"
+
 # Request logging: log all HTTP requests with method, path, status, duration (default disabled)
 REQUEST_LOG: bool = os.environ.get("LU_REQUEST_LOG", "").lower() in ("1", "true", "yes")
+
+# Database VACUUM: interval in hours (0 = disabled). Reclaims space from deleted rows.
+VACUUM_INTERVAL_HOURS: int = int(os.environ.get("LU_VACUUM_INTERVAL_HOURS", "0"))
+
+# Auto-stop: global default minutes of inactivity before auto-stopping swarm (0 = disabled)
+AUTO_STOP_MINUTES: int = int(os.environ.get("LU_AUTO_STOP_MINUTES", "0"))
+
+# Request timeout: max seconds for API requests (0 = disabled, default 60s)
+REQUEST_TIMEOUT: int = int(os.environ.get("LU_REQUEST_TIMEOUT", "60"))
+
+# Output log rotation: max file size in MB per agent (0 = unlimited, default 10MB)
+OUTPUT_LOG_MAX_MB: int = int(os.environ.get("LU_OUTPUT_LOG_MAX_MB", "10"))
+
+# Output log rotation: number of rotated files to keep (default 3)
+OUTPUT_LOG_ROTATE_KEEP: int = int(os.environ.get("LU_OUTPUT_LOG_ROTATE_KEEP", "3"))

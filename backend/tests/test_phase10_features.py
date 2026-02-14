@@ -444,10 +444,10 @@ class TestSQLiteOptimizations:
 
     @pytest.mark.asyncio
     async def test_new_indexes_in_init_db(self):
-        """Verify the new Phase 10 indexes are defined in init_db."""
+        """Verify the new Phase 10 indexes are defined in migrations."""
         import inspect
-        from app.database import init_db
-        source = inspect.getsource(init_db)
+        from app.database import _migration_001
+        source = inspect.getsource(_migration_001)
         assert "idx_swarm_runs_project_ended" in source
         assert "idx_templates_created" in source
         assert "idx_webhooks_enabled" in source

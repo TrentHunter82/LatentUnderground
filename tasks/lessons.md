@@ -221,7 +221,198 @@ After ANY correction, failed attempt, or discovery, add a lesson here.
 - Root cause: Earlier axe versions allowed aria-label on any element. 4.11 is stricter.
 - Rule: When using `aria-label` on decorative/indicator elements (`<span>`, `<div>`), always add `role="img"` to make it valid ARIA. This applies to LED indicators, status dots, badges.
 
+### [Claude-1] Claude Code --print mode blocks on open stdin pipe
+- What happened: Agents launched via `subprocess.Popen(stdin=subprocess.PIPE)` with `claude --print` produced zero output for 60+ seconds. The process was alive but nothing came through stdout/stderr pipes.
+- Root cause: Claude Code's `--print` mode waits for stdin EOF before processing. When `stdin=subprocess.PIPE` keeps the pipe open, Claude blocks indefinitely waiting for input that never comes. The `communicate()` method works because it closes stdin first.
+- Rule: Always use `stdin=subprocess.DEVNULL` when launching Claude Code in `--print` mode. This provides immediate EOF. Also add `creationflags=subprocess.CREATE_NO_WINDOW` on Windows to prevent console windows. If stdin interaction is needed, don't use `--print` mode.
+
 ### [Claude-4] When refactoring constructor parameters, update ALL callers including tests
 - What happened: RateLimitMiddleware was changed from `rpm=` to `write_rpm=`/`read_rpm=` but 3 existing tests still used `rpm=2`, causing TypeError.
 - Root cause: Constructor signature change without searching for all call sites.
 - Rule: After changing any function/class signature, grep for ALL callers across source AND test files. Use `Grep pattern="ClassName(" path="."` to find all instantiations.
+
+### Project creation scaffolds files automatically
+**Context**: `POST /api/projects` copies swarm.ps1, stop-swarm.ps1, swarm.bat from LU root into the project folder, plus creates .claude/, tasks/, logs/ directories.
+**Mistake**: Test assumed creating a project with an empty folder would leave it empty. In reality, the API scaffolds it immediately.
+**Fix**: Create the project via API, then delete the scaffolded file before testing the missing-file path.
+**Rule**: Always check what the API endpoint does beyond just the DB insert — FastAPI endpoints in this project often have side effects (file creation, directory scaffolding).
+
+### [Claude-1] replace_all on version assertions can over-replace manual-insert tests
+- What happened: Used `replace_all` for `assert version == 3` → `assert version == 4` when updating migration tests. This correctly updated migration-driven assertions but ALSO changed `test_get_schema_version_multiple_records` which manually inserts versions 1,2,3 and asserts max==3 (not migration-driven).
+- Root cause: `replace_all` is a blunt instrument — it doesn't understand semantic context. Some tests insert specific version numbers without running migrations.
+- Rule: When updating schema version assertions, use targeted edits (not replace_all). Review each assertion individually to determine if it's testing the migration system or testing the version-reading logic with manually inserted data.
+
+### [Claude-1] Pydantic min_length/max_length validation returns 422, not 400
+- What happened: Tests expected `status_code == 400` for empty string and too-long string inputs, but Pydantic's `Field(min_length=1, max_length=100000)` validation rejects them with 422 (Unprocessable Entity) before the endpoint handler runs.
+- Root cause: Pydantic validation errors are caught by FastAPI's RequestValidationError handler which returns 422. Only errors raised explicitly by endpoint code return 400.
+- Rule: Use `assert status_code == 422` for inputs rejected by Pydantic model validation (type errors, min/max length, regex patterns). Use `assert status_code == 400` for business logic errors raised explicitly in the endpoint handler (e.g., invalid agent name checked by custom validation functions).
+
+### [Claude-4] useEffect polling closure captures stale derived state
+- What happened: TerminalOutput's agent polling used `anyAgentAlive` (derived from `availableAgents` state) inside `setTimeout` callback, but `anyAgentAlive` was stale since `availableAgents` wasn't in the effect's dependency array.
+- Root cause: Derived values computed outside `useEffect` are captured at closure creation time. Since the effect only depends on `[projectId]`, the closure never updates.
+- Rule: When polling functions need to branch on fetched data (e.g., adaptive interval), compute the decision inside the polling function from the fresh response data, not from state variables.
+
+### [Claude-4] Supervisor asyncio.Task must clean up tracking dict in finally block
+- What happened: `_supervisor_tasks` dict accumulated stale entries when supervisors exited via exception or cancellation, because only the normal exit path removed the entry.
+- Root cause: `_supervisor_tasks.pop()` was only called in `_cleanup_project_agents()`, not in the supervisor's own exit paths.
+- Rule: Any long-running task that registers itself in a tracking dict must have a `finally` block that removes itself. This prevents memory leaks from accumulating done-but-never-cleaned tasks.
+
+### [Claude-4] Pydantic models must be ordered by dependency (no forward references)
+- What happened: `ProjectDashboardOut` (line 58) referenced `AgentStatusOut` (line 148) and `TaskProgress` (line 120) before they were defined. This caused `NameError` at import time, breaking 4 test files.
+- Root cause: New model added without checking if referenced types were already defined above it in the file.
+- Rule: In Pydantic response model files, always define models in dependency order (leaf models first, composite models last). When adding a model that references others, search for the referenced class definitions and ensure they appear above.
+
+### [Claude-4] Toast retry callbacks must not capture DOM events
+- What happened: `handleSubmit` passed `e` (React event) to toast retry: `onClick: () => handleSubmit(e)`. The event is recycled by React, so when the user clicks "Retry", `e` is null/stale.
+- Root cause: React synthetic events are pooled and recycled. Closures over event objects become invalid after the event handler returns.
+- Rule: Extract the core logic into a separate function that doesn't need the event. The form handler calls `e.preventDefault()` then delegates to the event-free function. Retry callbacks call the event-free function directly.
+
+### [Claude-1] Never call blocking subprocess/thread operations from async coroutines
+- What happened: `_cleanup_project_agents()` does `proc.wait(timeout=5)` and `t.join(timeout=3)` synchronously. Called from async `stop_swarm`, `cancel_drain_tasks`, and `_supervisor_loop`, it blocked the event loop for up to 11 seconds per agent.
+- Root cause: Functions that manage subprocesses naturally use blocking calls. When invoked from async code without wrapping, they freeze all other request handling.
+- Rule: Any function that calls `proc.wait()`, `proc.communicate()`, `thread.join()`, or similar blocking I/O must be wrapped in `asyncio.to_thread()` when called from async code. Audit all call sites when refactoring sync→async boundaries.
+
+### [Claude-4] ARIA tablist must contain only role="tab" or role="presentation" children
+- What happened: FileEditor had a `role="tablist"` div that contained tab buttons, spacer divs, timestamp spans, and action buttons (Cancel/Save/Edit). axe-core 4.11 flagged `aria-required-children` violation.
+- Root cause: All children of `tablist` must have `role="tab"`, `role="presentation"`, or `role="none"`. Non-tab UI elements inside a tablist are invalid.
+- Rule: When using `role="tablist"`, wrap only the tab buttons inside it. Move toolbar elements (spacers, action buttons, metadata) outside the tablist into a sibling container. Use `role="presentation"` for any structural wrappers inside the tablist that aren't tabs.
+
+### [Claude-4] Test mocks must match actual export shape (named vs default)
+- What happened: `vi.mock('../hooks/useWebSocket', () => ({ default: () => ... }))` broke because the hook file exports `export function useWebSocket` (named), not `export default`.
+- Root cause: Test writer assumed default export without checking the source file.
+- Rule: Before writing a vi.mock for any module, check whether it uses named exports or default export. `Grep pattern="export" path="source/file"` takes 2 seconds and prevents hours of debugging.
+
+### [Claude-4] Component tests must pass ALL required props to render meaningful output
+- What happened: AgentGrid PID responsive test passed `agents` but not `processAgents`. The PID is only rendered via `proc?.pid` from processAgents lookup, so no PID elements were rendered and the test found 0 matches.
+- Root cause: Test assumed `agents` prop contained PID data, but the component derives it from a separate `processAgents` prop.
+- Rule: Before writing assertions about rendered output, trace the data flow: which prop controls which DOM element? Pass all props needed to render the element under test.
+
+### [Claude-4] axe-core heading-order fails for components rendered in isolation
+- What happened: Dashboard and ProjectView components use `h3` section headings. When rendered in test isolation (without parent page's h1/h2), axe-core flags heading-order violation.
+- Root cause: Components are designed to be embedded in pages that have h1/h2 headings. Standalone rendering skips the heading hierarchy.
+- Rule: In component-level axe tests, disable heading-order rule: `axe(container, { rules: { 'heading-order': { enabled: false } } })`. Only test heading hierarchy in full-page integration tests.
+
+### [Claude-1] Supervisor tasks must not clean up themselves via shared cleanup function
+- What happened: `_supervisor_loop` called `_cleanup_project_agents()` which also cancels the supervisor task (itself). This worked by accident but was fragile.
+- Root cause: A long-running task calling a shared cleanup function that terminates the caller creates confusing control flow.
+- Rule: Split cleanup into layers: `_terminate_project_agents()` for agent-only cleanup (safe to call from supervisor), `_cleanup_project_agents()` for full cleanup including supervisor cancel (for external callers). The supervisor should only clean up what it owns, then exit normally.
+
+### [Claude-1] Cache shared references before TOCTOU checks
+- What happened: `get_db()` checked `if _pool and not _pool._closed` without caching `_pool`. Between these checks, `close_pool()` could set `_pool = None`.
+- Root cause: Module-level mutable references can change between sequential attribute accesses in async code.
+- Rule: When checking a global/shared reference and then using it, cache the reference first: `pool = _pool; if pool and not pool._closed: ...`. This prevents the reference from changing between the check and the use.
+
+### [Claude-3] vi.clearAllMocks() clears state but not implementations
+- What happened: Dashboard tests failed because `getProject` was returning undefined after `beforeEach(() => vi.clearAllMocks())`. A prior test had called `getProject.mockRejectedValue(...)` and clearAllMocks removed the mock calls/return values but the top-level `vi.mock` factory wasn't re-invoked.
+- Root cause: `vi.clearAllMocks()` only resets mock state (calls, return values). It does NOT restore the original implementation from the `vi.mock()` factory. After clearing, mocks become `vi.fn()` returning undefined.
+- Rule: When tests modify mock implementations (`.mockRejectedValue`, `.mockResolvedValue`), re-set the needed mock implementations at the start of each dependent test. Don't rely on `clearAllMocks` to restore factory defaults.
+
+### [Claude-3] Match component prop interfaces exactly in tests
+- What happened: Tests for SwarmControls used `onStatusChange` prop but the component accepts `onAction`. Tests for TerminalOutput used `status="running"` but the component accepts `fetchOutput` and `isRunning`. Dashboard tests passed a `project` prop but it accepts `wsEvents` and `onProjectChange` (fetches via useParams/getProject internally).
+- Root cause: Test writer assumed prop names without reading the component's export signature.
+- Rule: Always check `export default function ComponentName({ ...props })` destructuring before writing tests. Props not in the destructuring are silently ignored, leading to tests that don't exercise the intended behavior.
+
+### [Claude-3] SwarmControls Stop button opens ConfirmDialog first
+- What happened: Tests clicked the Stop button and immediately expected `stopSwarm` to be called. The button actually opens a `ConfirmDialog` - the user must click the confirm button within the dialog before `handleStop` executes.
+- Root cause: Safety pattern - destructive actions require confirmation. Test didn't account for the two-step interaction.
+- Rule: For buttons that trigger destructive actions, check if they open a confirmation dialog. After clicking the trigger button, wait for `screen.getByRole('alertdialog')` to appear, then click the confirm button within it.
+
+### [Claude-3] get_db() is an async generator — cannot use `await get_db()`
+- What happened: Benchmark tests used `db = await get_db()` which raised `TypeError: object async_generator can't be used in 'await' expression`.
+- Root cause: `get_db()` in database.py is an async generator (uses `yield`) meant for FastAPI's `Depends()`. It cannot be awaited directly.
+- Rule: In tests that need direct DB access, use `async with aiosqlite.connect(database.DB_PATH) as db:` instead. Or use `async for db in get_db():`. Never `await get_db()`.
+
+### [Claude-4] Adding new exports to shared modules (api.js) requires updating ALL test mocks
+- What happened: `createAbortable()` was added to api.js and used by Dashboard.jsx. Only 1 of 25 test files that mock `../lib/api` included `createAbortable` in the mock. This caused 62 frontend test failures because components importing the function got `undefined`.
+- Root cause: vi.mock replaces the entire module. Any new export added to a shared module must be added to every test file that mocks that module.
+- Rule: When adding a new export to a widely-mocked module like api.js: (1) grep for `vi.mock.*lib/api` to find all test files, (2) add the mock to every file, (3) run the full test suite, not just individual files. Consider adding shared mock factories in setup.js to reduce duplication.
+
+### [Claude-4] Frontend test pollution: tests pass alone but fail in full suite
+- What happened: 6 tests in phase17-error-recovery and phase15-features fail in full suite but pass individually. Empty `<div/>` body indicates component didn't render at all.
+- Root cause: Dynamic imports (`await import('../components/Dashboard')`) cache modules between test files. If an earlier test file's vi.mock leaks into the module cache, later files get the wrong mock.
+- Rule: This is a known Vitest limitation with dynamic imports + vi.mock. Solutions: (1) avoid dynamic imports in tests when possible, (2) use `vi.resetModules()` before dynamic imports, (3) accept as pre-existing flakes and document them.
+
+### [Claude-3] Vite chunk name extraction must handle multi-hyphen hashes
+- What happened: Bundle analysis test extracted chunk names with regex that assumed single hyphen+hash. File `markdown-Cn0I5-83.js` has hash `Cn0I5-83` containing a hyphen, so regex produced `markdown-Cn0I5` instead of `markdown`.
+- Root cause: Vite's content hashes can contain hyphens, making `name.replace(/-[hash]\.ext$/, '')` unreliable.
+- Rule: Use `name.split('.').slice(0, -1).join('.').split('-')[0]` to reliably extract the chunk name (everything before the first hyphen in the extensionless filename).
+
+### [Claude-3] Schema version assertions must use dynamic constants, not hardcoded integers
+- What happened: test_phase20_features.py had `assert version == 3` which broke when Phase 21 added migration_004 (SCHEMA_VERSION=4). test_swarm_history.py was missing 'summary' from expected_fields after swarm_runs gained a summary column.
+- Root cause: Hardcoded version numbers become stale when migrations are added. Field sets don't track schema changes.
+- Rule: Use `database.SCHEMA_VERSION` instead of hardcoded integers in tests. When adding columns to tables, grep all test files for expected field sets and add the new column name.
+
+### [Claude-1] Don't clean up shared locks in a function that callers hold the lock through
+- What happened: Added `_project_locks.pop(project_id, None)` to `_cleanup_project_agents()` to prevent memory leak. But `_launch_swarm_locked()` calls `cancel_drain_tasks(project_id)` → `_cleanup_project_agents()` WHILE HOLDING the lock from `_get_project_lock()`. The lock got deleted from the dict while still held, breaking assertions.
+- Root cause: `_launch_swarm_locked()` is called inside `async with lock:`, but it calls cleanup which deleted the lock it was holding.
+- Rule: Never clean up a shared resource (lock, semaphore) inside a function called while that resource is held. Clean up locks on project deletion or process exit, not on swarm stop/restart. The memory cost of retaining asyncio.Lock objects is negligible (~100 bytes each).
+
+### [Claude-3] _compute_trend splits DESC-ordered list — first_half = newer, second_half = older
+- What happened: Test expected "improving" when older runs had high errors and newer runs had none. But the function returned "degrading".
+- Root cause: `per_run_crash_rates` is built from DB query `ORDER BY id DESC`, so index 0 is newest. `_compute_trend` splits into first_half (newer) and second_half (older). `diff = second_half - first_half`. If second_half (older) > first_half (newer), diff > 0 → "degrading". This means "things are getting worse over time" (older data being higher confusingly maps to "degrading").
+- Rule: When testing `_compute_trend`, remember: improving = newer half has HIGHER rates (diff < -0.05), degrading = older half has HIGHER rates (diff > 0.05). The naming is inverted from intuition because the function compares older vs newer, not newer vs older.
+
+### [Claude-3] aiosqlite.Row factory required for string-indexed column access
+- What happened: Migration tests calling `_get_schema_version(db)` after `_run_migrations(db)` failed with `TypeError: tuple indices must be integers or slices, not str` because `row["version"]` needs Row factory.
+- Root cause: `_get_schema_version` uses `row["version"]` which requires `db.row_factory = aiosqlite.Row`. Without it, rows are plain tuples.
+- Rule: When calling database helper functions that use string column access (`row["column"]`), always set `db.row_factory = aiosqlite.Row` on the connection first.
+
+### [Claude-4] When changing _AUTH_SKIP_PATHS, grep for tests that depend on the old auth behavior
+- What happened: Removed `/api/metrics` from `_AUTH_SKIP_PATHS` to require auth. `test_metrics_skips_auth` failed because it asserted the old behavior (200 without auth).
+- Root cause: Security behavior change without updating the test that explicitly verified the old behavior.
+- Rule: After changing auth skip paths, grep all tests for the endpoint path AND for "skip_auth" / "skips_auth" patterns. Update every test to match the new expected behavior.
+
+### [Claude-4] ConnectionPool._create_connection() must set all per-connection PRAGMAs from init_db()
+- What happened: Pool connections only set `foreign_keys=ON` and `busy_timeout=5000`, missing `synchronous=NORMAL`, `temp_store=MEMORY`, `cache_size=-16000`. These are per-connection PRAGMAs (not database-level like WAL mode). Pool connections ran 2-3x slower for writes.
+- Root cause: `init_db()` and `_create_connection()` were written independently. PRAGMAs were added to init_db but never propagated to the pool.
+- Rule: When adding PRAGMAs to `init_db()`, always check if they're per-connection (most are) and add them to `_create_connection()` too. Only WAL mode is database-level.
+
+### [Claude-1] Prometheus histogram must handle durations exceeding all buckets
+- What happened: Custom histogram had a `for/break` loop that never incremented any bucket when `duration > max(DURATION_BUCKETS)`. Slow requests (>10s) were lost from bucket distribution, breaking p50/p95/p99 percentile calculations.
+- Root cause: Standard histogram semantics require every observation to land in some bucket. The loop silently dropped values above the largest bucket.
+- Rule: Always add `for/else` to histogram bucket insertion: `else: buckets[-1] += 1`. This ensures durations exceeding all bounds land in the largest bucket, matching Prometheus convention.
+
+### [Claude-2] vi.resetModules() breaks React context providers in tests with dynamic imports
+- What happened: Added `vi.resetModules()` to phase17-error-recovery.test.jsx beforeEach to fix module cache pollution. This caused ALL tests that dynamically import components (Dashboard, FileEditor, SwarmControls) to fail with "useToast must be used within ToastProvider".
+- Root cause: `vi.resetModules()` forces re-evaluation of all modules. The `ToastProvider` imported statically at the top of the test file becomes a DIFFERENT module instance than the one dynamically imported components use. React contexts only match within the same module instance.
+- Rule: Do NOT use `vi.resetModules()` when (1) the test uses static imports for providers (ToastProvider, MemoryRouter) AND (2) the test dynamically imports components that use those providers. These are irreconcilable — the static provider and the dynamic consumer become different module instances. Accept these as known flakes and verify they pass individually.
+
+### [Claude-2] Shape-based accessibility indicators need matching processAgents prop in tests
+- What happened: Updated AgentGrid LEDs from color-only dots to SVG shape icons with sr-only text. Test searched for "Claude-1: running" text but the agent status showed "Stale" because only `agents` prop was passed, not `processAgents`.
+- Root cause: `agentStatus()` checks `processInfo` (from `processAgents` prop) first for alive/crashed/stopped status. Without `processAgents`, it falls back to heartbeat-based detection which returns "Stale" for agents with no heartbeat.
+- Rule: When testing AgentGrid with expected alive/running agents, always pass both `agents` and `processAgents` props. The `alive` field in the agents array is NOT checked by `agentStatus()` — only `processInfo.alive` from processAgents matters.
+
+### [Claude-4] TanStack Query hooks mock must return stable references to prevent infinite re-renders
+- What happened: After adding TanStack Query hook mocks (`useProjects`, `useSwarmQuery`) to integration tests, App.jsx entered infinite re-render loops because `useEffect([projects])` detected new references every render.
+- Root cause: Mock functions like `useProjects: () => ({ data: [...] })` create new array/object references on each call. React's `useEffect` dependency comparison sees a new reference and re-runs, triggering another render.
+- Rule: When mocking hooks that return data used in React dependency arrays, extract data as module-level constants outside the mock function: `const _data = [...]; vi.mock(() => ({ useProjects: () => ({ data: _data }) }))`. This ensures the same reference is returned on every render.
+
+### [Claude-3] mockRejectedValue pollutes subsequent tests - vi.clearAllMocks doesn't reset implementations
+- What happened: Test set `getProject.mockRejectedValue(new Error('Network error'))` to test error states. Subsequent tests in same suite failed because getProject still rejected - vi.clearAllMocks() only clears call history, not mock implementations.
+- Root cause: vi.clearAllMocks() resets mock.calls and mock.results but does NOT reset mockReturnValue/mockResolvedValue/mockRejectedValue. The mock implementation persists.
+- Rule: When a test changes a mock implementation (mockRejectedValue, mockResolvedValue, etc.), wrap the test body in try/finally and restore the original mock implementation in the finally block. Example: `try { getProject.mockRejectedValue(...); /* test */ } finally { getProject.mockResolvedValue(originalData) }`. Alternative: use mockRejectedValueOnce() which auto-resets after one call.
+
+### [Claude-3] TanStack Query mock pattern for Dashboard tests: use vi.fn() for configurable hooks
+- What happened: Dashboard tests needed different hook return values per test (error state, loading state, success state). Static hook mocks couldn't be changed per-test.
+- Root cause: vi.mock() runs once and returns the same value. Tests that need different hook behaviors per test case need a controllable mock.
+- Rule: Make hooks configurable by wrapping in vi.fn(): `const mockUseProject = vi.fn(() => defaultResult); vi.mock('../hooks/useProjectQuery', () => ({ useProject: (...args) => mockUseProject(...args) }))`. Then in each test: `mockUseProject.mockReturnValue({ data: null, isLoading: false, error: new Error('fail'), refetch: vi.fn() })`.
+
+### [Claude-4] TanStack Query v5 useMutation passes extra context arg to mutationFn
+- What happened: Tests using `toHaveBeenCalledWith(expectedArg)` for mutation functions failed because TanStack Query v5 passes a second argument (mutation context object with `client`, `meta`, `mutationKey`) to the `mutationFn`.
+- Root cause: TanStack Query v5 changed the `mutationFn` signature to include context metadata as a second parameter.
+- Rule: When testing TanStack Query mutations, check only the first argument: `expect(fn.mock.calls[0][0]).toEqual(expected)` instead of `expect(fn).toHaveBeenCalledWith(expected)`.
+
+### [Claude-4] Guardrail regex must have same ReDoS protections as output search
+- What happened: Phase 25 added output guardrails with user-supplied regex patterns but initially lacked the timeout protection that output search already had. A malicious regex could freeze the entire backend supervisor.
+- Root cause: Feature was added without inheriting existing security patterns from the same codebase.
+- Rule: When adding any new feature that accepts user-supplied regex, always copy the protection pattern: `re.compile()` + `asyncio.wait_for(asyncio.to_thread(search), timeout=5.0)` + pattern length cap (200 chars) + input size cap (1MB). Grep for existing `wait_for.*to_thread.*search` patterns to find the reference implementation.
+
+### [Claude-3] App-level rendering in vitest/jsdom always times out
+- What happened: Tests that `await import('../App')` and render the full App component timeout at 15s. Tried multiple mock patterns (vi.hoisted, async vi.mock factory, inline constants) — none help.
+- Root cause: App component loads all routes, lazy-loaded chunks, providers, etc. in jsdom which is too slow. The timeout is inherent to full-App rendering, not the mock pattern.
+- Rule: Never test global keyboard shortcuts by rendering the full App. Instead, test at the component level (e.g., test ProjectView tabs, Sidebar shortcuts separately). Use `describe.skip` for App-level render tests and cover them via e2e/Playwright instead.
+
+### [Claude-3] vi.hoisted() pattern for shared mock factories
+- What happened: Creating shared TanStack Query mock factories in test-utils.jsx and importing via `await vi.hoisted(() => import('./test-utils'))` works for most component tests but NOT for tests that render the full App.
+- Root cause: `vi.hoisted` with dynamic import works when the mock factory returns synchronously before the module is first imported. But full App rendering triggers deep import chains that can race with mock setup.
+- Rule: Use `await vi.hoisted(() => import('./test-utils'))` + `vi.mock('./hooks/useX', () => createXMock())` for component-level tests. For files using `vi.fn()` wrappers that need per-test overrides, use static `import { createXMock } from './test-utils'` instead (works because vi.mock factory captures the import at module scope).

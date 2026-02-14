@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 import uvicorn
@@ -13,13 +14,15 @@ def open_browser():
 
 
 if __name__ == "__main__":
-    # Auto-open browser in background
-    threading.Thread(target=open_browser, daemon=True).start()
+    # Auto-open browser unless suppressed (e.g. when start.bat manages it)
+    if not os.environ.get("LU_NO_BROWSER"):
+        threading.Thread(target=open_browser, daemon=True).start()
 
+    use_reload = os.environ.get("LU_NO_RELOAD", "").lower() not in ("1", "true", "yes")
     uvicorn.run(
         "app.main:app",
         host=HOST,
         port=PORT,
-        reload=True,
+        reload=use_reload,
         log_level=LOG_LEVEL,
     )

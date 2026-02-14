@@ -35,9 +35,12 @@ export const AGENT_LOG_COLORS = {
 
 export const KEYBOARD_SHORTCUTS = [
   { keys: 'Ctrl+K', description: 'Focus search', group: 'Navigation' },
-  { keys: 'Escape', description: 'Close modal/dialog', group: 'Navigation' },
+  { keys: 'Escape', description: 'Close modal / clear input', group: 'Navigation' },
   { keys: 'Ctrl+N', description: 'New project', group: 'Actions' },
   { keys: 'Ctrl+?', description: 'Show keyboard shortcuts', group: 'Actions' },
+  { keys: 'Ctrl+L', description: 'Clear terminal output', group: 'Terminal' },
+  { keys: 'Ctrl+Enter', description: 'Focus & send input', group: 'Terminal' },
+  { keys: 'Enter', description: 'Send input', group: 'Terminal' },
   { keys: '←  →', description: 'Switch tabs', group: 'Views' },
   { keys: 'Home', description: 'First tab', group: 'Views' },
   { keys: 'End', description: 'Last tab', group: 'Views' },

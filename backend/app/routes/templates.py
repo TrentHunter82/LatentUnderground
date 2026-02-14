@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from ..database import get_db
 from ..models.responses import TemplateOut, ErrorDetail
+from ..sanitize import sanitize_string
 
 logger = logging.getLogger("latent.templates")
 
@@ -18,13 +19,15 @@ router = APIRouter(prefix="/api/templates", tags=["templates"])
 
 
 class TemplateCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = Field("", max_length=2000)
-    config: dict = Field(default_factory=dict)
+    """Create a reusable swarm configuration template."""
+    name: str = Field(..., min_length=1, max_length=200, examples=["Fast Build"])
+    description: Optional[str] = Field("", max_length=2000, examples=["Optimized for quick iteration cycles"])
+    config: dict = Field(default_factory=dict, examples=[{"agent_count": 4, "max_phases": 6}])
 
 
 class TemplateUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    """Update template fields. Only provided fields are changed."""
+    name: Optional[str] = Field(None, min_length=1, max_length=200, examples=["Updated Name"])
     description: Optional[str] = Field(None, max_length=2000)
     config: Optional[dict] = None
 
@@ -48,9 +51,11 @@ _404 = {404: {"model": ErrorDetail, "description": "Template not found"}}
 async def create_template(body: TemplateCreate, db: aiosqlite.Connection = Depends(get_db)):
     """Create a new swarm configuration template."""
     config_json = json.dumps(body.config)
+    name = sanitize_string(body.name)
+    description = sanitize_string(body.description or "")
     cursor = await db.execute(
         "INSERT INTO swarm_templates (name, description, config) VALUES (?, ?, ?)",
-        (body.name, body.description or "", config_json),
+        (name, description, config_json),
     )
     await db.commit()
     row = await (await db.execute(
@@ -94,10 +99,10 @@ async def update_template(template_id: int, body: TemplateUpdate, db: aiosqlite.
     params = []
     if body.name is not None:
         updates.append("name = ?")
-        params.append(body.name)
+        params.append(sanitize_string(body.name))
     if body.description is not None:
         updates.append("description = ?")
-        params.append(body.description)
+        params.append(sanitize_string(body.description))
     if body.config is not None:
         updates.append("config = ?")
         params.append(json.dumps(body.config))

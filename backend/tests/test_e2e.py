@@ -78,7 +78,7 @@ class TestEndToEnd:
         resp = await client.get(f"/api/projects/{pid}")
         assert resp.json()["status"] == "stopped"
 
-    async def test_launch_and_stop_workflow(self, client, mock_project_folder):
+    async def test_launch_and_stop_workflow(self, client, mock_project_folder, mock_launch_deps):
         """Test launch -> status -> stop flow with mocked subprocess."""
         # Create swarm.ps1 and stop-swarm.ps1
         (mock_project_folder / "swarm.ps1").write_text("# Mock swarm")
@@ -95,6 +95,7 @@ class TestEndToEnd:
         with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
             mock_process = MagicMock()
             mock_process.pid = 99999
+            mock_process.poll.return_value = None
             mock_process.stdout = MagicMock()
             mock_process.stderr = MagicMock()
             mock_process.wait = MagicMock()

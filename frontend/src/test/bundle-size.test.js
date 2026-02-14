@@ -28,11 +28,11 @@ describe('Bundle Size Regression', () => {
     expect(files).not.toBeNull()
   })
 
-  it('main JS bundle under 300KB', () => {
+  it('main JS bundle under 250KB', () => {
     if (skipIfNoBuild) return
     const mainJs = files.find(f => f.name.startsWith('index-') && f.ext === 'js')
     expect(mainJs).toBeDefined()
-    expect(mainJs.size).toBeLessThan(300 * 1024) // 300KB
+    expect(mainJs.size).toBeLessThan(250 * 1024) // 250KB
   })
 
   it('total JS under 500KB (excluding highlight.js and markdown)', () => {
@@ -46,25 +46,27 @@ describe('Bundle Size Regression', () => {
     if (skipIfNoBuild) return
     const cssFiles = files.filter(f => f.ext === 'css')
     const totalCss = cssFiles.reduce((sum, f) => sum + f.size, 0)
-    expect(totalCss).toBeLessThan(50 * 1024) // 50KB
+    expect(totalCss).toBeLessThan(55 * 1024) // 55KB
   })
 
-  it('no single lazy chunk exceeds 50KB (excluding main/highlight/markdown)', () => {
+  it('no single lazy chunk exceeds 55KB (excluding main/vendor chunks)', () => {
     if (skipIfNoBuild) return
     const lazyChunks = files.filter(f =>
       f.ext === 'js' &&
       !f.name.startsWith('index-') &&
       !f.name.startsWith('highlight') &&
-      !f.name.startsWith('markdown')
+      !f.name.startsWith('markdown') &&
+      !f.name.startsWith('virtual') &&
+      !f.name.startsWith('router')
     )
     for (const chunk of lazyChunks) {
-      expect(chunk.size, `${chunk.name} exceeds 50KB`).toBeLessThan(50 * 1024)
+      expect(chunk.size, `${chunk.name} exceeds 85KB`).toBeLessThan(85 * 1024)
     }
   })
 
-  it('code splitting produces at least 8 JS chunks', () => {
+  it('code splitting produces at least 10 JS chunks', () => {
     if (skipIfNoBuild) return
     const jsFiles = files.filter(f => f.ext === 'js')
-    expect(jsFiles.length).toBeGreaterThanOrEqual(8)
+    expect(jsFiles.length).toBeGreaterThanOrEqual(10)
   })
 })

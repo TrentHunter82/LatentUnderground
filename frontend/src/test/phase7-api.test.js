@@ -33,7 +33,7 @@ describe('sendSwarmInput API', () => {
       '/api/swarm/input',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ project_id: 1, text: 'hello' }),
+        body: JSON.stringify({ project_id: 1, text: 'hello', agent: null }),
       })
     )
   })

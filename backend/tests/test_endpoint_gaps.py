@@ -7,7 +7,7 @@ API versioning, browse, analytics, and swarm output endpoints.
 import pytest
 import aiosqlite
 
-from app.routes.swarm import _output_buffers, _buffers_lock
+from app.routes.swarm import _project_output_buffers, _buffers_lock
 
 
 # ---------------------------------------------------------------------------
@@ -387,7 +387,7 @@ class TestSwarmOutputEdgeCases:
         pid = created_project["id"]
         # Ensure buffer is clear
         with _buffers_lock:
-            _output_buffers.pop(pid, None)
+            _project_output_buffers.pop(pid, None)
 
         resp = await client.get(f"/api/swarm/output/{pid}")
         assert resp.status_code == 200
@@ -402,7 +402,7 @@ class TestSwarmOutputEdgeCases:
         """GET /api/swarm/output/{id}?offset=0&limit=10 respects pagination."""
         pid = created_project["id"]
         with _buffers_lock:
-            _output_buffers[pid] = [f"[stdout] line {i}" for i in range(25)]
+            _project_output_buffers[pid] = [f"[stdout] line {i}" for i in range(25)]
 
         resp = await client.get(f"/api/swarm/output/{pid}?offset=0&limit=10")
         assert resp.status_code == 200

@@ -12,7 +12,7 @@ const signalLabels = {
 export default memo(function SignalPanel({ signals, phase }) {
   return (
     <div className="retro-panel retro-panel-glow rounded p-4">
-      <h3 className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-medium mb-3 m-0 font-mono">Signals</h3>
+      <h2 className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-medium mb-3 m-0 font-mono">Signals</h2>
 
       {/* Phase indicator */}
       {phase && (

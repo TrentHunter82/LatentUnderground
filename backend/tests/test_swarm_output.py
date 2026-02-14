@@ -26,9 +26,8 @@ class TestSwarmOutput:
         """Output should return lines when buffer has content."""
         pid = project_with_folder["id"]
 
-        # Manually populate the output buffer
-        from app.routes.swarm import _output_buffers
-        _output_buffers[pid] = [
+        from app.routes.swarm import _project_output_buffers
+        _project_output_buffers[pid] = [
             "[stdout] Starting swarm...",
             "[stdout] Phase 1 initiated",
             "[stderr] Warning: something",
@@ -44,14 +43,14 @@ class TestSwarmOutput:
             assert len(data["lines"]) == 3
             assert "[stdout] Starting swarm..." in data["lines"][0]
         finally:
-            _output_buffers.pop(pid, None)
+            _project_output_buffers.pop(pid, None)
 
     async def test_output_with_offset(self, client, project_with_folder):
         """Output with offset should skip earlier lines."""
         pid = project_with_folder["id"]
 
-        from app.routes.swarm import _output_buffers
-        _output_buffers[pid] = [
+        from app.routes.swarm import _project_output_buffers
+        _project_output_buffers[pid] = [
             "[stdout] Line 1",
             "[stdout] Line 2",
             "[stdout] Line 3",
@@ -68,14 +67,14 @@ class TestSwarmOutput:
             assert data["lines"][0] == "[stdout] Line 3"
             assert data["lines"][1] == "[stdout] Line 4"
         finally:
-            _output_buffers.pop(pid, None)
+            _project_output_buffers.pop(pid, None)
 
     async def test_output_offset_beyond_buffer(self, client, project_with_folder):
         """Offset beyond buffer length returns empty lines."""
         pid = project_with_folder["id"]
 
-        from app.routes.swarm import _output_buffers
-        _output_buffers[pid] = ["[stdout] Only line"]
+        from app.routes.swarm import _project_output_buffers
+        _project_output_buffers[pid] = ["[stdout] Only line"]
 
         try:
             resp = await client.get(f"/api/swarm/output/{pid}?offset=100")
@@ -84,4 +83,22 @@ class TestSwarmOutput:
             assert data["lines"] == []
             assert data["next_offset"] == 100
         finally:
-            _output_buffers.pop(pid, None)
+            _project_output_buffers.pop(pid, None)
+
+    async def test_output_with_agent_filter(self, client, project_with_folder):
+        """Output with ?agent= filter returns from per-agent buffer."""
+        pid = project_with_folder["id"]
+
+        from app.routes.swarm import _agent_output_buffers, _agent_key
+        key = _agent_key(pid, "Claude-1")
+        _agent_output_buffers[key] = ["Line A from agent", "Line B from agent"]
+
+        try:
+            resp = await client.get(f"/api/swarm/output/{pid}?agent=Claude-1")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert len(data["lines"]) == 2
+            assert data["agent"] == "Claude-1"
+            assert data["lines"][0] == "Line A from agent"
+        finally:
+            _agent_output_buffers.pop(key, None)

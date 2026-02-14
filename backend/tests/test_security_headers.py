@@ -51,7 +51,8 @@ class TestSecurityHeadersOnVariousEndpoints:
         assert resp.status_code == 200
         assert resp.headers.get("x-content-type-options") == "nosniff"
         assert resp.headers.get("x-frame-options") == "DENY"
-        assert resp.headers.get("cache-control") == "no-store"
+        # GET endpoints with ETag use 'private, no-cache'; others use 'no-store'
+        assert resp.headers.get("cache-control") in ("no-store", "private, no-cache")
 
     @pytest.mark.asyncio
     async def test_headers_on_webhooks_list(self, client):

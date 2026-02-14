@@ -77,7 +77,7 @@ class TestOutputBufferCleanup:
 
     async def test_buffer_cleaned_on_stop(self, client, tmp_path):
         """Output buffer should be removed when a swarm is stopped."""
-        from app.routes.swarm import _output_buffers
+        from app.routes.swarm import _project_output_buffers
 
         # Create a project
         folder = tmp_path / "buf_test"
@@ -90,14 +90,14 @@ class TestOutputBufferCleanup:
         pid = resp.json()["id"]
 
         # Simulate a buffer existing (as if a swarm had been running)
-        _output_buffers[pid] = ["[stdout] line 1", "[stdout] line 2"]
+        _project_output_buffers[pid] = ["[stdout] line 1", "[stdout] line 2"]
 
         # Stop the swarm (even though not actually running)
         resp = await client.post("/api/swarm/stop", json={"project_id": pid})
         assert resp.status_code == 200
 
         # Buffer should be cleaned up
-        assert pid not in _output_buffers
+        assert pid not in _project_output_buffers
 
 
 class TestDatabaseMigration:

@@ -1,87 +1,168 @@
 import { useState } from 'react'
-import { launchSwarm, stopSwarm } from '../lib/api'
+import { useLaunchSwarm, useStopSwarm, useSendDirective } from '../hooks/useMutations'
 import { useToast } from './Toast'
 import { useNotifications } from '../hooks/useNotifications'
 import ConfirmDialog from './ConfirmDialog'
 
-export default function SwarmControls({ projectId, status, onAction }) {
-  const [loading, setLoading] = useState(false)
+export default function SwarmControls({ projectId, status, config, onAction, agents }) {
+  const [loadingAction, setLoadingAction] = useState(null) // 'launch' | 'resume' | 'stop' | null
   const [confirmStop, setConfirmStop] = useState(false)
+  const [showBroadcast, setShowBroadcast] = useState(false)
+  const [broadcastText, setBroadcastText] = useState('')
+  const [broadcasting, setBroadcasting] = useState(false)
   const toast = useToast()
   const { requestPermission } = useNotifications()
 
+  const launchMutation = useLaunchSwarm()
+  const stopMutation = useStopSwarm()
+  const directiveMutation = useSendDirective()
+
+  const isLoading = loadingAction !== null
+
   const handleLaunch = async (resume = false) => {
-    setLoading(true)
+    setLoadingAction(resume ? 'resume' : 'launch')
     // Non-blocking permission request on first launch
     requestPermission()
     try {
-      await launchSwarm({
+      await launchMutation.mutateAsync({
         project_id: projectId,
         resume,
         no_confirm: true,
-        agent_count: 4,
-        max_phases: 24,
+        agent_count: config?.agent_count ?? 4,
+        max_phases: config?.max_phases ?? 24,
       })
       toast(resume ? 'Swarm resumed' : 'Swarm launched', 'success')
       onAction?.()
     } catch (e) {
       toast(`Launch failed: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: () => handleLaunch(resume) })
     } finally {
-      setLoading(false)
+      setLoadingAction(null)
     }
   }
 
   const handleStop = async () => {
     setConfirmStop(false)
-    setLoading(true)
+    setLoadingAction('stop')
     try {
-      await stopSwarm({ project_id: projectId })
+      await stopMutation.mutateAsync({ project_id: projectId })
       toast('Swarm stopped', 'success')
       onAction?.()
     } catch (e) {
       toast(`Stop failed: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: handleStop })
     } finally {
-      setLoading(false)
+      setLoadingAction(null)
     }
   }
 
+  const handleBroadcast = async () => {
+    const text = broadcastText.trim()
+    if (!text || !agents) return
+    setBroadcasting(true)
+    const aliveAgents = agents.filter(a => a.alive)
+    try {
+      await Promise.all(aliveAgents.map(a =>
+        directiveMutation.mutateAsync({ projectId, agentName: a.name, text, priority: 'normal' })
+      ))
+      toast(`Directive sent to ${aliveAgents.length} agents`, 'success')
+      setBroadcastText('')
+      setShowBroadcast(false)
+    } catch (e) {
+      toast(`Broadcast failed: ${e.message}`, 'error')
+    } finally {
+      setBroadcasting(false)
+    }
+  }
+
+  const aliveCount = agents?.filter(a => a.alive).length ?? 0
+
+  const Spinner = () => (
+    <span className="inline-block w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin" aria-hidden="true" />
+  )
+
   return (
     <>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2">
         {status === 'running' ? (
-          <button
-            onClick={() => setConfirmStop(true)}
-            disabled={loading}
-            className="btn-neon btn-neon-danger px-4 py-2 rounded text-sm disabled:opacity-50"
-          >
-            {loading ? 'Stopping...' : 'Stop Swarm'}
-          </button>
+          <>
+            <button
+              onClick={() => setConfirmStop(true)}
+              disabled={isLoading}
+              aria-busy={loadingAction === 'stop'}
+              className="btn-neon btn-neon-danger px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5 sm:gap-2"
+            >
+              {loadingAction === 'stop' ? <><Spinner /> Stopping...</> : 'Stop Swarm'}
+            </button>
+            {aliveCount > 0 && (
+              <button
+                onClick={() => setShowBroadcast(!showBroadcast)}
+                aria-expanded={showBroadcast}
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-mono cursor-pointer border transition-colors ${
+                  showBroadcast
+                    ? 'bg-crt-cyan/10 border-crt-cyan/30 text-crt-cyan'
+                    : 'bg-transparent border-retro-border text-zinc-400 hover:text-crt-cyan hover:border-crt-cyan/30'
+                }`}
+                title="Send directive to all agents"
+                aria-label="Direct all agents"
+              >
+                Direct All
+              </button>
+            )}
+          </>
         ) : (
           <>
             <button
               onClick={() => handleLaunch(false)}
-              disabled={loading}
-              className="btn-neon px-4 py-2 rounded text-sm disabled:opacity-50"
+              disabled={isLoading}
+              aria-busy={loadingAction === 'launch'}
+              className="btn-neon px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5 sm:gap-2"
             >
-              {loading ? 'Launching...' : 'Launch'}
+              {loadingAction === 'launch' ? <><Spinner /> Launching...</> : 'Launch'}
             </button>
             {status === 'stopped' && (
               <button
                 onClick={() => handleLaunch(true)}
-                disabled={loading}
-                className="px-4 py-2 rounded bg-retro-grid hover:bg-retro-border text-zinc-200 text-sm font-medium transition-colors disabled:opacity-50 cursor-pointer border border-retro-border font-mono"
+                disabled={isLoading}
+                aria-busy={loadingAction === 'resume'}
+                className="px-3 sm:px-4 py-1.5 sm:py-2 rounded bg-retro-grid hover:bg-retro-border text-zinc-200 text-xs sm:text-sm font-medium transition-colors disabled:opacity-50 cursor-pointer border border-retro-border font-mono flex items-center gap-1.5 sm:gap-2"
               >
-                Resume
+                {loadingAction === 'resume' ? <><Spinner /> Resuming...</> : 'Resume'}
               </button>
             )}
           </>
         )}
-        {loading && (
-          <div className="w-24 h-1.5 retro-progress rounded overflow-hidden" role="progressbar" aria-label="Operation in progress">
-            <div className="h-full retro-progress-fill animate-pulse" style={{ width: '100%' }} />
-          </div>
-        )}
       </div>
+
+      {/* Broadcast directive panel */}
+      {showBroadcast && (
+        <div className="mt-2 retro-panel border border-retro-border rounded p-3 animate-fade-in">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-mono">Direct All Agents</span>
+            <button onClick={() => setShowBroadcast(false)} className="text-zinc-500 hover:text-zinc-300 bg-transparent border-0 cursor-pointer text-xs" aria-label="Close broadcast panel">✕</button>
+          </div>
+          <textarea
+            value={broadcastText}
+            onChange={(e) => setBroadcastText(e.target.value)}
+            placeholder="Enter directive for all agents..."
+            rows={2}
+            maxLength={5000}
+            className="retro-input w-full px-2 py-1.5 text-[11px] font-mono resize-none rounded mb-2"
+            aria-label="Broadcast directive text"
+            disabled={broadcasting}
+            onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleBroadcast() } }}
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] text-zinc-700 font-mono">{aliveCount} agent{aliveCount !== 1 ? 's' : ''} will receive this</span>
+            <button
+              onClick={handleBroadcast}
+              disabled={broadcasting || !broadcastText.trim()}
+              className="btn-neon px-3 py-1 rounded text-[11px] disabled:opacity-30 flex items-center gap-1.5"
+              aria-busy={broadcasting}
+            >
+              {broadcasting ? 'Sending...' : 'Send to All'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmStop}

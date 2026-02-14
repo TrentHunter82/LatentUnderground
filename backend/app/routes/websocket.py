@@ -1,7 +1,11 @@
 import asyncio
+import hmac
 import json
 import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
+
+from .. import config
 
 logger = logging.getLogger("latent.websocket")
 
@@ -38,6 +42,15 @@ manager = ConnectionManager()
 
 @router.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
+    # Authenticate WebSocket connections when API key is configured
+    api_key = config.API_KEY
+    if api_key:
+        # Accept token via query parameter: /ws?token=<key>
+        token = ws.query_params.get("token", "")
+        if not token or not hmac.compare_digest(token, api_key):
+            await ws.close(code=4401, reason="Authentication required")
+            return
+
     await manager.connect(ws)
     try:
         while True:

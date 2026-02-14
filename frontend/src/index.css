@@ -343,6 +343,10 @@ html.light {
   --color-signal-green: #3A8A6A;
   --color-signal-amber: #A08020;
   --color-signal-red: #9A2A22;
+
+  --color-retro-dark: #E8F4EE;
+  --color-retro-border: #88A898;
+  --color-retro-grid: #D0E4D8;
 }
 
 html.light body {

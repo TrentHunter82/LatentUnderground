@@ -9,6 +9,7 @@ dependencies = [
     "websockets>=14.0",
     "watchfiles>=1.0.0",
     "aiosqlite>=0.20.0",
+    "psutil>=7.2.2",
 ]
 
 [dependency-groups]

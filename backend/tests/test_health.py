@@ -3,6 +3,8 @@
 import pytest
 from unittest.mock import patch, AsyncMock
 
+from app import config
+
 
 @pytest.mark.asyncio
 async def test_health_ok(client):
@@ -22,7 +24,7 @@ async def test_health_has_all_fields(client):
     data = resp.json()
     assert set(data.keys()) == {"status", "db", "app", "version", "uptime_seconds", "active_processes"}
     assert data["app"] == "Latent Underground"
-    assert data["version"] == "1.0.0"
+    assert data["version"] == config.APP_VERSION
 
 
 @pytest.mark.asyncio
@@ -38,4 +40,4 @@ async def test_health_degraded_on_db_failure(client):
     assert data["status"] == "degraded"
     assert data["db"] == "error"
     assert data["app"] == "Latent Underground"
-    assert data["version"] == "1.0.0"
+    assert data["version"] == config.APP_VERSION

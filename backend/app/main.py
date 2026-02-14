@@ -1,10 +1,14 @@
 import asyncio
+import hashlib
 import hmac
+import html
 import logging
+import re
 import sqlite3
 import threading
 import time
 import traceback
+import uuid
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -22,11 +26,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from . import config
 from . import database
 from .database import init_db, init_pool, close_pool
-from .routes import projects, swarm, files, logs, websocket, backup, templates, browse, plugins, webhooks
+from .routes import projects, swarm, files, logs, websocket, backup, templates, browse, plugins, webhooks, system
 from .routes.backup import _create_backup
 from .routes.swarm import _pid_alive
 from .routes.watcher import router as watcher_router, cleanup_watchers
 from .plugins import plugin_manager
+from .metrics import metrics
 from .models.responses import HealthOut
 
 logger = logging.getLogger("latent")
@@ -89,10 +94,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         now = time.time()
         window = 60.0
 
-        # Clean old entries
-        self._requests[key] = [t for t in self._requests[key] if now - t < window]
+        # Clean old entries and prune empty keys to prevent memory leak
+        recent = [t for t in self._requests[key] if now - t < window]
+        if recent:
+            self._requests[key] = recent
+        else:
+            self._requests.pop(key, None)
 
-        if len(self._requests[key]) >= rpm:
+        if len(self._requests.get(key, [])) >= rpm:
             return JSONResponse(
                 status_code=429,
                 content={"detail": f"Rate limit exceeded. Max {rpm} requests per minute."},
@@ -193,6 +202,24 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """Collect Prometheus-compatible request metrics (count, duration histogram)."""
+
+    async def dispatch(self, request: Request, call_next):
+        if not request.url.path.startswith("/api/"):
+            return await call_next(request)
+        # Skip the metrics endpoint itself to avoid self-referencing noise
+        if request.url.path == "/api/metrics":
+            return await call_next(request)
+        start = time.monotonic()
+        response = await call_next(request)
+        duration = time.monotonic() - start
+        metrics.record_request(
+            request.method, request.url.path, response.status_code, duration,
+        )
+        return response
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to all API responses."""
 
@@ -205,10 +232,126 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         # X-XSS-Protection: 0 is modern best practice (rely on CSP, not legacy filter)
         response.headers["X-XSS-Protection"] = "0"
-        # Cache-Control: no-store for API responses to prevent caching of sensitive data
+        # Cache-Control: use no-cache for GET requests with ETag (allows conditional
+        # requests), no-store for all other API responses
         if path.startswith("/api/"):
-            response.headers["Cache-Control"] = "no-store"
+            if response.headers.get("ETag"):
+                response.headers["Cache-Control"] = "private, no-cache"
+            else:
+                response.headers["Cache-Control"] = "no-store"
         return response
+
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """Add X-Request-ID header for log correlation across frontend/backend.
+
+    If the client sends an X-Request-ID header, it is preserved and echoed.
+    Otherwise, a new UUID is generated.
+    """
+
+    _REQUEST_ID_MAX_LEN = 128
+    _REQUEST_ID_RE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+
+    async def dispatch(self, request: Request, call_next):
+        client_id = request.headers.get("x-request-id", "")
+        # Validate format: alphanumeric/dash/underscore/dot, max 128 chars
+        if (
+            client_id
+            and len(client_id) <= self._REQUEST_ID_MAX_LEN
+            and self._REQUEST_ID_RE.match(client_id)
+        ):
+            request_id = client_id
+        else:
+            request_id = str(uuid.uuid4())
+        # Store on request state for use in route handlers and logging
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
+class RequestTimeoutMiddleware(BaseHTTPMiddleware):
+    """Enforce a timeout on API request handling.
+
+    Returns 504 Gateway Timeout if a request exceeds the configured duration.
+    Skips SSE streaming endpoints and health checks (which must always respond).
+    """
+
+    _SKIP_SUFFIXES = ("/stream",)
+
+    def __init__(self, app, timeout_seconds: int = 60):
+        super().__init__(app)
+        self.timeout = timeout_seconds
+
+    async def dispatch(self, request: Request, call_next):
+        if self.timeout <= 0:
+            return await call_next(request)
+        # Skip non-API and streaming endpoints
+        path = request.url.path
+        if not path.startswith("/api/"):
+            return await call_next(request)
+        if any(path.endswith(s) for s in self._SKIP_SUFFIXES):
+            return await call_next(request)
+
+        try:
+            return await asyncio.wait_for(call_next(request), timeout=self.timeout)
+        except asyncio.TimeoutError:
+            logger.warning("Request timed out after %ds: %s %s", self.timeout, request.method, path)
+            return JSONResponse(
+                status_code=504,
+                content={"detail": f"Request timed out after {self.timeout} seconds"},
+            )
+
+
+class ETagMiddleware(BaseHTTPMiddleware):
+    """Compute ETag for GET /api/ responses and return 304 when content unchanged.
+
+    Reduces bandwidth for polling clients by sending empty 304 responses
+    when the data hasn't changed since the last request.
+    """
+
+    # Skip streaming/SSE endpoints and health checks (fast enough to always send)
+    _SKIP_PATHS = {"/api/health", "/api/system"}
+
+    async def dispatch(self, request: Request, call_next):
+        # Only compute ETags for GET requests on API endpoints
+        if request.method != "GET" or not request.url.path.startswith("/api/"):
+            return await call_next(request)
+        # Skip streaming endpoints
+        if "/stream" in request.url.path or request.url.path in self._SKIP_PATHS:
+            return await call_next(request)
+
+        response = await call_next(request)
+
+        # Only ETag successful JSON responses
+        if response.status_code != 200:
+            return response
+
+        # Read the response body
+        body = b""
+        async for chunk in response.body_iterator:
+            body += chunk
+
+        # Compute weak ETag from content hash
+        etag = f'W/"{hashlib.blake2b(body, digest_size=16).hexdigest()}"'
+
+        # Check If-None-Match from client
+        if_none_match = request.headers.get("if-none-match", "")
+        if if_none_match == etag:
+            from starlette.responses import Response as StarletteResponse
+            return StarletteResponse(
+                status_code=304,
+                headers={"ETag": etag, "Cache-Control": "private, no-cache"},
+            )
+
+        # Return response with ETag header
+        from starlette.responses import Response as StarletteResponse
+        return StarletteResponse(
+            content=body,
+            status_code=response.status_code,
+            headers={**dict(response.headers), "ETag": etag},
+            media_type=response.media_type,
+        )
 
 
 def _ensure_directories():
@@ -345,8 +488,9 @@ async def _cleanup_old_logs():
         logger.info("Log retention: removed %d log file(s) older than %d days", removed, days)
 
 
-# Background task handle for auto-backups
+# Background task handles
 _backup_task: asyncio.Task | None = None
+_vacuum_task: asyncio.Task | None = None
 
 
 async def _auto_backup_loop():
@@ -375,6 +519,25 @@ async def _auto_backup_loop():
             logger.error("Auto-backup failed", exc_info=True)
 
 
+async def _auto_vacuum_loop():
+    """Periodically run VACUUM on the database to reclaim space."""
+    interval = config.VACUUM_INTERVAL_HOURS * 3600
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            import sqlite3 as _sqlite3
+            def _do_vacuum():
+                conn = _sqlite3.connect(str(database.DB_PATH))
+                try:
+                    conn.execute("VACUUM")
+                finally:
+                    conn.close()
+            await asyncio.to_thread(_do_vacuum)
+            logger.info("Database VACUUM completed successfully")
+        except Exception:
+            logger.error("Database VACUUM failed", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log_level = getattr(logging, config.LOG_LEVEL.upper(), logging.INFO)
@@ -395,38 +558,102 @@ async def lifespan(app: FastAPI):
     await _cleanup_old_logs()
 
     # Start auto-backup if configured
-    global _backup_task
+    global _backup_task, _vacuum_task
     if config.BACKUP_INTERVAL_HOURS > 0:
         _backup_task = asyncio.create_task(_auto_backup_loop())
         logger.info("Auto-backup enabled: every %dh, keep %d", config.BACKUP_INTERVAL_HOURS, config.BACKUP_KEEP)
+
+    # Start VACUUM scheduling if configured
+    if config.VACUUM_INTERVAL_HOURS > 0:
+        _vacuum_task = asyncio.create_task(_auto_vacuum_loop())
+        logger.info("Auto-VACUUM enabled: every %dh", config.VACUUM_INTERVAL_HOURS)
 
     # Discover plugins
     plugin_manager.discover()
 
     logger.info("Latent Underground started")
+
+    # --- Startup security diagnostics ---
+    if not config.API_KEY and config.HOST != "127.0.0.1":
+        logger.warning(
+            "SECURITY: API key is empty and HOST=%s — API is accessible without authentication. "
+            "Set LU_API_KEY to enable authentication.",
+            config.HOST,
+        )
+    if config.API_KEY and len(config.API_KEY) < 16:
+        logger.warning(
+            "SECURITY: API key is shorter than 16 characters — consider using a stronger key",
+        )
+    # Log enabled security features
+    auth_status = "enabled" if config.API_KEY else "disabled"
+    rate_status = f"write={config.RATE_LIMIT_RPM}/min, read={config.RATE_LIMIT_READ_RPM}/min"
+    cors_status = ", ".join(config.CORS_ORIGINS[:3]) + ("..." if len(config.CORS_ORIGINS) > 3 else "")
+    logger.info(
+        "Security: auth=%s, rate_limiting=[%s], CORS=[%s]",
+        auth_status, rate_status, cors_status,
+    )
+
     yield
 
     # --- Graceful shutdown ---
     logger.info("Latent Underground shutting down...")
 
-    # Cancel auto-backup task
-    if _backup_task and not _backup_task.done():
-        _backup_task.cancel()
-        try:
-            await _backup_task
-        except asyncio.CancelledError:
-            pass
+    # 1. Cancel background tasks (backup, vacuum)
+    for task in [_backup_task, _vacuum_task]:
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
-    # Stop PID monitor threads with timeout
+    # 2. Stop PID monitor threads
     for evt in _pid_monitors:
         evt.set()
     _pid_monitors.clear()
 
-    # Drain output buffers and stop drain threads
-    await swarm.cancel_drain_tasks()
+    # 3. Gracefully terminate all agent processes and drain threads
+    # This sends SIGTERM to each agent, waits for drain threads to flush,
+    # and marks any running swarm_runs as 'stopped' in the database
+    try:
+        active_project_ids = set()
+        for key in list(swarm._agent_processes.keys()):
+            active_project_ids.add(int(key.split(":")[0]))
+
+        if active_project_ids:
+            logger.info("Stopping %d active project(s) during shutdown...", len(active_project_ids))
+
+        await swarm.cancel_drain_tasks()
+
+        # Mark any remaining 'running' swarm_runs and projects as stopped
+        if active_project_ids:
+            try:
+                async with aiosqlite.connect(database.DB_PATH) as db:
+                    for pid in active_project_ids:
+                        await db.execute(
+                            "UPDATE projects SET status = 'stopped', swarm_pid = NULL, "
+                            "updated_at = datetime('now') WHERE id = ? AND status = 'running'",
+                            (pid,),
+                        )
+                        await db.execute(
+                            "UPDATE swarm_runs SET ended_at = datetime('now'), status = 'stopped' "
+                            "WHERE project_id = ? AND status = 'running'",
+                            (pid,),
+                        )
+                    await db.commit()
+                    logger.info("Marked %d project(s) as stopped in database", len(active_project_ids))
+            except Exception:
+                logger.error("Failed to update DB during shutdown", exc_info=True)
+    except Exception:
+        logger.error("Error during agent shutdown", exc_info=True)
+
+    # 4. Clear all module-level tracking dicts
+    swarm._cleanup_stale_tracking_dicts()
+
+    # 5. Cleanup filesystem watchers
     await cleanup_watchers()
 
-    # Close connection pool
+    # 6. Close connection pool
     await close_pool()
 
     logger.info("Latent Underground shutdown complete")
@@ -435,7 +662,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Latent Underground",
     description="GUI for managing Claude Swarm sessions",
-    version="1.0.0",
+    version=config.APP_VERSION,
     lifespan=lifespan,
 )
 
@@ -495,6 +722,9 @@ async def generic_exception_handler(request: Request, exc: Exception):
 # --- Middleware ---
 
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
+app.add_middleware(MetricsMiddleware)
+app.add_middleware(ETagMiddleware)
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(APIKeyMiddleware)
 if config.REQUEST_LOG:
@@ -511,6 +741,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+if config.REQUEST_TIMEOUT > 0:
+    app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=config.REQUEST_TIMEOUT)
 
 
 app.include_router(projects.router)
@@ -524,6 +756,7 @@ app.include_router(templates.router)
 app.include_router(browse.router)
 app.include_router(plugins.router)
 app.include_router(webhooks.router)
+app.include_router(system.router)
 
 
 @app.get("/api/health", tags=["system"], response_model=HealthOut,
@@ -545,6 +778,53 @@ async def health():
             status_code=503,
             content={**base, "status": "degraded", "db": "error", "active_processes": 0},
         )
+
+
+@app.get("/api/metrics", tags=["system"],
+         summary="Prometheus-compatible metrics",
+         response_class=JSONResponse)
+async def prometheus_metrics():
+    """Export application metrics in Prometheus text exposition format.
+
+    Includes request counts, latency histograms, and application gauges
+    (active agents, DB size, uptime). Compatible with Prometheus scraping.
+    """
+    # Update application-level gauges before export
+    try:
+        async with aiosqlite.connect(database.DB_PATH) as db:
+            row = await (await db.execute(
+                "SELECT COUNT(*) as cnt FROM projects WHERE status = 'running'"
+            )).fetchone()
+            metrics.set_gauge(
+                "lu_active_projects", float(row[0]),
+                "Number of projects with running swarms",
+            )
+    except Exception:
+        pass
+
+    metrics.set_gauge(
+        "lu_uptime_seconds", float(int(time.time() - _start_time)),
+        "Application uptime in seconds",
+    )
+    metrics.set_gauge(
+        "lu_active_agents", float(len(swarm._agent_processes)),
+        "Number of active agent processes",
+    )
+
+    try:
+        db_size = database.DB_PATH.stat().st_size
+        wal = database.DB_PATH.with_suffix(".db-wal")
+        if wal.exists():
+            db_size += wal.stat().st_size
+        metrics.set_gauge("lu_db_size_bytes", float(db_size), "Database file size in bytes")
+    except OSError:
+        pass
+
+    from starlette.responses import Response as StarletteResponse
+    return StarletteResponse(
+        content=metrics.export(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 # --- Serve frontend static files ---

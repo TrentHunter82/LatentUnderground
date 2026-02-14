@@ -93,6 +93,6 @@ async def test_indexes_idempotent(tmp_path):
             rows = await (await db.execute(
                 "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
             )).fetchall()
-            assert len(rows) == 6  # projects_status, swarm_runs_project_started, swarm_runs_status, swarm_runs_project_ended, templates_created, webhooks_enabled
+            assert len(rows) == 13  # projects_status, swarm_runs_project_started, swarm_runs_status, swarm_runs_project_ended, templates_created, webhooks_enabled, swarm_runs_project_status, webhooks_project, projects_archived_status, agent_events_project_ts, agent_events_type, checkpoints_run_agent, checkpoints_project_ts
     finally:
         database.DB_PATH = original

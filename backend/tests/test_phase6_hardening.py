@@ -126,7 +126,7 @@ class TestBufferLockExists:
 
     def test_max_output_lines(self):
         from app.routes.swarm import _MAX_OUTPUT_LINES
-        assert _MAX_OUTPUT_LINES == 500
+        assert _MAX_OUTPUT_LINES >= 500  # configurable via LU_OUTPUT_BUFFER_LINES
 
     def test_max_content_size(self):
         from app.routes.files import MAX_CONTENT_SIZE

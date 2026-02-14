@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react'
+import { useState, useMemo, useRef, useCallback, lazy, Suspense } from 'react'
 import Dashboard from './Dashboard'
 import TerminalOutput from './TerminalOutput'
 import ProjectSettings from './ProjectSettings'
 import WebhookManager from './WebhookManager'
 import { useParams } from 'react-router-dom'
-import { getProject, getSwarmHistory, getSwarmOutput, updateProjectConfig } from '../lib/api'
+import { getSwarmHistory, getSwarmOutput, updateProjectConfig } from '../lib/api'
+import { useProject } from '../hooks/useProjectQuery'
 import { useSafeToast } from './Toast'
 
 const LogViewer = lazy(() => import('./LogViewer'))
@@ -27,20 +28,14 @@ export default function ProjectView({ wsEvents, onProjectChange }) {
   const toast = useSafeToast()
   const projectId = Number(id)
   const [activeTab, setActiveTab] = useState('dashboard')
-  const [project, setProject] = useState(null)
 
-  useEffect(() => {
-    let mounted = true
-    getProject(projectId).then(p => { if (mounted) setProject(p) }).catch((e) => {
-      if (!mounted) return
-      console.warn('Failed to load project:', e)
-      toast(`Failed to load project: ${e.message}`, 'error', 4000, {
-        label: 'Retry',
-        onClick: () => getProject(projectId).then(setProject).catch(() => {})
-      })
-    })
-    return () => { mounted = false }
-  }, [projectId, toast])
+  // Use TanStack Query for project data
+  const { data: project } = useProject(projectId, {
+    refetchOnWindowFocus: true,
+  })
+
+  // Re-fetch project when swarm status changes via wsEvents
+  // TanStack Query's refetchInterval in Dashboard handles periodic polling
 
   const initialConfig = useMemo(() => {
     if (!project?.config) return null
@@ -97,14 +92,14 @@ export default function ProjectView({ wsEvents, onProjectChange }) {
           <Dashboard wsEvents={wsEvents} onProjectChange={onProjectChange} />
         )}
         {activeTab === 'files' && (
-          <Suspense fallback={<div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse">Loading editor...</div>}>
+          <Suspense fallback={<div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse" role="status">Loading editor...</div>}>
             <div className="p-2 sm:p-4 h-full">
               <FileEditor projectId={projectId} wsEvents={wsEvents} />
             </div>
           </Suspense>
         )}
         {activeTab === 'history' && (
-          <Suspense fallback={<div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse">Loading history...</div>}>
+          <Suspense fallback={<div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse" role="status">Loading history...</div>}>
             <div className="p-4 h-full overflow-y-auto">
               <SwarmHistory projectId={projectId} fetchHistory={getSwarmHistory} />
             </div>
@@ -116,14 +111,14 @@ export default function ProjectView({ wsEvents, onProjectChange }) {
           </div>
         )}
         {activeTab === 'logs' && (
-          <Suspense fallback={<div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse">Loading logs...</div>}>
+          <Suspense fallback={<div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse" role="status">Loading logs...</div>}>
             <div className="p-4 h-full">
               <LogViewer projectId={projectId} wsEvents={wsEvents} />
             </div>
           </Suspense>
         )}
         {activeTab === 'analytics' && (
-          <Suspense fallback={<div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse">Loading analytics...</div>}>
+          <Suspense fallback={<div className="p-6 text-center text-zinc-500 font-mono text-sm animate-pulse" role="status">Loading analytics...</div>}>
             <Analytics projectId={projectId} />
           </Suspense>
         )}

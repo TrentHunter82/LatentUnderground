@@ -93,7 +93,7 @@ class TestSwarmLaunch:
         assert resp.status_code == 400
         assert "swarm.ps1 not found" in resp.json()["detail"]
 
-    async def test_launch_with_swarm_script(self, client, mock_project_folder):
+    async def test_launch_with_swarm_script(self, client, mock_project_folder, mock_launch_deps):
         """Launch should succeed when swarm.ps1 exists."""
         # Create swarm.ps1 in mock folder
         (mock_project_folder / "swarm.ps1").write_text("# Mock swarm script")
@@ -108,6 +108,7 @@ class TestSwarmLaunch:
         with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
             mock_process = MagicMock()
             mock_process.pid = 12345
+            mock_process.poll.return_value = None
             mock_process.stdout = MagicMock()
             mock_process.stderr = MagicMock()
             mock_popen.return_value = mock_process

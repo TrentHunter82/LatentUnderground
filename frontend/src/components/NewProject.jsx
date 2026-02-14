@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createProject, launchSwarm, getTemplates, createTemplate } from '../lib/api'
 import { DEFAULT_TEMPLATE_PRESETS } from '../lib/constants'
 import { useToast } from './Toast'
 import FolderBrowser from './FolderBrowser'
 import TemplateManager from './TemplateManager'
+import { useTemplates, templateKeys } from '../hooks/useProjectQuery'
+import { useCreateProject, useLaunchSwarm, useCreateTemplate } from '../hooks/useMutations'
+import { useQueryClient } from '@tanstack/react-query'
 
 const complexityOptions = ['Simple', 'Medium', 'Complex']
 
@@ -20,9 +22,7 @@ const defaultForm = {
 
 export default function NewProject({ onProjectChange }) {
   const navigate = useNavigate()
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [templates, setTemplates] = useState([])
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [templateConfig, setTemplateConfig] = useState(null)
   const [form, setForm] = useState({ ...defaultForm })
@@ -30,19 +30,23 @@ export default function NewProject({ onProjectChange }) {
   const [showManager, setShowManager] = useState(false)
 
   const toast = useToast()
+  const queryClient = useQueryClient()
 
-  const refreshTemplates = () => {
-    getTemplates().then(setTemplates).catch((err) => console.warn('Failed to load templates:', err.message))
-  }
+  // TanStack Query: templates list
+  const { data: templates = [] } = useTemplates()
 
-  useEffect(() => { refreshTemplates() }, [])
+  // TanStack Query: mutations
+  const createProjectMutation = useCreateProject()
+  const launchSwarmMutation = useLaunchSwarm()
+  const createTemplateMutation = useCreateTemplate()
+
+  const loading = createProjectMutation.isPending || launchSwarmMutation.isPending
 
   const loadDefaultPresets = async () => {
     try {
       for (const preset of DEFAULT_TEMPLATE_PRESETS) {
-        await createTemplate(preset)
+        await createTemplateMutation.mutateAsync(preset)
       }
-      refreshTemplates()
       toast('Default templates loaded', 'success')
     } catch (err) {
       toast(`Failed to load presets: ${err.message}`, 'error', 4000, {
@@ -80,29 +84,28 @@ export default function NewProject({ onProjectChange }) {
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
+  const doSubmit = async () => {
     setError(null)
     try {
-      const project = await createProject(form)
+      const project = await createProjectMutation.mutateAsync(form)
       onProjectChange?.()
       navigate(`/projects/${project.id}`)
     } catch (err) {
       setError(err.message)
-      toast(err.message, 'error', 4000, { label: 'Retry', onClick: () => handleSubmit(e) })
-    } finally {
-      setLoading(false)
+      toast(err.message, 'error', 4000, { label: 'Retry', onClick: doSubmit })
     }
   }
 
-  const handleLaunchNew = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault()
-    setLoading(true)
+    doSubmit()
+  }
+
+  const doLaunchNew = async () => {
     setError(null)
     try {
-      const project = await createProject(form)
-      await launchSwarm({
+      const project = await createProjectMutation.mutateAsync(form)
+      await launchSwarmMutation.mutateAsync({
         project_id: project.id,
         resume: false,
         no_confirm: true,
@@ -113,10 +116,13 @@ export default function NewProject({ onProjectChange }) {
       navigate(`/projects/${project.id}`)
     } catch (err) {
       setError(err.message)
-      toast(err.message, 'error', 4000, { label: 'Retry', onClick: () => handleLaunchNew(e) })
-    } finally {
-      setLoading(false)
+      toast(err.message, 'error', 4000, { label: 'Retry', onClick: doLaunchNew })
     }
+  }
+
+  const handleLaunchNew = (e) => {
+    e.preventDefault()
+    doLaunchNew()
   }
 
   const inputClass = 'retro-input w-full rounded px-3 py-2 text-sm transition-colors'
@@ -129,7 +135,7 @@ export default function NewProject({ onProjectChange }) {
         <p className="text-sm text-zinc-500 mb-6">Configure and launch a new Claude swarm session.</p>
 
         {error && (
-          <div className="mb-4 px-4 py-2 rounded bg-signal-red/10 border border-signal-red/30 text-signal-red text-sm font-mono">
+          <div className="mb-4 px-4 py-2 rounded bg-signal-red/10 border border-signal-red/30 text-signal-red text-sm font-mono" role="alert">
             {error}
           </div>
         )}
@@ -137,7 +143,7 @@ export default function NewProject({ onProjectChange }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className={`${labelClass} mb-0`}>Start from Template</label>
+              <label htmlFor="template-select" className={`${labelClass} mb-0`}>Start from Template</label>
               <button
                 type="button"
                 onClick={() => setShowManager((v) => !v)}
@@ -149,6 +155,7 @@ export default function NewProject({ onProjectChange }) {
             {templates.length > 0 && (
               <>
                 <select
+                  id="template-select"
                   value={selectedTemplateId}
                   onChange={handleTemplateChange}
                   className={`${inputClass} cursor-pointer`}
@@ -184,36 +191,41 @@ export default function NewProject({ onProjectChange }) {
           </div>
 
           {showManager && (
-            <TemplateManager onTemplatesChange={setTemplates} />
+            <TemplateManager onTemplatesChange={() => queryClient.invalidateQueries({ queryKey: templateKeys.list() })} />
           )}
 
           <div>
-            <label className={labelClass}>Project Name</label>
+            <label htmlFor="project-name" className={labelClass}>Project Name</label>
             <input
+              id="project-name"
               className={inputClass}
               placeholder="My Awesome App"
               value={form.name}
               onChange={set('name')}
               required
+              aria-required="true"
             />
           </div>
 
           <div>
-            <label className={labelClass}>Goal</label>
+            <label htmlFor="project-goal" className={labelClass}>Goal</label>
             <textarea
+              id="project-goal"
               className={`${inputClass} min-h-20 resize-y`}
               placeholder="What should this project accomplish?"
               value={form.goal}
               onChange={set('goal')}
               rows={3}
               required
+              aria-required="true"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Project Type</label>
+              <label htmlFor="project-type" className={labelClass}>Project Type</label>
               <input
+                id="project-type"
                 className={inputClass}
                 placeholder="Web Application"
                 value={form.project_type}
@@ -221,8 +233,9 @@ export default function NewProject({ onProjectChange }) {
               />
             </div>
             <div>
-              <label className={labelClass}>Tech Stack</label>
+              <label htmlFor="tech-stack" className={labelClass}>Tech Stack</label>
               <input
+                id="tech-stack"
                 className={inputClass}
                 placeholder="React + FastAPI + SQLite"
                 value={form.tech_stack}
@@ -232,13 +245,14 @@ export default function NewProject({ onProjectChange }) {
           </div>
 
           <div>
-            <label className={labelClass}>Complexity</label>
-            <div className="flex flex-wrap gap-2">
+            <label id="complexity-label" className={labelClass}>Complexity</label>
+            <div className="flex flex-wrap gap-2" role="group" aria-labelledby="complexity-label">
               {complexityOptions.map((opt) => (
                 <button
                   key={opt}
                   type="button"
                   onClick={() => setForm((f) => ({ ...f, complexity: opt }))}
+                  aria-pressed={form.complexity === opt}
                   className={`px-3 sm:px-4 py-2 rounded text-sm font-medium transition-colors cursor-pointer font-mono ${
                     form.complexity === opt
                       ? 'btn-neon'
@@ -252,8 +266,9 @@ export default function NewProject({ onProjectChange }) {
           </div>
 
           <div>
-            <label className={labelClass}>Requirements</label>
+            <label htmlFor="requirements" className={labelClass}>Requirements</label>
             <textarea
+              id="requirements"
               className={`${inputClass} min-h-20 resize-y`}
               placeholder="Specific requirements, constraints, or notes..."
               value={form.requirements}
@@ -263,14 +278,16 @@ export default function NewProject({ onProjectChange }) {
           </div>
 
           <div>
-            <label className={labelClass}>Project Folder Path</label>
+            <label htmlFor="folder-path" className={labelClass}>Project Folder Path</label>
             <div className="flex gap-2">
               <input
+                id="folder-path"
                 className={`${inputClass} flex-1`}
                 placeholder="C:/Projects/my-app"
                 value={form.folder_path}
                 onChange={set('folder_path')}
                 required
+                aria-required="true"
               />
               <button
                 type="button"

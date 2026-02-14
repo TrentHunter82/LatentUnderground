@@ -264,7 +264,7 @@ class TestPaginationEdgeCases:
         resp = await client.get(f"/api/swarm/output/{pid}?limit=9999")
         assert resp.status_code in (200, 422)
         if resp.status_code == 200:
-            assert resp.json()["limit"] <= 500
+            assert resp.json()["limit"] <= 5000  # default LU_OUTPUT_BUFFER_LINES
 
     async def test_zero_limit_returns_no_lines(self, client, created_project):
         """Limit=0 should return empty lines or validation error."""

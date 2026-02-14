@@ -8,7 +8,7 @@ export default memo(function TaskProgress({ tasks }) {
   return (
     <div className="retro-panel retro-panel-glow rounded p-4">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-medium m-0 font-mono">Task Progress</h3>
+        <h2 className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-medium m-0 font-mono">Task Progress</h2>
         <span className="text-sm font-mono text-zinc-300">
           {done}/{total} <span className="text-zinc-500">({Math.round(percent)}%)</span>
         </span>

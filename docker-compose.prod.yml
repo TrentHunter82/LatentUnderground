@@ -2,6 +2,8 @@ services:
   latent-underground:
     build: .
     restart: unless-stopped
+    security_opt:
+      - "no-new-privileges:true"
     volumes:
       - lu-data:/app/data
       - lu-backups:/app/backend/backups
@@ -11,23 +13,32 @@ services:
       - LU_DB_PATH=/app/data/latent.db
       - LU_LOG_LEVEL=info
       - LU_LOG_FORMAT=json
-      - LU_API_KEY=${LU_API_KEY:-}
+      - LU_API_KEY=${LU_API_KEY:?LU_API_KEY must be set for production}
       - LU_RATE_LIMIT_RPM=30
       - LU_BACKUP_INTERVAL_HOURS=6
       - LU_BACKUP_KEEP=10
       - LU_LOG_RETENTION_DAYS=30
+      - LU_VACUUM_INTERVAL_HOURS=24
+      - LU_REQUEST_LOG=true
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
     networks:
       - lu-net
 
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
+    security_opt:
+      - "no-new-privileges:true"
     ports:
       - "${LU_PUBLIC_PORT:-443}:443"
       - "${LU_HTTP_PORT:-80}:80"
@@ -38,6 +49,11 @@ services:
     depends_on:
       latent-underground:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
     networks:
       - lu-net
 

@@ -1,42 +1,103 @@
-import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
-import { getLogs, searchLogs } from '../lib/api'
+import { useState, useEffect, useRef, useCallback, useMemo, memo, useDeferredValue } from 'react'
 import { AGENT_NAMES, AGENT_LOG_COLORS } from '../lib/constants'
-import { useDebounce } from '../hooks/useDebounce'
 import { LogViewerSkeleton } from './Skeleton'
 import { useSafeToast } from './Toast'
+import { useLogs, useLogSearch } from '../hooks/useSwarmQuery'
 
 const levels = ['all', 'INFO', 'WARN', 'ERROR', 'DEBUG']
 const levelRegex = /\b(INFO|WARN|ERROR|DEBUG)\b/
 const ROW_HEIGHT = 22
 const OVERSCAN = 15
 const VIRTUALIZE_THRESHOLD = 200
+const FILTER_STORAGE_KEY = 'lu_log_filters'
+
+function saveLogFilters(projectId, filters) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}')
+    stored[projectId] = filters
+    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(stored))
+  } catch { /* ignore */ }
+}
+
+function loadLogFilters(projectId) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}')
+    return stored[projectId] || null
+  } catch { return null }
+}
+
+function HighlightedText({ text, search }) {
+  if (!search) return <span className="text-zinc-400">{text}</span>
+
+  const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const splitRegex = new RegExp(`(${escaped})`, 'gi')
+  const matchRegex = new RegExp(`^${escaped}$`, 'i')
+  const parts = text.split(splitRegex)
+
+  if (parts.length === 1) return <span className="text-zinc-400">{text}</span>
+
+  return (
+    <span className="text-zinc-400">
+      {parts.map((part, i) =>
+        matchRegex.test(part) ? (
+          <mark key={i} className="bg-crt-amber/30 text-crt-amber rounded-sm px-0.5">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </span>
+  )
+}
 
 export default memo(function LogViewer({ projectId, wsEvents }) {
   const toast = useSafeToast()
   const [logs, setLogs] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('all')
+  const savedFilters = useMemo(() => loadLogFilters(projectId), [projectId])
+  const [filter, setFilter] = useState(savedFilters?.agent || 'all')
   const [autoScroll, setAutoScroll] = useState(true)
-  const [searchText, setSearchText] = useState('')
-  const [levelFilter, setLevelFilter] = useState('all')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
-  const [isSearching, setIsSearching] = useState(false)
+  const [searchText, setSearchText] = useState(savedFilters?.search || '')
+  const [levelFilter, setLevelFilter] = useState(savedFilters?.level || 'all')
+  const [fromDate, setFromDate] = useState(savedFilters?.fromDate || '')
+  const [toDate, setToDate] = useState(savedFilters?.toDate || '')
   const containerRef = useRef(null)
   const lastWsTime = useRef(0)
   const [isLive, setIsLive] = useState(false)
   const [scrollTop, setScrollTop] = useState(0)
   const [containerHeight, setContainerHeight] = useState(400)
-  const debouncedSearch = useDebounce(searchText, 300)
+  const debouncedSearch = useDeferredValue(searchText)
+
+  // Persist filters to localStorage
+  useEffect(() => {
+    saveLogFilters(projectId, { agent: filter, search: searchText, level: levelFilter, fromDate, toDate })
+  }, [projectId, filter, searchText, levelFilter, fromDate, toDate])
 
   const hasDateFilter = fromDate || toDate
-  const hasServerFilter = hasDateFilter
 
-  // Load initial logs (no date filters)
-  const loadLogs = useCallback(async () => {
-    try {
-      const data = await getLogs(projectId, 200)
-      const flat = (data.logs || []).flatMap((entry) =>
+  // Build search params for TanStack Query
+  const searchParams = useMemo(() => {
+    const params = {}
+    if (debouncedSearch) params.q = debouncedSearch
+    if (filter !== 'all') params.agent = filter
+    if (levelFilter !== 'all') params.level = levelFilter
+    if (fromDate) params.from_date = fromDate
+    if (toDate) params.to_date = toDate
+    return params
+  }, [debouncedSearch, filter, levelFilter, fromDate, toDate])
+
+  // TanStack Query: initial log load (when no date filters)
+  const { data: logsData, isLoading: logsLoading, error: logsError } = useLogs(projectId, 200, {
+    enabled: !!projectId && !hasDateFilter,
+  })
+
+  // TanStack Query: server-side search (when date filters active)
+  const { data: searchData, isFetching: isSearching, error: searchError } = useLogSearch(
+    projectId, searchParams, { enabled: !!projectId && !!hasDateFilter }
+  )
+
+  // Sync TanStack Query data to local state for WS appending
+  useEffect(() => {
+    if (!hasDateFilter && logsData) {
+      const flat = (logsData.logs || []).flatMap((entry) =>
         entry.lines.map((line, i) => ({
           id: `${entry.agent}-${i}-${Date.now()}`,
           agent: entry.agent,
@@ -44,47 +105,27 @@ export default memo(function LogViewer({ projectId, wsEvents }) {
         }))
       )
       setLogs(flat)
-    } catch (e) {
-      console.warn('Failed to load logs:', e)
-      toast(`Failed to load logs: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: loadLogs })
-    } finally {
-      setLoading(false)
     }
-  }, [projectId])
+  }, [logsData, hasDateFilter])
 
-  // Server-side search (when date filters are active)
-  const runSearch = useCallback(async () => {
-    setIsSearching(true)
-    try {
-      const params = {}
-      if (debouncedSearch) params.q = debouncedSearch
-      if (filter !== 'all') params.agent = filter
-      if (levelFilter !== 'all') params.level = levelFilter
-      if (fromDate) params.from_date = fromDate
-      if (toDate) params.to_date = toDate
-
-      const data = await searchLogs(projectId, params)
-      const results = (data.results || []).map((r, i) => ({
+  useEffect(() => {
+    if (hasDateFilter && searchData) {
+      const results = (searchData.results || []).map((r, i) => ({
         id: `search-${i}-${Date.now()}`,
         agent: r.agent,
         text: r.text,
       }))
       setLogs(results)
-    } catch (e) {
-      console.warn('Failed to search logs:', e)
-      toast(`Log search failed: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: runSearch })
-    } finally {
-      setIsSearching(false)
     }
-  }, [projectId, debouncedSearch, filter, levelFilter, fromDate, toDate])
+  }, [searchData, hasDateFilter])
 
+  // Show errors via toast
   useEffect(() => {
-    if (hasServerFilter) {
-      runSearch()
-    } else {
-      loadLogs()
-    }
-  }, [hasServerFilter, runSearch, loadLogs])
+    if (logsError) toast(`Failed to load logs: ${logsError.message}`, 'error')
+  }, [logsError])
+  useEffect(() => {
+    if (searchError) toast(`Log search failed: ${searchError.message}`, 'error')
+  }, [searchError])
 
   // Append WebSocket log events (only when not in search mode)
   useEffect(() => {
@@ -92,7 +133,7 @@ export default memo(function LogViewer({ projectId, wsEvents }) {
       lastWsTime.current = Date.now()
       setIsLive(true)
 
-      if (!hasServerFilter) {
+      if (!hasDateFilter) {
         const newEntries = wsEvents.lines.map((line, i) => ({
           id: `${wsEvents.agent}-ws-${Date.now()}-${i}`,
           agent: wsEvents.agent,
@@ -101,7 +142,7 @@ export default memo(function LogViewer({ projectId, wsEvents }) {
         setLogs((prev) => [...prev, ...newEntries].slice(-1000))
       }
     }
-  }, [wsEvents, hasServerFilter])
+  }, [wsEvents, hasDateFilter])
 
   // LIVE indicator timeout
   useEffect(() => {
@@ -115,7 +156,7 @@ export default memo(function LogViewer({ projectId, wsEvents }) {
 
   // Client-side filtering (only when not using server search)
   const filtered = useMemo(() => {
-    if (hasServerFilter) return logs
+    if (hasDateFilter) return logs
     return logs.filter((l) => {
       if (filter !== 'all' && l.agent !== filter) return false
       if (levelFilter !== 'all') {
@@ -127,7 +168,7 @@ export default memo(function LogViewer({ projectId, wsEvents }) {
       }
       return true
     })
-  }, [logs, filter, levelFilter, debouncedSearch, hasServerFilter])
+  }, [logs, filter, levelFilter, debouncedSearch, hasDateFilter])
 
   // Auto-scroll
   useEffect(() => {
@@ -178,7 +219,7 @@ export default memo(function LogViewer({ projectId, wsEvents }) {
     URL.revokeObjectURL(url)
   }
 
-  if (loading) {
+  if (logsLoading && !hasDateFilter) {
     return <LogViewerSkeleton />
   }
 
@@ -212,7 +253,7 @@ export default memo(function LogViewer({ projectId, wsEvents }) {
 
         <div className="flex-1" />
 
-        {isLive && !hasServerFilter && (
+        {isLive && !hasDateFilter && (
           <span className="flex items-center gap-1 text-[10px] font-mono text-crt-green">
             <span className="w-1.5 h-1.5 rounded-full bg-crt-green animate-pulse" />
             LIVE
@@ -326,7 +367,7 @@ export default memo(function LogViewer({ projectId, wsEvents }) {
               return (
                 <div key={entry.id} className={`py-0.5 px-2 rounded ${color.bg}`}>
                   <span className={`font-semibold ${color.label}`}>[{entry.agent}]</span>{' '}
-                  <span className="text-zinc-400">{entry.text}</span>
+                  <HighlightedText text={entry.text} search={debouncedSearch} />
                 </div>
               )
             })}
@@ -351,7 +392,7 @@ export default memo(function LogViewer({ projectId, wsEvents }) {
                   }}
                 >
                   <span className={`font-semibold ${color.label} shrink-0`}>[{entry.agent}]</span>
-                  <span className="text-zinc-400 ml-1 truncate">{entry.text}</span>
+                  <span className="ml-1 truncate"><HighlightedText text={entry.text} search={debouncedSearch} /></span>
                 </div>
               )
             })}

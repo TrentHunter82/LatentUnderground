@@ -1,9 +1,9 @@
-﻿{
-    "TechStack":  "Python FastAPI + React Vite Tailwind",
-    "Complexity":  "Complex",
-    "ProjectType":  "Custom Project",
-    "AgentCount":  4,
-    "Goal":  "Harden and elevate Latent Underground from working prototype to production-grade product",
-    "StartTime":  "2026-02-06 18:30:04",
-    "Requirements":  "Existing codebase in backend/ and frontend/ - DO NOT start from scratch. Build on what exists"
+{
+    "TechStack": "Python FastAPI + React Vite Tailwind",
+    "Complexity": "Complex",
+    "ProjectType": "Custom Project",
+    "AgentCount": 4,
+    "Goal": "Make Latent Underground fully controllable from the web UI - no terminal management needed. Polish per-agent orchestration, fix bugs, improve reliability.",
+    "StartTime": "2026-02-11 05:30:00",
+    "Requirements": "Existing codebase in backend/ and frontend/ - DO NOT start from scratch. Build on what exists. Per-agent orchestration is newly implemented - the backend now spawns each agent as a subprocess and captures output. The web UI has agent sub-tabs, per-agent stop, and stdin input. Focus on making the full launch→monitor→control→stop flow work seamlessly from the browser with zero terminal windows."
 }

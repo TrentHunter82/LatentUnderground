@@ -13,7 +13,7 @@ import pytest
 class TestFullProjectLifecycle:
     """Full project lifecycle: create, configure, launch, stop, verify history/stats, delete."""
 
-    async def test_complete_lifecycle(self, client, mock_project_folder):
+    async def test_complete_lifecycle(self, client, mock_project_folder, mock_launch_deps):
         """The complete happy path: every major API in sequence."""
         # -- 1. Create project --
         create_resp = await client.post("/api/projects", json={
@@ -65,6 +65,7 @@ class TestFullProjectLifecycle:
         with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
             mock_process = MagicMock()
             mock_process.pid = 12345
+            mock_process.poll.return_value = None
             mock_process.stdout = MagicMock()
             mock_process.stderr = MagicMock()
             mock_popen.return_value = mock_process
@@ -79,7 +80,6 @@ class TestFullProjectLifecycle:
         # -- 6. Verify project status is now 'running' --
         project_resp = await client.get(f"/api/projects/{pid}")
         assert project_resp.json()["status"] == "running"
-        assert project_resp.json()["swarm_pid"] == 12345
 
         # -- 7. Check history shows a running run --
         history_resp = await client.get(f"/api/swarm/history/{pid}")
@@ -137,7 +137,7 @@ class TestFullProjectLifecycle:
         get_resp = await client.get(f"/api/projects/{pid}")
         assert get_resp.status_code == 404
 
-    async def test_multiple_runs_accumulate_stats(self, client, mock_project_folder):
+    async def test_multiple_runs_accumulate_stats(self, client, mock_project_folder, mock_launch_deps):
         """Multiple launch/stop cycles accumulate in history and stats."""
         (mock_project_folder / "swarm.ps1").write_text("# Mock")
 
@@ -154,6 +154,7 @@ class TestFullProjectLifecycle:
             with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
                 mock_process = MagicMock()
                 mock_process.pid = 10000 + i
+                mock_process.poll.return_value = None
                 mock_process.stdout = MagicMock()
                 mock_process.stderr = MagicMock()
                 mock_process.wait = MagicMock()

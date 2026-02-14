@@ -9,7 +9,7 @@ import pytest
 class TestTemplateLifecycle:
     """Create template -> apply to project -> launch with template config -> verify."""
 
-    async def test_template_to_project_flow(self, client, mock_project_folder):
+    async def test_template_to_project_flow(self, client, mock_project_folder, mock_launch_deps):
         """Full flow: create template, create project with template config, launch, verify."""
         # 1. Create template
         tmpl_resp = await client.post("/api/templates", json={
@@ -57,6 +57,7 @@ class TestTemplateLifecycle:
         with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
             mock_proc = MagicMock()
             mock_proc.pid = 55555
+            mock_proc.poll.return_value = None
             mock_proc.stdout = MagicMock()
             mock_proc.stderr = MagicMock()
             mock_popen.return_value = mock_proc
@@ -211,7 +212,7 @@ class TestOutputPaginationFlow:
 
     async def test_paginated_output_polling(self, client, mock_project_folder):
         """Simulate the frontend polling pattern with pagination."""
-        from app.routes.swarm import _buffers_lock, _output_buffers
+        from app.routes.swarm import _buffers_lock, _project_output_buffers
 
         folder = str(mock_project_folder).replace("\\", "/")
         (mock_project_folder / "swarm.ps1").write_text("# mock")
@@ -227,7 +228,7 @@ class TestOutputPaginationFlow:
 
         # Simulate output buffer (as if swarm is running)
         with _buffers_lock:
-            _output_buffers[pid] = [f"[stdout] line {i}" for i in range(100)]
+            _project_output_buffers[pid] = [f"[stdout] line {i}" for i in range(100)]
 
         try:
             # First page
@@ -255,11 +256,11 @@ class TestOutputPaginationFlow:
         finally:
             # Cleanup
             with _buffers_lock:
-                _output_buffers.pop(pid, None)
+                _project_output_buffers.pop(pid, None)
 
     async def test_incremental_polling_with_growing_buffer(self, client, mock_project_folder):
         """Simulate realistic frontend polling where new lines appear between polls."""
-        from app.routes.swarm import _buffers_lock, _output_buffers
+        from app.routes.swarm import _buffers_lock, _project_output_buffers
 
         folder = str(mock_project_folder).replace("\\", "/")
         (mock_project_folder / "swarm.ps1").write_text("# mock")
@@ -274,7 +275,7 @@ class TestOutputPaginationFlow:
         try:
             # Start with 5 lines
             with _buffers_lock:
-                _output_buffers[pid] = [f"[stdout] batch1-{i}" for i in range(5)]
+                _project_output_buffers[pid] = [f"[stdout] batch1-{i}" for i in range(5)]
 
             poll1 = (await client.get(f"/api/swarm/output/{pid}?offset=0&limit=100")).json()
             assert len(poll1["lines"]) == 5
@@ -283,7 +284,7 @@ class TestOutputPaginationFlow:
 
             # More output arrives
             with _buffers_lock:
-                _output_buffers[pid].extend([f"[stdout] batch2-{i}" for i in range(3)])
+                _project_output_buffers[pid].extend([f"[stdout] batch2-{i}" for i in range(3)])
 
             poll2 = (await client.get(
                 f"/api/swarm/output/{pid}?offset={poll1['next_offset']}&limit=100"
@@ -293,7 +294,7 @@ class TestOutputPaginationFlow:
             assert poll2["next_offset"] == 8
         finally:
             with _buffers_lock:
-                _output_buffers.pop(pid, None)
+                _project_output_buffers.pop(pid, None)
 
     async def test_pagination_response_structure(self, client, mock_project_folder):
         """Verify all expected fields are present in paginated output response."""
@@ -333,7 +334,7 @@ class TestSearchAndFilterIntegration:
         for name, status in [
             ("Alpha API", "created"),
             ("Beta Backend", "running"),
-            ("Gamma CLI", "completed"),
+            ("Gamma CLI", "stopped"),
         ]:
             resp = await client.post("/api/projects", json={
                 "name": name,
@@ -356,10 +357,10 @@ class TestSearchAndFilterIntegration:
         assert any(p["name"] == "Beta Backend" for p in results)
 
         # Filter by status
-        resp = await client.get("/api/projects?status=completed")
+        resp = await client.get("/api/projects?status=stopped")
         assert resp.status_code == 200
         results = resp.json()
-        assert all(p["status"] == "completed" for p in results)
+        assert all(p["status"] == "stopped" for p in results)
         assert any(p["name"] == "Gamma CLI" for p in results)
 
         # Sort by name
@@ -379,10 +380,10 @@ class TestSearchAndFilterIntegration:
             "name": "API Client", "goal": "Build client", "folder_path": folder,
         })
         pid2 = r2.json()["id"]
-        await client.patch(f"/api/projects/{pid2}", json={"status": "completed"})
+        await client.patch(f"/api/projects/{pid2}", json={"status": "stopped"})
 
-        # Search "API" + status "completed" should find only API Client
-        resp = await client.get("/api/projects?search=API&status=completed")
+        # Search "API" + status "stopped" should find only API Client
+        resp = await client.get("/api/projects?search=API&status=stopped")
         assert resp.status_code == 200
         results = resp.json()
         assert len(results) == 1
@@ -417,7 +418,7 @@ class TestSearchAndFilterIntegration:
 class TestAnalyticsIntegration:
     """Test analytics endpoint with real project data."""
 
-    async def test_analytics_with_runs(self, client, mock_project_folder):
+    async def test_analytics_with_runs(self, client, mock_project_folder, mock_launch_deps):
         """Create project, run multiple launch/stop cycles, check analytics."""
         folder = str(mock_project_folder).replace("\\", "/")
         (mock_project_folder / "swarm.ps1").write_text("# mock")
@@ -435,6 +436,7 @@ class TestAnalyticsIntegration:
             with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
                 mock_proc = MagicMock()
                 mock_proc.pid = 30000 + i
+                mock_proc.poll.return_value = None
                 mock_proc.stdout = MagicMock()
                 mock_proc.stderr = MagicMock()
                 mock_popen.return_value = mock_proc
@@ -474,7 +476,7 @@ class TestAnalyticsIntegration:
         assert data["run_trends"] == []
         assert data["success_rate"] is None
 
-    async def test_stats_endpoint_matches_analytics(self, client, mock_project_folder):
+    async def test_stats_endpoint_matches_analytics(self, client, mock_project_folder, mock_launch_deps):
         """Stats and analytics endpoints both reflect the same run data."""
         folder = str(mock_project_folder).replace("\\", "/")
         (mock_project_folder / "swarm.ps1").write_text("# mock")
@@ -490,6 +492,7 @@ class TestAnalyticsIntegration:
         with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
             mock_proc = MagicMock()
             mock_proc.pid = 40000
+            mock_proc.poll.return_value = None
             mock_proc.stdout = MagicMock()
             mock_proc.stderr = MagicMock()
             mock_popen.return_value = mock_proc
@@ -510,7 +513,7 @@ class TestAnalyticsIntegration:
 class TestFullProjectLifecycle:
     """End-to-end: create -> configure -> launch -> monitor -> stop -> analytics -> delete."""
 
-    async def test_complete_lifecycle(self, client, mock_project_folder):
+    async def test_complete_lifecycle(self, client, mock_project_folder, mock_launch_deps):
         """Full lifecycle from project creation to deletion."""
         folder = str(mock_project_folder).replace("\\", "/")
         (mock_project_folder / "swarm.ps1").write_text("# mock")
@@ -539,6 +542,7 @@ class TestFullProjectLifecycle:
         with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
             mock_proc = MagicMock()
             mock_proc.pid = 99999
+            mock_proc.poll.return_value = None
             mock_proc.stdout = MagicMock()
             mock_proc.stderr = MagicMock()
             mock_popen.return_value = mock_proc
@@ -596,7 +600,7 @@ class TestFullProjectLifecycle:
         gone_resp = await client.get(f"/api/projects/{pid}")
         assert gone_resp.status_code == 404
 
-    async def test_project_update_then_launch(self, client, mock_project_folder):
+    async def test_project_update_then_launch(self, client, mock_project_folder, mock_launch_deps):
         """Update project metadata, then launch swarm and verify it runs."""
         folder = str(mock_project_folder).replace("\\", "/")
         (mock_project_folder / "swarm.ps1").write_text("# mock")
@@ -622,6 +626,7 @@ class TestFullProjectLifecycle:
         with patch("app.routes.swarm.subprocess.Popen") as mock_popen:
             mock_proc = MagicMock()
             mock_proc.pid = 77777
+            mock_proc.poll.return_value = None
             mock_proc.stdout = MagicMock()
             mock_proc.stderr = MagicMock()
             mock_popen.return_value = mock_proc

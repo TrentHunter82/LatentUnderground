@@ -1,9 +1,25 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback, useDeferredValue } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { deleteProject, archiveProject, unarchiveProject } from '../lib/api'
 import ConfirmDialog from './ConfirmDialog'
 import { useToast } from './Toast'
-import { useDebounce } from '../hooks/useDebounce'
+
+// Preload route chunks on hover (fires import once per route, cached by bundler)
+let _projectViewPreloaded = false
+function preloadProjectView() {
+  if (_projectViewPreloaded) return
+  _projectViewPreloaded = true
+  import('./ProjectView').catch(() => { _projectViewPreloaded = false })
+}
+
+let _newProjectPreloaded = false
+function preloadNewProject() {
+  if (_newProjectPreloaded) return
+  _newProjectPreloaded = true
+  import('./NewProject').catch(() => { _newProjectPreloaded = false })
+}
+
+const ORDER_KEY = 'lu_project_order'
 
 const statusColors = {
   running: 'bg-emerald-500',
@@ -17,9 +33,69 @@ const statusGlow = {
   created: 'led-warning',
 }
 
+// Shape icons for color-independent status (WCAG 1.4.1)
+function ProjectStatusIcon({ status }) {
+  const size = 8
+  switch (status) {
+    case 'running':
+      // Filled circle (running)
+      return (
+        <svg width={size} height={size} viewBox="0 0 8 8" className="shrink-0 text-emerald-500" aria-hidden="true">
+          <circle cx="4" cy="4" r="3.5" fill="currentColor" />
+        </svg>
+      )
+    case 'stopped':
+      // Hollow circle (stopped)
+      return (
+        <svg width={size} height={size} viewBox="0 0 8 8" className="shrink-0 text-zinc-500" aria-hidden="true">
+          <circle cx="4" cy="4" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+      )
+    case 'created':
+      // Triangle (created/new)
+      return (
+        <svg width={size} height={size} viewBox="0 0 8 8" className="shrink-0 text-amber-500" aria-hidden="true">
+          <path d="M4 1L7 7H1z" fill="currentColor" />
+        </svg>
+      )
+    default:
+      // Diamond (unknown)
+      return (
+        <svg width={size} height={size} viewBox="0 0 8 8" className="shrink-0 text-zinc-600" aria-hidden="true">
+          <path d="M4 1L7 4L4 7L1 4z" fill="currentColor" />
+        </svg>
+      )
+  }
+}
+
 const statusFilters = ['all', 'running', 'stopped', 'created']
 
-export default function Sidebar({ projects, onRefresh, collapsed, onToggle, showArchived, onShowArchivedChange }) {
+function loadOrder() {
+  try {
+    const stored = localStorage.getItem(ORDER_KEY)
+    return stored ? JSON.parse(stored) : []
+  } catch {
+    return []
+  }
+}
+
+function saveOrder(order) {
+  try {
+    localStorage.setItem(ORDER_KEY, JSON.stringify(order))
+  } catch {}
+}
+
+function sortByOrder(projects, order) {
+  if (!order.length) return projects
+  const indexMap = new Map(order.map((id, i) => [id, i]))
+  return [...projects].sort((a, b) => {
+    const ai = indexMap.has(a.id) ? indexMap.get(a.id) : Infinity
+    const bi = indexMap.has(b.id) ? indexMap.get(b.id) : Infinity
+    return ai - bi
+  })
+}
+
+export default function Sidebar({ projects, onRefresh, collapsed, onToggle, showArchived, onShowArchivedChange, projectHealth }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
@@ -27,7 +103,16 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle, show
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const debouncedSearch = useDebounce(search, 300)
+  const debouncedSearch = useDeferredValue(search)
+
+  // Drag-and-drop state
+  const [customOrder, setCustomOrder] = useState(loadOrder)
+  const dragItem = useRef(null)
+  const dragOverItem = useRef(null)
+  const [dragOverId, setDragOverId] = useState(null)
+
+  const isFiltering = statusFilter !== 'all' || !!debouncedSearch
+  const canDrag = !isFiltering
 
   const filteredProjects = projects.filter((p) => {
     if (statusFilter !== 'all' && p.status !== statusFilter) return false
@@ -38,6 +123,72 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle, show
     return true
   })
 
+  // Apply custom order only when not filtering
+  const orderedProjects = canDrag ? sortByOrder(filteredProjects, customOrder) : filteredProjects
+
+  const handleDragStart = useCallback((e, projectId) => {
+    dragItem.current = projectId
+    e.dataTransfer.effectAllowed = 'move'
+    // Make the drag image slightly transparent
+    if (e.target) {
+      e.target.style.opacity = '0.5'
+    }
+  }, [])
+
+  const handleDragEnd = useCallback((e) => {
+    if (e.target) {
+      e.target.style.opacity = '1'
+    }
+    setDragOverId(null)
+
+    if (dragItem.current != null && dragOverItem.current != null && dragItem.current !== dragOverItem.current) {
+      // Compute new order from current ordered projects
+      const currentIds = orderedProjects.map(p => p.id)
+      const fromIdx = currentIds.indexOf(dragItem.current)
+      const toIdx = currentIds.indexOf(dragOverItem.current)
+
+      if (fromIdx !== -1 && toIdx !== -1) {
+        const newOrder = [...currentIds]
+        newOrder.splice(fromIdx, 1)
+        newOrder.splice(toIdx, 0, dragItem.current)
+        setCustomOrder(newOrder)
+        saveOrder(newOrder)
+      }
+    }
+
+    dragItem.current = null
+    dragOverItem.current = null
+  }, [orderedProjects])
+
+  const handleDragOver = useCallback((e, projectId) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    dragOverItem.current = projectId
+    setDragOverId(projectId)
+  }, [])
+
+  const handleDragLeave = useCallback(() => {
+    setDragOverId(null)
+  }, [])
+
+  // Preload ProjectView chunk on hover for faster navigation
+  const handleProjectHover = useCallback(() => {
+    preloadProjectView()
+  }, [])
+
+  // Keyboard reorder: move a project up or down in the list
+  const handleMoveProject = useCallback((projectId, direction) => {
+    const currentIds = orderedProjects.map(p => p.id)
+    const idx = currentIds.indexOf(projectId)
+    if (idx === -1) return
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (targetIdx < 0 || targetIdx >= currentIds.length) return
+    const newOrder = [...currentIds]
+    ;[newOrder[idx], newOrder[targetIdx]] = [newOrder[targetIdx], newOrder[idx]]
+    setCustomOrder(newOrder)
+    saveOrder(newOrder)
+  }, [orderedProjects])
+
   return (
     <>
       {/* Mobile overlay */}
@@ -45,6 +196,7 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle, show
         <div
           className="fixed inset-0 bg-black/60 z-20 lg:hidden"
           onClick={onToggle}
+          aria-hidden="true"
         />
       )}
 
@@ -74,6 +226,8 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle, show
         <div className="p-3">
           <button
             onClick={() => { navigate('/projects/new'); onToggle?.() }}
+            onMouseEnter={preloadNewProject}
+            onFocus={preloadNewProject}
             className="btn-neon w-full py-2 px-3 rounded text-sm whitespace-nowrap"
           >
             + New Project
@@ -119,8 +273,11 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle, show
 
         {/* Project List */}
         <div className="flex-1 overflow-y-auto px-2">
-          <div className="px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-medium font-mono">
-            Projects
+          <div className="px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-medium font-mono flex items-center justify-between">
+            <span>Projects</span>
+            {canDrag && projects.length > 1 && (
+              <span className="text-[9px] text-zinc-700 normal-case tracking-normal">drag to reorder</span>
+            )}
           </div>
           {projects.length === 0 && (
             <div className="px-3 py-4 text-sm text-zinc-600 text-center">
@@ -132,28 +289,104 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle, show
               No matching projects
             </div>
           )}
-          {filteredProjects.map((p) => {
+          {orderedProjects.map((p) => {
             const isArchived = !!p.archived_at
+            const isDragOver = dragOverId === p.id && dragItem.current !== p.id
             return (
-            <div key={p.id} className={`group relative mb-0.5 ${isArchived ? 'opacity-50' : ''}`}>
-              <Link
-                to={`/projects/${p.id}`}
-                className={`block px-3 py-2 pr-14 rounded no-underline transition-colors ${
-                  activeId === p.id
-                    ? 'bg-retro-grid text-zinc-100 border-l-2 border-crt-green'
-                    : 'text-zinc-400 hover:bg-retro-grid/50 hover:text-zinc-200'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${statusColors[p.status] || 'bg-zinc-600'} ${statusGlow[p.status] || ''}`} aria-label={`Status: ${p.status || 'unknown'}`} />
-                  <span className="text-sm truncate font-mono">{p.name}</span>
-                  {isArchived && (
-                    <span className="text-[8px] font-mono uppercase tracking-wider text-crt-amber/70 bg-crt-amber/10 px-1 py-0.5 rounded shrink-0">Archived</span>
-                  )}
-                </div>
-                <div className="ml-4 text-[11px] text-zinc-600 truncate">{p.goal}</div>
-              </Link>
-              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div
+              key={p.id}
+              className={`group relative mb-0.5 ${isArchived ? 'opacity-50' : ''} ${isDragOver ? 'border-t-2 border-crt-green' : 'border-t-2 border-transparent'}`}
+              draggable={canDrag}
+              onDragStart={(e) => handleDragStart(e, p.id)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e) => handleDragOver(e, p.id)}
+              onDragLeave={handleDragLeave}
+            >
+              <div className="flex items-center">
+                {canDrag && (
+                  <div className="shrink-0 flex flex-col items-center gap-0">
+                    <div
+                      className="w-4 flex items-center justify-center cursor-grab opacity-0 group-hover:opacity-60 transition-opacity text-zinc-600"
+                      aria-hidden="true"
+                    >
+                      <svg width="8" height="12" viewBox="0 0 8 12" fill="currentColor">
+                        <circle cx="2" cy="2" r="1" />
+                        <circle cx="6" cy="2" r="1" />
+                        <circle cx="2" cy="6" r="1" />
+                        <circle cx="6" cy="6" r="1" />
+                        <circle cx="2" cy="10" r="1" />
+                        <circle cx="6" cy="10" r="1" />
+                      </svg>
+                    </div>
+                    <div className="flex flex-col opacity-0 focus-within:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleMoveProject(p.id, 'up')}
+                        disabled={orderedProjects.indexOf(p) === 0}
+                        className="w-4 h-4 flex items-center justify-center text-zinc-600 hover:text-crt-green focus:text-crt-green bg-transparent border-0 cursor-pointer disabled:opacity-30 disabled:cursor-default p-0 focus:outline-none focus:ring-1 focus:ring-crt-green rounded"
+                        aria-label={`Move ${p.name} up`}
+                        title="Move up"
+                      >
+                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M1 5l3-3 3 3" /></svg>
+                      </button>
+                      <button
+                        onClick={() => handleMoveProject(p.id, 'down')}
+                        disabled={orderedProjects.indexOf(p) === orderedProjects.length - 1}
+                        className="w-4 h-4 flex items-center justify-center text-zinc-600 hover:text-crt-green focus:text-crt-green bg-transparent border-0 cursor-pointer disabled:opacity-30 disabled:cursor-default p-0 focus:outline-none focus:ring-1 focus:ring-crt-green rounded"
+                        aria-label={`Move ${p.name} down`}
+                        title="Move down"
+                      >
+                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M1 3l3 3 3-3" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <Link
+                  to={`/projects/${p.id}`}
+                  onMouseEnter={handleProjectHover}
+                  onFocus={handleProjectHover}
+                  className={`block flex-1 px-3 py-2 ${canDrag ? 'pr-14' : 'pr-14'} rounded no-underline transition-colors ${
+                    activeId === p.id
+                      ? 'bg-retro-grid text-zinc-100 border-l-2 border-crt-green'
+                      : 'text-zinc-400 hover:bg-retro-grid/50 hover:text-zinc-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <ProjectStatusIcon status={p.status} />
+                    <span className="sr-only">{`Status: ${p.status || 'unknown'}`}</span>
+                    <span className="text-sm truncate font-mono">{p.name}</span>
+                    {projectHealth?.[p.id] && projectHealth[p.id] !== 'gray' && (
+                      <span className="relative group/health inline-flex items-center gap-0.5 shrink-0">
+                        {projectHealth[p.id] === 'green' ? (
+                          <svg width="7" height="7" viewBox="0 0 7 7" aria-hidden="true" className="text-crt-green">
+                            <circle cx="3.5" cy="3.5" r="3" fill="currentColor" />
+                          </svg>
+                        ) : projectHealth[p.id] === 'yellow' ? (
+                          <svg width="7" height="7" viewBox="0 0 7 7" aria-hidden="true" className="text-signal-amber">
+                            <path d="M3.5 0.5L6.5 6H0.5z" fill="currentColor" />
+                          </svg>
+                        ) : (
+                          <svg width="7" height="7" viewBox="0 0 7 7" aria-hidden="true" className="text-signal-red">
+                            <path d="M3.5 0.5L6.5 3.5L3.5 6.5L0.5 3.5z" fill="currentColor" />
+                          </svg>
+                        )}
+                        <span className="sr-only">{`Health: ${
+                          projectHealth[p.id] === 'green' ? 'Healthy' :
+                          projectHealth[p.id] === 'yellow' ? 'Warning' : 'Critical'
+                        }`}</span>
+                        <span className="hidden group-hover/health:block absolute left-full ml-1 bg-retro-dark border border-retro-border rounded px-1.5 py-0.5 text-[9px] font-mono text-zinc-400 whitespace-nowrap z-50 shadow-lg">
+                          {projectHealth[p.id] === 'green' ? 'Healthy' :
+                           projectHealth[p.id] === 'yellow' ? 'Warning' : 'Critical'}
+                        </span>
+                      </span>
+                    )}
+                    {isArchived && (
+                      <span className="text-[8px] font-mono uppercase tracking-wider text-crt-amber/70 bg-crt-amber/10 px-1 py-0.5 rounded shrink-0">Archived</span>
+                    )}
+                  </div>
+                  <div className={`${canDrag ? 'ml-4' : 'ml-4'} text-[11px] text-zinc-600 truncate`}>{p.goal}</div>
+                </Link>
+              </div>
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                 <button
                   onClick={async (e) => {
                     e.preventDefault(); e.stopPropagation()
@@ -170,7 +403,7 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle, show
                       toast(`${isArchived ? 'Unarchive' : 'Archive'} failed: ${err.message}`, 'error')
                     }
                   }}
-                  className="p-1 rounded text-zinc-600 hover:text-crt-amber hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
+                  className="p-2 rounded text-zinc-600 hover:text-crt-amber hover:bg-retro-grid focus:text-crt-amber focus:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-crt-amber min-w-[32px] min-h-[32px] flex items-center justify-center"
                   aria-label={`${isArchived ? 'Unarchive' : 'Archive'} ${p.name}`}
                   title={`${isArchived ? 'Unarchive' : 'Archive'} ${p.name}`}
                 >
@@ -182,7 +415,7 @@ export default function Sidebar({ projects, onRefresh, collapsed, onToggle, show
                 </button>
                 <button
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteTarget(p) }}
-                  className="p-1 rounded text-zinc-600 hover:text-signal-red hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
+                  className="p-2 rounded text-zinc-600 hover:text-signal-red hover:bg-retro-grid focus:text-signal-red focus:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-signal-red min-w-[32px] min-h-[32px] flex items-center justify-center"
                   aria-label={`Delete ${p.name}`}
                   title={`Delete ${p.name}`}
                 >

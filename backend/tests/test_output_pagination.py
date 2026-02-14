@@ -4,7 +4,7 @@ Tests offset parameter, empty buffers, buffer capping, and edge cases.
 """
 
 import pytest
-from app.routes.swarm import _output_buffers, _buffers_lock, _MAX_OUTPUT_LINES
+from app.routes.swarm import _project_output_buffers, _buffers_lock, _MAX_OUTPUT_LINES
 
 
 class TestOutputPaginationBasic:
@@ -25,7 +25,7 @@ class TestOutputPaginationBasic:
         """Buffer with lines returns them correctly."""
         pid = created_project["id"]
         with _buffers_lock:
-            _output_buffers[pid] = ["[stdout] line 1", "[stdout] line 2", "[stdout] line 3"]
+            _project_output_buffers[pid] = ["[stdout] line 1", "[stdout] line 2", "[stdout] line 3"]
 
         resp = await client.get(f"/api/swarm/output/{pid}?offset=0")
         assert resp.status_code == 200
@@ -38,7 +38,7 @@ class TestOutputPaginationBasic:
         """Offset parameter skips earlier lines."""
         pid = created_project["id"]
         with _buffers_lock:
-            _output_buffers[pid] = [f"[stdout] line {i}" for i in range(10)]
+            _project_output_buffers[pid] = [f"[stdout] line {i}" for i in range(10)]
 
         resp = await client.get(f"/api/swarm/output/{pid}?offset=5")
         assert resp.status_code == 200
@@ -52,7 +52,7 @@ class TestOutputPaginationBasic:
         """Offset past end of buffer returns empty lines."""
         pid = created_project["id"]
         with _buffers_lock:
-            _output_buffers[pid] = ["line 1", "line 2"]
+            _project_output_buffers[pid] = ["line 1", "line 2"]
 
         resp = await client.get(f"/api/swarm/output/{pid}?offset=10")
         assert resp.status_code == 200
@@ -64,7 +64,7 @@ class TestOutputPaginationBasic:
         """No offset parameter defaults to 0."""
         pid = created_project["id"]
         with _buffers_lock:
-            _output_buffers[pid] = ["line 1"]
+            _project_output_buffers[pid] = ["line 1"]
 
         resp = await client.get(f"/api/swarm/output/{pid}")
         assert resp.status_code == 200
@@ -83,25 +83,26 @@ class TestOutputPaginationEdgeCases:
         assert "not found" in resp.json()["detail"].lower()
 
     async def test_negative_offset(self, client, created_project):
-        """Negative offset uses Python slice behavior (tail of list)."""
+        """Negative offset is clamped to 0 (returns all lines)."""
         pid = created_project["id"]
         with _buffers_lock:
-            _output_buffers[pid] = ["line 1", "line 2", "line 3"]
+            _project_output_buffers[pid] = ["line 1", "line 2", "line 3"]
 
         resp = await client.get(f"/api/swarm/output/{pid}?offset=-2")
         assert resp.status_code == 200
         body = resp.json()
-        # Python list[-2:] gives last 2 elements
-        assert len(body["lines"]) == 2
+        # Negative offset clamped to 0, so returns all lines
+        assert len(body["lines"]) == 3
+        assert body["offset"] == 0
 
     async def test_buffer_capping_at_max_lines(self, client, created_project):
         """Buffer should not exceed _MAX_OUTPUT_LINES."""
         pid = created_project["id"]
         # Fill buffer beyond max
         with _buffers_lock:
-            _output_buffers[pid] = [f"line {i}" for i in range(_MAX_OUTPUT_LINES + 100)]
+            _project_output_buffers[pid] = [f"line {i}" for i in range(_MAX_OUTPUT_LINES + 100)]
             # Manually trim like _drain_stream_sync does
-            buf = _output_buffers[pid]
+            buf = _project_output_buffers[pid]
             if len(buf) > _MAX_OUTPUT_LINES:
                 del buf[: len(buf) - _MAX_OUTPUT_LINES]
 
@@ -114,7 +115,7 @@ class TestOutputPaginationEdgeCases:
         """Simulate incremental polling: get offset, add lines, poll again."""
         pid = created_project["id"]
         with _buffers_lock:
-            _output_buffers[pid] = ["line 1", "line 2"]
+            _project_output_buffers[pid] = ["line 1", "line 2"]
 
         # First poll
         resp = await client.get(f"/api/swarm/output/{pid}?offset=0")
@@ -123,7 +124,7 @@ class TestOutputPaginationEdgeCases:
 
         # Add more lines
         with _buffers_lock:
-            _output_buffers[pid].extend(["line 3", "line 4", "line 5"])
+            _project_output_buffers[pid].extend(["line 3", "line 4", "line 5"])
 
         # Second poll with previous next_offset
         resp = await client.get(f"/api/swarm/output/{pid}?offset={next_offset}")
@@ -151,7 +152,7 @@ class TestOutputPaginationEdgeCases:
         """Limit parameter caps the number of returned lines."""
         pid = created_project["id"]
         with _buffers_lock:
-            _output_buffers[pid] = [f"line {i}" for i in range(50)]
+            _project_output_buffers[pid] = [f"line {i}" for i in range(50)]
 
         resp = await client.get(f"/api/swarm/output/{pid}?offset=0&limit=10")
         assert resp.status_code == 200
@@ -165,7 +166,7 @@ class TestOutputPaginationEdgeCases:
         """Limit and offset work together for pagination."""
         pid = created_project["id"]
         with _buffers_lock:
-            _output_buffers[pid] = [f"line {i}" for i in range(30)]
+            _project_output_buffers[pid] = [f"line {i}" for i in range(30)]
 
         # Get second page
         resp = await client.get(f"/api/swarm/output/{pid}?offset=10&limit=10")
@@ -180,7 +181,7 @@ class TestOutputPaginationEdgeCases:
         """Limit larger than _MAX_OUTPUT_LINES is capped."""
         pid = created_project["id"]
         with _buffers_lock:
-            _output_buffers[pid] = ["line"]
+            _project_output_buffers[pid] = ["line"]
 
         resp = await client.get(f"/api/swarm/output/{pid}?offset=0&limit=9999")
         assert resp.status_code == 200

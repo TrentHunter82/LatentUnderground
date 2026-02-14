@@ -39,11 +39,16 @@ export default function FileEditor({ projectId, wsEvents }) {
       setLastModified(new Date().toLocaleTimeString())
       setError(null)
     } catch (e) {
-      setError(e.message)
       setContent('')
       setOriginal('')
       setLastModified(null)
-      toast(`Failed to load file: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: loadFile })
+      // 404 = file not created yet (normal during swarm startup) — no toast
+      if (e.message?.includes('404')) {
+        setError(null)
+      } else {
+        setError(e.message)
+        toast(`Failed to load file: ${e.message}`, 'error', 4000, { label: 'Retry', onClick: loadFile })
+      }
     }
   }, [activeFile, projectId])
 
@@ -102,26 +107,50 @@ export default function FileEditor({ projectId, wsEvents }) {
 
   const hasChanges = content !== original
 
+  const tabRefs = useRef({})
+
+  const handleTabKeyDown = useCallback((e) => {
+    const idx = editableFiles.findIndex((f) => f.path === activeFile)
+    let next = -1
+
+    if (e.key === 'ArrowRight') next = (idx + 1) % editableFiles.length
+    else if (e.key === 'ArrowLeft') next = (idx - 1 + editableFiles.length) % editableFiles.length
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = editableFiles.length - 1
+    else return
+
+    e.preventDefault()
+    const nextPath = editableFiles[next].path
+    setActiveFile(nextPath)
+    tabRefs.current[nextPath]?.focus()
+  }, [activeFile])
+
   return (
     <div className="retro-panel border border-retro-border rounded flex flex-col h-full">
       {/* File tabs */}
       <div className="flex items-center gap-1 px-3 py-2 border-b border-retro-border">
-        {editableFiles.map((f) => (
-          <button
-            key={f.path}
-            onClick={() => setActiveFile(f.path)}
-            role="tab"
-            aria-selected={activeFile === f.path}
-            aria-label={`${f.label} file`}
-            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs font-medium transition-colors cursor-pointer border-0 font-mono ${
-              activeFile === f.path
-                ? 'bg-retro-grid text-crt-green border border-crt-green/30'
-                : 'text-zinc-500 hover:text-zinc-300 bg-transparent'
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+        <div role="tablist" aria-label="File tabs" className="flex items-center gap-1">
+          {editableFiles.map((f) => (
+            <button
+              key={f.path}
+              ref={(el) => { tabRefs.current[f.path] = el }}
+              onClick={() => setActiveFile(f.path)}
+              onKeyDown={handleTabKeyDown}
+              role="tab"
+              aria-selected={activeFile === f.path}
+              aria-controls="file-editor-panel"
+              tabIndex={activeFile === f.path ? 0 : -1}
+              aria-label={`${f.label} file`}
+              className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs font-medium transition-colors cursor-pointer border-0 font-mono ${
+                activeFile === f.path
+                  ? 'bg-retro-grid text-crt-green border border-crt-green/30'
+                  : 'text-zinc-500 hover:text-zinc-300 bg-transparent'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
 
         <div className="flex-1" />
 
@@ -167,7 +196,7 @@ export default function FileEditor({ projectId, wsEvents }) {
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div id="file-editor-panel" role="tabpanel" className="flex-1 overflow-y-auto p-4">
         {editing ? (
           <textarea
             value={content}
@@ -178,7 +207,7 @@ export default function FileEditor({ projectId, wsEvents }) {
           />
         ) : (
           <div className="markdown-body text-sm text-zinc-300">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugin ? [rehypePlugin] : []}>{content || '*Empty file*'}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugin ? [rehypePlugin] : []}>{content || '*File not created yet — it will appear once the swarm generates it.*'}</ReactMarkdown>
           </div>
         )}
       </div>

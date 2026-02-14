@@ -19,13 +19,27 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test/setup.js',
+    exclude: ['e2e/**', 'node_modules/**'],
   },
   build: {
+    target: 'es2020',
     rollupOptions: {
       output: {
-        manualChunks: {
-          'highlight': ['highlight.js', 'rehype-highlight'],
-          'markdown': ['react-markdown', 'remark-gfm'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-router-dom') || id.includes('@remix-run') || id.includes('turbo-stream')) {
+              return 'router'
+            }
+            if (id.includes('highlight.js') || id.includes('rehype-highlight')) {
+              return 'highlight'
+            }
+            if (id.includes('react-markdown') || id.includes('remark-gfm') || id.includes('micromark') || id.includes('mdast') || id.includes('unified') || id.includes('unist') || id.includes('hast')) {
+              return 'markdown'
+            }
+            if (id.includes('@tanstack/react-virtual') || id.includes('@tanstack/virtual-core')) {
+              return 'virtual'
+            }
+          }
         },
       },
     },
