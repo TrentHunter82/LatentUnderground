@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor, renderHook } from '@testing-library/react'
 import { ToastProvider, useToast, useSafeToast } from '../components/Toast'
+import { createApiMock, createSwarmQueryMock, createMutationsMock } from './test-utils'
 
 // Mock API module
-vi.mock('../lib/api', () => ({
+vi.mock('../lib/api', () => createApiMock({
+  createAbortable: vi.fn(() => ({ signal: undefined, abort: vi.fn() })),
   getProject: vi.fn(() => Promise.resolve({ id: 1, name: 'Test', goal: 'Test goal', status: 'created', config: null })),
   getSwarmStatus: vi.fn(() => Promise.resolve(null)),
   deleteProject: vi.fn(() => Promise.resolve()),
@@ -29,7 +31,14 @@ vi.mock('../lib/api', () => ({
   clearApiKey: vi.fn(),
   setApiKey: vi.fn(),
   createProject: vi.fn(() => Promise.resolve({ id: 1 })),
+  getProjectQuota: vi.fn(() => Promise.resolve({ project_id: 1, quota: {}, usage: {} })),
+  getProjectHealth: vi.fn(() => Promise.resolve({ project_id: 1, crash_rate: 0, status: 'healthy', trend: 'stable', run_count: 0 })),
+  getHealthTrends: vi.fn(() => Promise.resolve({ projects: [], computed_at: new Date().toISOString() })),
+  getRunCheckpoints: vi.fn(() => Promise.resolve({ run_id: 1, checkpoints: [], total: 0 })),
 }))
+
+vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock())
+vi.mock('../hooks/useMutations', () => createMutationsMock())
 
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ id: '1' }),

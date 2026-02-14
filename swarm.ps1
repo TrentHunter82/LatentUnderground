@@ -9,7 +9,8 @@ param(
     [switch]$Resume,
     [switch]$NoConfirm,
     [int]$AgentCount = 4,
-    [int]$MaxPhases = 24
+    [int]$MaxPhases = 24,
+    [switch]$SetupOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,6 +20,33 @@ $dirs = @(".claude", ".claude/signals", ".claude/heartbeats", ".claude/handoffs"
 foreach ($dir in $dirs) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }
+
+# === PRE-LAUNCH CLEANUP ===
+# Archive and clear stale artifacts from previous runs so agents start clean.
+if (-not $Resume) {
+    # Starting fresh — archive everything from previous run
+    $prevPhaseFile = ".claude/swarm-phase.json"
+    if (Test-Path $prevPhaseFile) {
+        $prev = (Get-Content $prevPhaseFile | ConvertFrom-Json)
+        $prevPhase = [int]$prev.Phase
+        $archiveDir = ".claude/archive/phase-$prevPhase"
+        New-Item -ItemType Directory -Force -Path $archiveDir | Out-Null
+        Copy-Item ".claude/signals/*" "$archiveDir/" -ErrorAction SilentlyContinue
+        Copy-Item ".claude/heartbeats/*" "$archiveDir/" -ErrorAction SilentlyContinue
+        Copy-Item "tasks/TASKS.md" "$archiveDir/TASKS-phase-$prevPhase.md" -ErrorAction SilentlyContinue
+        # Archive logs
+        $logArchive = "$archiveDir/logs"
+        New-Item -ItemType Directory -Force -Path $logArchive | Out-Null
+        Copy-Item "logs/*.log" "$logArchive/" -ErrorAction SilentlyContinue
+    }
+}
+
+# Always clear transient state (safe for both fresh and resume — agents recreate these)
+Remove-Item ".claude/signals/*.signal" -Force -ErrorAction SilentlyContinue
+Remove-Item ".claude/heartbeats/*.heartbeat" -Force -ErrorAction SilentlyContinue
+Remove-Item ".claude/handoffs/*.md" -Force -ErrorAction SilentlyContinue
+# Clear old logs so watcher doesn't re-broadcast stale output
+Remove-Item "logs/*.log" -Force -ErrorAction SilentlyContinue
 
 # === PHASE TRACKING ===
 $phaseFile = ".claude/swarm-phase.json"
@@ -751,6 +779,21 @@ if (-not $NoConfirm) {
     }
 }
 
+# === READ ROLE-SPECIFIC RULES ===
+function Read-RulesFile([string]$Filename) {
+    $path = ".claude/rules/$Filename"
+    if (Test-Path $path) {
+        return (Get-Content $path -Raw -Encoding UTF8)
+    }
+    return ""
+}
+
+$backendRules = Read-RulesFile "BACKEND_RULES.md"
+$frontendRules = Read-RulesFile "FRONTEND_RULES.md"
+$testingRules = Read-RulesFile "TESTING_RULES.md"
+$windowsRules = Read-RulesFile "WINDOWS_RULES.md"
+$securityRules = Read-RulesFile "SECURITY_RULES.md"
+
 # === DEFINE AGENT PROMPTS ===
 $sharedRules = "CRITICAL: You are running FULLY AUTONOMOUSLY. Never wait for user input. Never use EnterPlanMode or AskUserQuestion. Plan internally and execute immediately. You are unattended - act decisively.`n`n" +
     "ORCHESTRATION RULES (non-negotiable):`n" +
@@ -778,11 +821,19 @@ $sharedRules = "CRITICAL: You are running FULLY AUTONOMOUSLY. Never wait for use
     "   - Goal: maximize throughput by keeping multiple agents working simultaneously`n" +
     "8. DEMAND ELEGANCE: For non-trivial changes, pause and ask yourself - is there a more elegant way? Skip for trivial fixes.`n" +
     "9. AUTONOMOUS: If you hit a bug, fix it. Do not ask for hand-holding. Read logs, trace errors, resolve.`n" +
-    "10. SIMPLICITY: Make every change as simple as possible. No temporary fixes. Find root causes. Minimal impact."
+    "10. SIMPLICITY: Make every change as simple as possible. No temporary fixes. Find root causes. Minimal impact.`n`n" +
+    "DIRECTIVE PROTOCOL:`n" +
+    "After completing each task, check for directive files:`n" +
+    "1. Check .claude/directives/{your-agent-name}.directive (e.g. .claude/directives/Claude-1.directive)`n" +
+    "2. Check .claude/directives/all.directive (broadcast directives for all agents)`n" +
+    "If a directive file exists: read it, execute the instructions as HIGHEST PRIORITY (override current task), then delete the file when done.`n" +
+    "This allows the orchestrator to redirect you at any point without restarting."
 
 $prompt1 = "You are Claude-1 (Backend/Core) working on: $goal`n`n" +
     "FIRST: Read AGENTS.md, tasks/lessons.md, then tasks/TASKS.md.`n`n" +
     "$sharedRules`n`n" +
+    "ROLE-SPECIFIC RULES (read these carefully - they are distilled from past mistakes):`n`n" +
+    "$backendRules`n`n$windowsRules`n`n$securityRules`n`n" +
     "YOUR WORKFLOW:`n" +
     "1. Read tasks/lessons.md - internalize past mistakes`n" +
     "2. SKILL UP: Search for skills relevant to your backend/core tasks:`n" +
@@ -812,6 +863,8 @@ $prompt1 = "You are Claude-1 (Backend/Core) working on: $goal`n`n" +
 $prompt2 = "You are Claude-2 (Frontend/Interface) working on: $goal`n`n" +
     "FIRST: Read AGENTS.md, tasks/lessons.md, then tasks/TASKS.md.`n`n" +
     "$sharedRules`n`n" +
+    "ROLE-SPECIFIC RULES (read these carefully - they are distilled from past mistakes):`n`n" +
+    "$frontendRules`n`n$securityRules`n`n" +
     "YOUR WORKFLOW:`n" +
     "1. Read tasks/lessons.md - internalize past mistakes`n" +
     "2. SKILL UP: Search for skills relevant to your frontend/UI tasks:`n" +
@@ -843,6 +896,8 @@ $prompt2 = "You are Claude-2 (Frontend/Interface) working on: $goal`n`n" +
 $prompt3 = "You are Claude-3 (Integration/Testing) working on: $goal`n`n" +
     "FIRST: Read AGENTS.md, tasks/lessons.md, then tasks/TASKS.md.`n`n" +
     "$sharedRules`n`n" +
+    "ROLE-SPECIFIC RULES (read these carefully - they are distilled from past mistakes):`n`n" +
+    "$testingRules`n`n$backendRules`n`n$frontendRules`n`n" +
     "YOUR WORKFLOW:`n" +
     "1. Read tasks/lessons.md - internalize past mistakes`n" +
     "2. SKILL UP: Search for skills relevant to your testing/integration tasks:`n" +
@@ -876,6 +931,8 @@ $prompt3 = "You are Claude-3 (Integration/Testing) working on: $goal`n`n" +
 $prompt4 = "You are Claude-4 (Polish/Review) working on: $goal`n`n" +
     "FIRST: Read AGENTS.md, tasks/lessons.md, then tasks/TASKS.md.`n`n" +
     "$sharedRules`n`n" +
+    "ROLE-SPECIFIC RULES (read ALL of these - you review all domains):`n`n" +
+    "$backendRules`n`n$frontendRules`n`n$testingRules`n`n$windowsRules`n`n$securityRules`n`n" +
     "YOUR WORKFLOW:`n" +
     "1. Read tasks/lessons.md - internalize ALL past mistakes and patterns`n" +
     "2. SKILL UP: Search for skills relevant to your review/polish tasks:`n" +
@@ -922,6 +979,23 @@ $agents = @(
     @{ Name = "Claude-4"; Role = "Polish/Review";    Color = "Yellow";  WaitFor = "tests-passing";  Prompt = $prompt4 }
 )
 
+# === WRITE PROMPT FILES ===
+foreach ($agent in $agents) {
+    $promptFile = ".claude/prompts/$($agent.Name).txt"
+    $agent.Prompt | Out-File -FilePath $promptFile -Encoding UTF8
+    Write-Host "  OK - Wrote $promptFile" -ForegroundColor Gray
+}
+
+# === SETUP-ONLY MODE ===
+if ($SetupOnly) {
+    Write-Host ""
+    Write-Host "  ===== SETUP COMPLETE (Setup-Only Mode) =====" -ForegroundColor Green
+    Write-Host "  Prompt files written to .claude/prompts/" -ForegroundColor Gray
+    Write-Host "  Backend will launch agents as subprocesses." -ForegroundColor Gray
+    Write-Host ""
+    exit 0
+}
+
 # === LAUNCH AGENTS ===
 Write-Host ""
 Write-Host "  Launching agents..." -ForegroundColor Yellow
@@ -930,9 +1004,6 @@ Write-Host ""
 $workDir = Get-Location
 
 foreach ($agent in $agents) {
-    $promptFile = ".claude/prompts/$($agent.Name).txt"
-    $agent.Prompt | Out-File -FilePath $promptFile -Encoding UTF8
-
     $agentArgs = @(
         "-NoExit", "-Command",
         "cd '$workDir'; .\.claude\agent-loop.ps1 -AgentName '$($agent.Name)' -AgentRole '$($agent.Role)' -Prompt (Get-Content '.claude/prompts/$($agent.Name).txt' -Raw) -WaitForSignal '$($agent.WaitFor)' -Color '$($agent.Color)'"

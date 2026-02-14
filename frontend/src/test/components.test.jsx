@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { createApiMock, createProjectQueryMock, createSwarmQueryMock, createMutationsMock, TestQueryWrapper } from './test-utils'
 
 // --- TaskProgress ---
 import TaskProgress from '../components/TaskProgress'
@@ -278,7 +279,8 @@ describe('DashboardSkeleton', () => {
 // ============================================================
 
 // --- SwarmControls ---
-vi.mock('../lib/api', () => ({
+vi.mock('../lib/api', () => createApiMock({
+  createAbortable: vi.fn(() => ({ signal: undefined, abort: vi.fn() })),
   launchSwarm: vi.fn(),
   stopSwarm: vi.fn(),
   createProject: vi.fn(),
@@ -287,6 +289,32 @@ vi.mock('../lib/api', () => ({
   searchLogs: vi.fn(() => Promise.resolve({ results: [] })),
   deleteProject: vi.fn(),
   getTemplates: vi.fn(() => Promise.resolve([])),
+  getProjectQuota: vi.fn(() => Promise.resolve({ project_id: 1, quota: {}, usage: {} })),
+  getProjectHealth: vi.fn(() => Promise.resolve({ project_id: 1, crash_rate: 0, status: 'healthy', trend: 'stable', run_count: 0 })),
+  getHealthTrends: vi.fn(() => Promise.resolve({ projects: [], computed_at: new Date().toISOString() })),
+  getRunCheckpoints: vi.fn(() => Promise.resolve({ run_id: 1, checkpoints: [], total: 0 })),
+}))
+
+vi.mock('../hooks/useProjectQuery', () => createProjectQueryMock())
+
+const mockUseLogs = vi.fn(() => ({ data: { logs: [] }, isLoading: false, error: null }))
+const mockUseLogSearch = vi.fn(() => ({ data: { results: [] }, isFetching: false, error: null }))
+vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock({
+  useLogs: (...args) => mockUseLogs(...args),
+  useLogSearch: (...args) => mockUseLogSearch(...args),
+}))
+
+const mockLaunchMutateAsync = vi.fn().mockResolvedValue({})
+const mockStopMutateAsync = vi.fn().mockResolvedValue({})
+const mockCreateProjectMutateAsync = vi.fn().mockResolvedValue({ id: 1 })
+const mockCreateTemplateMutateAsync = vi.fn().mockResolvedValue({ id: 1 })
+let mockCreateProjectIsPending = false
+const mockUseCreateProject = vi.fn(() => ({ mutateAsync: mockCreateProjectMutateAsync, isPending: mockCreateProjectIsPending }))
+vi.mock('../hooks/useMutations', () => createMutationsMock({
+  useLaunchSwarm: () => ({ mutateAsync: mockLaunchMutateAsync, isPending: false }),
+  useStopSwarm: () => ({ mutateAsync: mockStopMutateAsync, isPending: false }),
+  useCreateProject: (...args) => mockUseCreateProject(...args),
+  useCreateTemplate: () => ({ mutateAsync: mockCreateTemplateMutateAsync, isPending: false }),
 }))
 
 import { launchSwarm, stopSwarm, createProject, getLogs, deleteProject } from '../lib/api'
@@ -323,27 +351,24 @@ describe('SwarmControls', () => {
   })
 
   it('calls launchSwarm with resume=false on Launch click', async () => {
-    launchSwarm.mockResolvedValue({})
     renderSwarmControls({ status: 'created' })
     await act(async () => { fireEvent.click(screen.getByText('Launch')) })
-    expect(launchSwarm).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockLaunchMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
       project_id: 1,
       resume: false,
     }))
   })
 
   it('calls launchSwarm with resume=true on Resume click', async () => {
-    launchSwarm.mockResolvedValue({})
     renderSwarmControls({ status: 'stopped' })
     await act(async () => { fireEvent.click(screen.getByText('Resume')) })
-    expect(launchSwarm).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockLaunchMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
       project_id: 1,
       resume: true,
     }))
   })
 
   it('shows confirmation dialog before stopping and calls stopSwarm on confirm', async () => {
-    stopSwarm.mockResolvedValue({})
     renderSwarmControls({ status: 'running' })
 
     // Click Stop -> opens confirmation dialog
@@ -354,7 +379,7 @@ describe('SwarmControls', () => {
     const confirmBtns = screen.getAllByText('Stop Swarm')
     // The last one is the dialog's confirm button (rendered after the trigger)
     await act(async () => { fireEvent.click(confirmBtns[confirmBtns.length - 1]) })
-    expect(stopSwarm).toHaveBeenCalledWith({ project_id: 1 })
+    expect(mockStopMutateAsync).toHaveBeenCalledWith({ project_id: 1 })
   })
 })
 
@@ -370,9 +395,11 @@ import NewProject from '../components/NewProject'
 
 function renderNewProject(props = {}) {
   return render(
-    <ToastProvider>
-      <NewProject onProjectChange={vi.fn()} {...props} />
-    </ToastProvider>
+    <TestQueryWrapper>
+      <ToastProvider>
+        <NewProject onProjectChange={vi.fn()} {...props} />
+      </ToastProvider>
+    </TestQueryWrapper>
   )
 }
 
@@ -396,8 +423,8 @@ describe('NewProject', () => {
     expect(nameInput.value).toBe('Test Project')
   })
 
-  it('calls createProject on form submit', async () => {
-    createProject.mockResolvedValue({ id: 42 })
+  it('calls createProject mutation on form submit', async () => {
+    mockCreateProjectMutateAsync.mockResolvedValue({ id: 42 })
     const onProjectChange = vi.fn()
     renderNewProject({ onProjectChange })
 
@@ -407,7 +434,7 @@ describe('NewProject', () => {
 
     await act(async () => { fireEvent.click(screen.getByText('Create Project')) })
 
-    expect(createProject).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockCreateProjectMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
       name: 'My App',
       goal: 'A goal',
       folder_path: 'C:/test',
@@ -416,9 +443,9 @@ describe('NewProject', () => {
     expect(onProjectChange).toHaveBeenCalled()
   })
 
-  it('calls createProject + launchSwarm on Create & Launch', async () => {
-    createProject.mockResolvedValue({ id: 7 })
-    launchSwarm.mockResolvedValue({})
+  it('calls createProject + launchSwarm mutations on Create & Launch', async () => {
+    mockCreateProjectMutateAsync.mockResolvedValue({ id: 7 })
+    mockLaunchMutateAsync.mockResolvedValue({})
     renderNewProject()
 
     fireEvent.change(screen.getByPlaceholderText('My Awesome App'), { target: { value: 'App' } })
@@ -427,13 +454,13 @@ describe('NewProject', () => {
 
     await act(async () => { fireEvent.click(screen.getByText('Create & Launch')) })
 
-    expect(createProject).toHaveBeenCalled()
-    expect(launchSwarm).toHaveBeenCalledWith(expect.objectContaining({ project_id: 7 }))
+    expect(mockCreateProjectMutateAsync).toHaveBeenCalled()
+    expect(mockLaunchMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ project_id: 7 }))
     expect(mockNavigate).toHaveBeenCalledWith('/projects/7')
   })
 
   it('displays error message on failure', async () => {
-    createProject.mockRejectedValue(new Error('Name required'))
+    mockCreateProjectMutateAsync.mockRejectedValue(new Error('Name required'))
     renderNewProject()
 
     fireEvent.change(screen.getByPlaceholderText('My Awesome App'), { target: { value: 'X' } })
@@ -447,19 +474,16 @@ describe('NewProject', () => {
   })
 
   it('shows loading state during submission', async () => {
-    let resolve
-    createProject.mockReturnValue(new Promise((r) => { resolve = r }))
+    // Simulate isPending=true from TanStack Query mutation
+    mockCreateProjectIsPending = true
+    mockUseCreateProject.mockReturnValue({ mutateAsync: mockCreateProjectMutateAsync, isPending: true })
     renderNewProject()
-
-    fireEvent.change(screen.getByPlaceholderText('My Awesome App'), { target: { value: 'X' } })
-    fireEvent.change(screen.getByPlaceholderText('What should this project accomplish?'), { target: { value: 'Y' } })
-    fireEvent.change(screen.getByPlaceholderText('C:/Projects/my-app'), { target: { value: 'C:/z' } })
-
-    await act(async () => { fireEvent.click(screen.getByText('Create Project')) })
 
     expect(screen.getByText('Creating...')).toBeInTheDocument()
 
-    await act(async () => { resolve({ id: 1 }) })
+    // Reset
+    mockCreateProjectIsPending = false
+    mockUseCreateProject.mockReturnValue({ mutateAsync: mockCreateProjectMutateAsync, isPending: false })
   })
 })
 
@@ -470,8 +494,9 @@ describe('LogViewer', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('loads and displays initial logs', async () => {
-    getLogs.mockResolvedValue({
-      logs: [{ agent: 'Claude-1', lines: ['Starting build', 'Build complete'] }],
+    mockUseLogs.mockReturnValue({
+      data: { logs: [{ agent: 'Claude-1', lines: ['Starting build', 'Build complete'] }] },
+      isLoading: false, error: null,
     })
     await act(async () => { render(<LogViewer projectId={1} />) })
     expect(screen.getByText('Starting build')).toBeInTheDocument()
@@ -479,7 +504,7 @@ describe('LogViewer', () => {
   })
 
   it('renders agent filter buttons', async () => {
-    getLogs.mockResolvedValue({ logs: [] })
+    mockUseLogs.mockReturnValue({ data: { logs: [] }, isLoading: false, error: null })
     await act(async () => { render(<LogViewer projectId={1} />) })
     expect(screen.getAllByText('All').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Claude-1')).toBeInTheDocument()
@@ -490,13 +515,13 @@ describe('LogViewer', () => {
   })
 
   it('shows empty state when no logs', async () => {
-    getLogs.mockResolvedValue({ logs: [] })
+    mockUseLogs.mockReturnValue({ data: { logs: [] }, isLoading: false, error: null })
     await act(async () => { render(<LogViewer projectId={1} />) })
     expect(screen.getByText('No logs')).toBeInTheDocument()
   })
 
   it('appends logs from WebSocket events', async () => {
-    getLogs.mockResolvedValue({ logs: [] })
+    mockUseLogs.mockReturnValue({ data: { logs: [] }, isLoading: false, error: null })
     const { rerender } = await act(async () =>
       render(<LogViewer projectId={1} wsEvents={null} />)
     )
@@ -516,8 +541,9 @@ describe('LogViewer', () => {
   it('truncates buffer to 1000 lines', async () => {
     // Start with 999 lines
     const manyLines = Array.from({ length: 999 }, (_, i) => `Line ${i}`)
-    getLogs.mockResolvedValue({
-      logs: [{ agent: 'Claude-1', lines: manyLines }],
+    mockUseLogs.mockReturnValue({
+      data: { logs: [{ agent: 'Claude-1', lines: manyLines }] },
+      isLoading: false, error: null,
     })
     const { rerender } = await act(async () =>
       render(<LogViewer projectId={1} wsEvents={null} />)
@@ -551,8 +577,9 @@ describe('ActivityFeed', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('loads and displays initial activity', async () => {
-    getLogs.mockResolvedValue({
-      logs: [{ agent: 'Claude-1', lines: ['Started task'] }],
+    mockUseLogs.mockReturnValue({
+      data: { logs: [{ agent: 'Claude-1', lines: ['Started task'] }] },
+      isLoading: false, error: null,
     })
     await act(async () => { render(<ActivityFeed projectId={1} />) })
     expect(screen.getByText('Started task')).toBeInTheDocument()
@@ -560,13 +587,13 @@ describe('ActivityFeed', () => {
   })
 
   it('shows empty state when no activity', async () => {
-    getLogs.mockResolvedValue({ logs: [] })
+    mockUseLogs.mockReturnValue({ data: { logs: [] }, isLoading: false, error: null })
     await act(async () => { render(<ActivityFeed projectId={1} />) })
     expect(screen.getByText('No activity yet')).toBeInTheDocument()
   })
 
   it('appends WebSocket log events', async () => {
-    getLogs.mockResolvedValue({ logs: [] })
+    mockUseLogs.mockReturnValue({ data: { logs: [] }, isLoading: false, error: null })
     const { rerender } = await act(async () =>
       render(<ActivityFeed projectId={1} wsEvents={null} />)
     )
@@ -662,12 +689,12 @@ describe('Sidebar', () => {
     expect(screen.getByText('+ New Project')).toBeInTheDocument()
   })
 
-  it('shows status dot with correct color class for running project', () => {
-    const { container } = renderSidebar({
+  it('shows status indicator with accessible label for running project', () => {
+    renderSidebar({
       projects: [{ id: 1, name: 'P1', goal: 'G1', status: 'running' }],
     })
-    const dot = container.querySelector('.bg-emerald-500')
-    expect(dot).toBeInTheDocument()
+    // Shape-based status icons use sr-only text for screen readers
+    expect(screen.getByText('Status: running')).toBeInTheDocument()
   })
 })
 

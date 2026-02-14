@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { axe } from 'vitest-axe'
 import * as matchers from 'vitest-axe/matchers'
+import { createApiMock, createSwarmQueryMock, createMutationsMock } from './test-utils'
 
 expect.extend(matchers)
 
@@ -15,7 +16,8 @@ vi.mock('react-router-dom', () => ({
 }))
 
 // Mock api module
-vi.mock('../lib/api', () => ({
+vi.mock('../lib/api', () => createApiMock({
+  createAbortable: vi.fn(() => ({ signal: undefined, abort: vi.fn() })),
   getProjects: vi.fn(() => Promise.resolve([])),
   getProject: vi.fn(() => Promise.resolve({ id: 1, name: 'Test', status: 'created', config: '{}' })),
   createProject: vi.fn(() => Promise.resolve({ id: 1, name: 'Test' })),
@@ -41,7 +43,14 @@ vi.mock('../lib/api', () => ({
   updateProject: vi.fn(() => Promise.resolve({ id: 1 })),
   sendSwarmInput: vi.fn(() => Promise.resolve({})),
   getProjectAnalytics: vi.fn(() => Promise.resolve({ total_runs: 0, runs: [] })),
+  getProjectQuota: vi.fn(() => Promise.resolve({ project_id: 1, quota: {}, usage: {} })),
+  getProjectHealth: vi.fn(() => Promise.resolve({ project_id: 1, crash_rate: 0, status: 'healthy', trend: 'stable', run_count: 0 })),
+  getHealthTrends: vi.fn(() => Promise.resolve({ projects: [], computed_at: new Date().toISOString() })),
+  getRunCheckpoints: vi.fn(() => Promise.resolve({ run_id: 1, checkpoints: [], total: 0 })),
 }))
+
+vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock())
+vi.mock('../hooks/useMutations', () => createMutationsMock())
 
 // Mock useNotifications (used by SwarmControls) - named export
 vi.mock('../hooks/useNotifications', () => ({

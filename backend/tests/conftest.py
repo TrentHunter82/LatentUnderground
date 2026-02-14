@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 # Disable rate limiting in tests (must be set before app imports)
 os.environ.setdefault("LU_RATE_LIMIT_RPM", "0")
@@ -46,6 +47,10 @@ async def tmp_db(tmp_path):
                 phase INTEGER,
                 tasks_completed INTEGER DEFAULT 0,
                 task_summary TEXT DEFAULT '',
+                label TEXT,
+                notes TEXT,
+                summary TEXT,
+                guardrail_results TEXT,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             )
         """)
@@ -72,6 +77,32 @@ async def tmp_db(tmp_path):
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS agent_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                run_id INTEGER,
+                agent_name TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                detail TEXT DEFAULT '',
+                timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY (run_id) REFERENCES swarm_runs(id) ON DELETE CASCADE
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS agent_checkpoints (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                run_id INTEGER,
+                agent_name TEXT NOT NULL,
+                checkpoint_type TEXT NOT NULL,
+                data TEXT DEFAULT '{}',
+                timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY (run_id) REFERENCES swarm_runs(id) ON DELETE CASCADE
+            )
+        """)
         await db.commit()
     return db_path
 
@@ -81,15 +112,24 @@ async def app(tmp_db, tmp_path):
     """Create a FastAPI test app with test database."""
     from app import database
     from app.routes.files import _last_write
-    from app.routes.swarm import _output_buffers, _swarm_processes, cancel_drain_tasks
+    from app.routes.swarm import (
+        _project_output_buffers, _agent_processes, _agent_output_buffers,
+        _agent_drain_threads, _agent_drain_events, _agent_started_at,
+        _agent_log_files, _last_output_at, _project_locks, _agent_line_counts,
+        _known_directives, _project_resource_usage, cancel_drain_tasks,
+        _checkpoint_batch, _checkpoint_batch_lock, _checkpoint_cooldowns,
+        _current_run_ids, _circuit_breakers, _supervisor_tasks,
+    )
 
     original_db_path = database.DB_PATH
     database.DB_PATH = tmp_db
 
     # Clear rate limiter state between tests
     _last_write.clear()
-    # Clear output buffers from previous tests
-    _output_buffers.clear()
+    # Clear output buffers and tracking state from previous tests
+    _project_output_buffers.clear()
+    _agent_output_buffers.clear()
+    _last_output_at.clear()
 
     try:
         from app.main import app as _app
@@ -104,8 +144,27 @@ async def app(tmp_db, tmp_path):
 
     # Stop any drain threads and clear all module-level state on teardown
     await cancel_drain_tasks()
-    _output_buffers.clear()
-    _swarm_processes.clear()
+    _project_output_buffers.clear()
+    _agent_output_buffers.clear()
+    _agent_processes.clear()
+    _agent_drain_threads.clear()
+    _agent_drain_events.clear()
+    _agent_started_at.clear()
+    _agent_log_files.clear()
+    _last_output_at.clear()
+    _project_locks.clear()
+    _agent_line_counts.clear()
+    _known_directives.clear()
+    _project_resource_usage.clear()
+    _checkpoint_cooldowns.clear()
+    _current_run_ids.clear()
+    _circuit_breakers.clear()
+    # Cancel any lingering supervisor tasks
+    for task in _supervisor_tasks.values():
+        task.cancel()
+    _supervisor_tasks.clear()
+    with _checkpoint_batch_lock:
+        _checkpoint_batch.clear()
     database.DB_PATH = original_db_path
 
 
@@ -188,6 +247,15 @@ def mock_project_folder(tmp_path):
     (logs_dir / "Claude-1.log").write_text("Line 1\nLine 2\nLine 3\n")
     (logs_dir / "Claude-2.log").write_text("Starting work\n")
 
+    # Create prompt files (used by per-agent launch flow)
+    prompts_dir = claude_dir / "prompts"
+    prompts_dir.mkdir()
+    for i in range(1, 5):
+        (prompts_dir / f"Claude-{i}.txt").write_text(f"Mock prompt for Claude-{i}")
+
+    # Create handoffs dir
+    (claude_dir / "handoffs").mkdir(exist_ok=True)
+
     # Create AGENTS.md and progress.txt
     (folder / "AGENTS.md").write_text("# Agents\n")
     (folder / "progress.txt").write_text("Progress log\n")
@@ -205,3 +273,29 @@ async def project_with_folder(client, mock_project_folder):
     })
     assert resp.status_code == 201
     return resp.json()
+
+
+@pytest.fixture()
+def mock_launch_deps():
+    """Patches _run_setup_only and _find_claude_cmd for swarm launch tests.
+
+    The mock _run_setup_only creates prompt files in .claude/prompts/ as the
+    real swarm.ps1 -SetupOnly would. Tests still need to mock subprocess.Popen
+    for the actual agent processes.
+    """
+    def setup_side_effect(folder, swarm_script, agent_count, max_phases):
+        prompts_dir = folder / ".claude" / "prompts"
+        prompts_dir.mkdir(parents=True, exist_ok=True)
+        for i in range(1, agent_count + 1):
+            pf = prompts_dir / f"Claude-{i}.txt"
+            if not pf.exists():
+                pf.write_text(f"Mock prompt for Claude-{i}")
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = "Setup complete"
+        result.stderr = ""
+        return result
+
+    with patch("app.routes.swarm._run_setup_only", side_effect=setup_side_effect), \
+         patch("app.routes.swarm._find_claude_cmd", return_value=["claude.cmd"]):
+        yield

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { TestQueryWrapper, createApiMock } from './test-utils'
 
 // Mock react-router-dom
 vi.mock('react-router-dom', () => ({
@@ -9,7 +10,8 @@ vi.mock('react-router-dom', () => ({
 }))
 
 // Mock api module
-vi.mock('../lib/api', () => ({
+vi.mock('../lib/api', () => createApiMock({
+  createAbortable: vi.fn(() => ({ signal: undefined, abort: vi.fn() })),
   getProject: vi.fn(() => Promise.resolve({ id: 1, name: 'Test', goal: 'Test goal', config: null })),
   getSwarmStatus: vi.fn(() => Promise.resolve(null)),
   getProjectStats: vi.fn(() => Promise.resolve({ total_runs: 3, avg_duration_seconds: 120, total_tasks_completed: 15 })),
@@ -29,7 +31,32 @@ vi.mock('../lib/api', () => ({
   getLogs: vi.fn(() => Promise.resolve({ logs: [] })),
   createProject: vi.fn(),
   getTemplates: vi.fn(() => Promise.resolve([])),
+  getProjectQuota: vi.fn(() => Promise.resolve({ project_id: 1, quota: {}, usage: {} })),
+  getProjectHealth: vi.fn(() => Promise.resolve({ project_id: 1, crash_rate: 0, status: 'healthy', trend: 'stable', run_count: 0 })),
+  getHealthTrends: vi.fn(() => Promise.resolve({ projects: [], computed_at: new Date().toISOString() })),
+  getRunCheckpoints: vi.fn(() => Promise.resolve({ run_id: 1, checkpoints: [], total: 0 })),
 }))
+
+const { createProjectQueryMock, createSwarmQueryMock, createMutationsMock } = await vi.hoisted(() => import('./test-utils'))
+
+vi.mock('../hooks/useProjectQuery', () => createProjectQueryMock({
+  useProject: () => ({ data: { id: 1, name: 'Test', goal: 'Test goal', config: null }, isLoading: false, error: null }),
+  useProjectStats: () => ({ data: { total_runs: 3, avg_duration_seconds: 120, total_tasks_completed: 15 }, isLoading: false, error: null }),
+}))
+
+vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock({
+  useSwarmStatus: () => ({ data: null, isLoading: false, error: null }),
+  useSwarmHistory: () => ({ data: { runs: [{ id: 1, status: 'completed', tasks_completed: 5, duration_seconds: 90 }, { id: 2, status: 'completed', tasks_completed: 8, duration_seconds: 150 }, { id: 3, status: 'failed', tasks_completed: 2, duration_seconds: 30 }] }, isLoading: false, error: null }),
+}))
+vi.mock('../hooks/useMutations', () => createMutationsMock())
+
+vi.mock('@tanstack/react-query', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    useQueryClient: () => ({ invalidateQueries: vi.fn(), removeQueries: vi.fn() }),
+  }
+})
 
 import { ToastProvider } from '../components/Toast'
 
@@ -294,9 +321,11 @@ import { getSwarmHistory, getProjectStats } from '../lib/api'
 
 function renderProjectView(props = {}) {
   return render(
-    <ToastProvider>
-      <ProjectView wsEvents={null} onProjectChange={vi.fn()} {...props} />
-    </ToastProvider>
+    <TestQueryWrapper>
+      <ToastProvider>
+        <ProjectView wsEvents={null} onProjectChange={vi.fn()} {...props} />
+      </ToastProvider>
+    </TestQueryWrapper>
   )
 }
 

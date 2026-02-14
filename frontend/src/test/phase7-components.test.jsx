@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
+import { createApiMock, createProjectQueryMock, createSwarmQueryMock, createMutationsMock } from './test-utils'
 
 // Mock react-router-dom
 const mockNavigate = vi.fn()
@@ -12,7 +13,8 @@ vi.mock('react-router-dom', () => ({
 }))
 
 // Mock api module with ALL exports used across the component tree
-vi.mock('../lib/api', () => ({
+vi.mock('../lib/api', () => createApiMock({
+  createAbortable: vi.fn(() => ({ signal: undefined, abort: vi.fn() })),
   getProject: vi.fn(() => Promise.resolve({ id: 1, name: 'Test', goal: 'Test goal', config: null })),
   getProjects: vi.fn(() => Promise.resolve([])),
   createProject: vi.fn(),
@@ -26,6 +28,8 @@ vi.mock('../lib/api', () => ({
   sendSwarmInput: vi.fn(() => Promise.resolve({ status: 'sent' })),
   launchSwarm: vi.fn(),
   stopSwarm: vi.fn(),
+  getSwarmAgents: vi.fn(() => Promise.resolve({ agents: [] })),
+  stopSwarmAgent: vi.fn(() => Promise.resolve({ status: 'stopped' })),
   getLogs: vi.fn(() => Promise.resolve({ logs: [] })),
   searchLogs: vi.fn(() => Promise.resolve({ results: [], total: 0 })),
   startWatch: vi.fn(() => Promise.resolve()),
@@ -34,6 +38,10 @@ vi.mock('../lib/api', () => ({
   setApiKey: vi.fn(),
   clearApiKey: vi.fn(),
   getStoredApiKey: vi.fn(() => null),
+  getProjectQuota: vi.fn(() => Promise.resolve({ project_id: 1, quota: {}, usage: {} })),
+  getProjectHealth: vi.fn(() => Promise.resolve({ project_id: 1, crash_rate: 0, status: 'healthy', trend: 'stable', run_count: 0 })),
+  getHealthTrends: vi.fn(() => Promise.resolve({ projects: [], computed_at: new Date().toISOString() })),
+  getRunCheckpoints: vi.fn(() => Promise.resolve({ run_id: 1, checkpoints: [], total: 0 })),
 }))
 
 // Mock hooks
@@ -47,7 +55,11 @@ vi.mock('../hooks/useNotifications', () => ({
   useNotifications: () => ({ notify: vi.fn(), permission: 'granted', requestPermission: vi.fn() }),
 }))
 
-import { sendSwarmInput, getLogs, searchLogs, setApiKey, clearApiKey, getStoredApiKey } from '../lib/api'
+vi.mock('../hooks/useProjectQuery', () => createProjectQueryMock())
+vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock())
+vi.mock('../hooks/useMutations', () => createMutationsMock())
+
+import { sendSwarmInput, getLogs, searchLogs, setApiKey, clearApiKey, getStoredApiKey, getSwarmAgents, stopSwarmAgent } from '../lib/api'
 import { ToastProvider } from '../components/Toast'
 
 // ============================================================
@@ -68,6 +80,14 @@ function renderTerminal(props = {}) {
   )
 }
 
+async function renderTerminalWithAgents(props = {}) {
+  getSwarmAgents.mockResolvedValue({ agents: [{ name: 'Claude-1', alive: true, pid: 1001, exit_code: null }] })
+  const result = renderTerminal({ isRunning: true, ...props })
+  // Wait for agent polling to resolve
+  await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+  return result
+}
+
 describe('TerminalOutput Input Bar', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
@@ -81,14 +101,18 @@ describe('TerminalOutput Input Bar', () => {
     renderTerminal({ isRunning: false })
     const input = screen.getByLabelText('Terminal input')
     expect(input).toBeDisabled()
-    expect(input).toHaveAttribute('placeholder', 'Swarm not running')
+    expect(input).toHaveAttribute('placeholder', 'Waiting for agents...')
   })
 
-  it('input is enabled when running', () => {
+  it('input is enabled when agents are alive', async () => {
+    const { getSwarmAgents } = await import('../lib/api')
+    getSwarmAgents.mockResolvedValue({ agents: [{ name: 'Claude-1', alive: true, pid: 1001 }] })
     renderTerminal({ isRunning: true })
+    // Wait for agent polling to resolve
+    await act(async () => { await new Promise(r => setTimeout(r, 50)) })
     const input = screen.getByLabelText('Terminal input')
     expect(input).not.toBeDisabled()
-    expect(input).toHaveAttribute('placeholder', 'Type input for swarm...')
+    expect(input).toHaveAttribute('placeholder', 'Send to all agents (Enter to submit)')
   })
 
   it('send button disabled when input is empty', () => {
@@ -98,7 +122,7 @@ describe('TerminalOutput Input Bar', () => {
 
   it('calls sendSwarmInput on Enter key', async () => {
     sendSwarmInput.mockResolvedValue({ status: 'sent' })
-    renderTerminal({ isRunning: true })
+    await renderTerminalWithAgents()
 
     const input = screen.getByLabelText('Terminal input')
     fireEvent.change(input, { target: { value: 'hello world' } })
@@ -106,12 +130,12 @@ describe('TerminalOutput Input Bar', () => {
       fireEvent.keyDown(input, { key: 'Enter' })
     })
 
-    expect(sendSwarmInput).toHaveBeenCalledWith(1, 'hello world')
+    expect(sendSwarmInput).toHaveBeenCalledWith(1, 'hello world', null)
   })
 
   it('echoes input locally with > prefix', async () => {
     sendSwarmInput.mockResolvedValue({ status: 'sent' })
-    renderTerminal({ isRunning: true })
+    await renderTerminalWithAgents()
 
     const input = screen.getByLabelText('Terminal input')
     fireEvent.change(input, { target: { value: 'test cmd' } })
@@ -124,7 +148,7 @@ describe('TerminalOutput Input Bar', () => {
 
   it('shows error message on failed send', async () => {
     sendSwarmInput.mockRejectedValue(new Error('Pipe broken'))
-    renderTerminal({ isRunning: true })
+    await renderTerminalWithAgents()
 
     const input = screen.getByLabelText('Terminal input')
     fireEvent.change(input, { target: { value: 'fail cmd' } })
@@ -137,7 +161,7 @@ describe('TerminalOutput Input Bar', () => {
 
   it('clears input after successful send', async () => {
     sendSwarmInput.mockResolvedValue({ status: 'sent' })
-    renderTerminal({ isRunning: true })
+    await renderTerminalWithAgents()
 
     const input = screen.getByLabelText('Terminal input')
     fireEvent.change(input, { target: { value: 'clear me' } })
@@ -262,14 +286,20 @@ describe('LogViewer Date Range', () => {
 
   it('calls searchLogs when date filter is set', async () => {
     searchLogs.mockResolvedValue({ results: [], total: 0 })
+    getLogs.mockResolvedValue({ logs: [] })
 
+    let result
     await act(async () => {
-      render(<LogViewer projectId={1} wsEvents={null} />)
+      result = render(<LogViewer projectId={1} wsEvents={null} />)
     })
+    // Wait for initial loadLogs to resolve and skeleton to clear
+    await act(async () => { await new Promise(r => setTimeout(r, 50)) })
 
     await act(async () => {
       fireEvent.change(screen.getByLabelText('From date'), { target: { value: '2026-01-15' } })
     })
+    // Wait for runSearch effect to fire
+    await act(async () => { await new Promise(r => setTimeout(r, 50)) })
 
     expect(searchLogs).toHaveBeenCalledWith(
       1,
@@ -283,23 +313,30 @@ describe('LogViewer Date Range', () => {
 // ============================================================
 describe('LogViewer LIVE Indicator', () => {
   it('shows LIVE indicator on WebSocket log event', async () => {
+    getLogs.mockResolvedValue({ logs: [] })
     const wsEvent = { type: 'log', agent: 'Claude-1', lines: ['test line'] }
     await act(async () => {
       render(<LogViewer projectId={1} wsEvents={wsEvent} />)
     })
+    // Wait for loadLogs to resolve so skeleton clears
+    await act(async () => { await new Promise(r => setTimeout(r, 50)) })
 
     expect(screen.getByText('LIVE')).toBeInTheDocument()
   })
 
   it('appends WebSocket log lines on rerender', async () => {
+    getLogs.mockResolvedValue({ logs: [] })
     // First render with no ws events - let initial loadLogs settle
-    const { rerender } = render(<LogViewer projectId={1} wsEvents={null} />)
-    await act(async () => {})  // flush loadLogs
+    let result
+    await act(async () => {
+      result = render(<LogViewer projectId={1} wsEvents={null} />)
+    })
+    await act(async () => { await new Promise(r => setTimeout(r, 50)) })
 
     // Now send ws event via rerender
     const wsEvent = { type: 'log', agent: 'Claude-1', lines: ['Hello from ws'] }
     await act(async () => {
-      rerender(<LogViewer projectId={1} wsEvents={wsEvent} />)
+      result.rerender(<LogViewer projectId={1} wsEvents={wsEvent} />)
     })
 
     expect(screen.getByText('Hello from ws')).toBeInTheDocument()

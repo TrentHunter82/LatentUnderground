@@ -10,16 +10,23 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { axe } from 'vitest-axe'
 import * as matchers from 'vitest-axe/matchers'
+import { createApiMock } from './test-utils'
 
 expect.extend(matchers)
 
 // Mock api (SettingsPanel uses getStoredApiKey, clearApiKey)
-vi.mock('../lib/api', () => ({
+vi.mock('../lib/api', () => createApiMock({
+  createAbortable: vi.fn(() => ({ signal: undefined, abort: vi.fn() })),
   getProjects: vi.fn(() => Promise.resolve([])),
   getStoredApiKey: vi.fn(() => null),
   clearApiKey: vi.fn(),
+  getProjectQuota: vi.fn(() => Promise.resolve({ project_id: 1, quota: {}, usage: {} })),
+  getProjectHealth: vi.fn(() => Promise.resolve({ project_id: 1, crash_rate: 0, status: 'healthy', trend: 'stable', run_count: 0 })),
+  getHealthTrends: vi.fn(() => Promise.resolve({ projects: [], computed_at: new Date().toISOString() })),
+  getRunCheckpoints: vi.fn(() => Promise.resolve({ run_id: 1, checkpoints: [], total: 0 })),
 }))
 
 // Mock useHealthCheck (SettingsPanel uses status/latency)
@@ -81,14 +88,15 @@ describe('SettingsPanel Accessibility', () => {
     expect(titleEl).toHaveTextContent('Settings')
   })
 
-  it('focus moves to first interactive element when opened', () => {
+  it('focus moves to first interactive element when opened', async () => {
     render(
       <SettingsPanel open={true} onClose={vi.fn()} onOpenAuth={vi.fn()} />
     )
-    // The component focuses the first button inside panelRef on open.
-    // The first button in the panel is the "Close settings" button.
+    // The component focuses the first button inside panelRef on open (with a microtask delay).
     const closeBtn = screen.getByLabelText('Close settings')
-    expect(document.activeElement).toBe(closeBtn)
+    await waitFor(() => {
+      expect(document.activeElement).toBe(closeBtn)
+    })
   })
 
   it('Escape key closes the panel', () => {
@@ -196,102 +204,94 @@ describe('ShortcutCheatsheet Accessibility', () => {
 describe('OnboardingModal Accessibility', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Clear any onboarding localStorage state
     localStorage.removeItem('lu_onboarding_complete')
   })
 
-  it('has no axe violations on step 0 (Welcome)', async () => {
-    const { container } = render(
-      <OnboardingModal open={true} onClose={vi.fn()} />
+  const renderOnboarding = (props = {}) =>
+    render(
+      <MemoryRouter>
+        <OnboardingModal open={true} onClose={vi.fn()} {...props} />
+      </MemoryRouter>
     )
+
+  it('has no axe violations on step 0 (Welcome)', async () => {
+    const { container } = renderOnboarding()
     const results = await axe(container)
     expect(results).toHaveNoViolations()
   })
 
-  it('has no axe violations on step 2 (final step)', async () => {
-    const { container } = render(
-      <OnboardingModal open={true} onClose={vi.fn()} />
-    )
+  it('has no axe violations on step 3 (final step)', async () => {
+    const { container } = renderOnboarding()
 
-    // Navigate to step 2 (final) by clicking NEXT twice
-    const nextButton = screen.getByText('NEXT')
-    await act(async () => { fireEvent.click(nextButton) })
+    // Navigate to step 3 (final) by clicking NEXT three times
+    await act(async () => { fireEvent.click(screen.getByText('NEXT')) })
+    await act(async () => { fireEvent.click(screen.getByText('NEXT')) })
     await act(async () => { fireEvent.click(screen.getByText('NEXT')) })
 
-    // Now on final step - button should say GET STARTED
-    expect(screen.getByText('GET STARTED')).toBeInTheDocument()
+    expect(screen.getByText('CREATE FIRST PROJECT')).toBeInTheDocument()
 
     const results = await axe(container)
     expect(results).toHaveNoViolations()
   })
 
   it('dialog has correct ARIA attributes (role, aria-modal, aria-labelledby)', () => {
-    render(
-      <OnboardingModal open={true} onClose={vi.fn()} />
-    )
+    renderOnboarding()
     const dialog = screen.getByRole('dialog')
     expect(dialog).toBeInTheDocument()
     expect(dialog).toHaveAttribute('aria-modal', 'true')
     expect(dialog).toHaveAttribute('aria-labelledby', 'onboarding-title')
 
-    // Verify the title element exists and shows step 0 title
     const titleEl = document.getElementById('onboarding-title')
     expect(titleEl).toBeInTheDocument()
     expect(titleEl).toHaveTextContent('Welcome to Latent Underground')
   })
 
   it('step navigation with Next button advances through all steps', async () => {
-    render(
-      <OnboardingModal open={true} onClose={vi.fn()} />
-    )
+    renderOnboarding()
 
     // Step 0: Welcome
     expect(screen.getByText('Welcome to Latent Underground')).toBeInTheDocument()
-    expect(screen.getByText('NEXT')).toBeInTheDocument()
 
-    // Advance to step 1
+    // Step 1: Configure
     await act(async () => { fireEvent.click(screen.getByText('NEXT')) })
-    expect(screen.getByText('Create Your First Project')).toBeInTheDocument()
+    expect(screen.getByText('Create & Configure')).toBeInTheDocument()
 
-    // Advance to step 2 (final)
+    // Step 2: Monitor
     await act(async () => { fireEvent.click(screen.getByText('NEXT')) })
     expect(screen.getByText('Launch & Monitor')).toBeInTheDocument()
-    expect(screen.getByText('GET STARTED')).toBeInTheDocument()
+
+    // Step 3: Notifications (final)
+    await act(async () => { fireEvent.click(screen.getByText('NEXT')) })
+    expect(screen.getByText('Stay Informed')).toBeInTheDocument()
+    expect(screen.getByText('CREATE FIRST PROJECT')).toBeInTheDocument()
   })
 
   it('Back button is disabled on first step', () => {
-    render(
-      <OnboardingModal open={true} onClose={vi.fn()} />
-    )
+    renderOnboarding()
     const backButton = screen.getByText('BACK')
     expect(backButton).toBeDisabled()
   })
 
   it('step indicator dots have proper styling for current vs inactive', async () => {
-    const { container } = render(
-      <OnboardingModal open={true} onClose={vi.fn()} />
-    )
+    const { container } = renderOnboarding()
 
-    // There should be 3 step indicator dots (one per step)
-    const dots = container.querySelectorAll('span[aria-label^="Step"]')
-    expect(dots).toHaveLength(3)
+    // There should be 4 step indicator dots (one per step)
+    const dots = container.querySelectorAll('button[aria-label^="Go to step"]')
+    expect(dots).toHaveLength(4)
 
     // Step 1 dot should be active (bg-crt-green), others inactive (bg-zinc-600)
     expect(dots[0]).toHaveClass('bg-crt-green')
     expect(dots[1]).toHaveClass('bg-zinc-600')
     expect(dots[2]).toHaveClass('bg-zinc-600')
-
-    // Verify aria-labels on dots
-    expect(dots[0]).toHaveAttribute('aria-label', 'Step 1 (current)')
-    expect(dots[1]).toHaveAttribute('aria-label', 'Step 2')
-    expect(dots[2]).toHaveAttribute('aria-label', 'Step 3')
+    expect(dots[3]).toHaveClass('bg-zinc-600')
 
     // Advance to step 2 and verify dot styling updates
     await act(async () => { fireEvent.click(screen.getByText('NEXT')) })
 
-    const updatedDots = container.querySelectorAll('span[aria-label^="Step"]')
+    const updatedDots = container.querySelectorAll('button[aria-label^="Go to step"]')
     expect(updatedDots[0]).toHaveClass('bg-zinc-600')
     expect(updatedDots[1]).toHaveClass('bg-crt-green')
     expect(updatedDots[2]).toHaveClass('bg-zinc-600')
+    expect(updatedDots[3]).toHaveClass('bg-zinc-600')
   })
 })

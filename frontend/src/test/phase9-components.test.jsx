@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { ToastProvider, useToast } from '../components/Toast'
 import ShortcutCheatsheet from '../components/ShortcutCheatsheet'
 import OnboardingModal from '../components/OnboardingModal'
 import { KEYBOARD_SHORTCUTS, DEFAULT_TEMPLATE_PRESETS } from '../lib/constants'
+import { createApiMock } from './test-utils'
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -37,11 +39,16 @@ vi.mock('../hooks/useNotifications', () => ({
   }),
 }))
 
-vi.mock('../lib/api', () => ({
+vi.mock('../lib/api', () => createApiMock({
+  createAbortable: vi.fn(() => ({ signal: undefined, abort: vi.fn() })),
   getStoredApiKey: vi.fn(() => null),
   clearApiKey: vi.fn(),
   getTemplates: vi.fn(() => Promise.resolve([])),
   createTemplate: vi.fn(() => Promise.resolve({ id: 1 })),
+  getProjectQuota: vi.fn(() => Promise.resolve({ project_id: 1, quota: {}, usage: {} })),
+  getProjectHealth: vi.fn(() => Promise.resolve({ project_id: 1, crash_rate: 0, status: 'healthy', trend: 'stable', run_count: 0 })),
+  getHealthTrends: vi.fn(() => Promise.resolve({ projects: [], computed_at: new Date().toISOString() })),
+  getRunCheckpoints: vi.fn(() => Promise.resolve({ run_id: 1, checkpoints: [], total: 0 })),
 }))
 
 import SettingsPanel from '../components/SettingsPanel'
@@ -180,51 +187,70 @@ describe('OnboardingModal', () => {
     localStorageMock.clear()
   })
 
+  const renderOnboarding = (props = {}) =>
+    render(
+      <MemoryRouter>
+        <OnboardingModal open={true} onClose={vi.fn()} {...props} />
+      </MemoryRouter>
+    )
+
   it('renders nothing when closed', () => {
-    const { container } = render(<OnboardingModal open={false} onClose={vi.fn()} />)
+    const { container } = render(
+      <MemoryRouter>
+        <OnboardingModal open={false} onClose={vi.fn()} />
+      </MemoryRouter>
+    )
     expect(container.innerHTML).toBe('')
   })
 
   it('shows first step when open', () => {
-    render(<OnboardingModal open={true} onClose={vi.fn()} />)
+    renderOnboarding()
     expect(screen.getByText('Welcome to Latent Underground')).toBeInTheDocument()
   })
 
   it('navigates through steps with Next button', () => {
-    render(<OnboardingModal open={true} onClose={vi.fn()} />)
+    renderOnboarding()
 
     expect(screen.getByText('Welcome to Latent Underground')).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('NEXT'))
-    expect(screen.getByText('Create Your First Project')).toBeInTheDocument()
+    expect(screen.getByText('Create & Configure')).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('NEXT'))
     expect(screen.getByText('Launch & Monitor')).toBeInTheDocument()
-    expect(screen.getByText('GET STARTED')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('NEXT'))
+    expect(screen.getByText('Stay Informed')).toBeInTheDocument()
+    expect(screen.getByText('CREATE FIRST PROJECT')).toBeInTheDocument()
   })
 
   it('navigates back with Back button', () => {
-    render(<OnboardingModal open={true} onClose={vi.fn()} />)
+    renderOnboarding()
 
     fireEvent.click(screen.getByText('NEXT'))
-    expect(screen.getByText('Create Your First Project')).toBeInTheDocument()
+    expect(screen.getByText('Create & Configure')).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('BACK'))
     expect(screen.getByText('Welcome to Latent Underground')).toBeInTheDocument()
   })
 
   it('Back button disabled on first step', () => {
-    render(<OnboardingModal open={true} onClose={vi.fn()} />)
+    renderOnboarding()
     expect(screen.getByText('BACK')).toBeDisabled()
   })
 
-  it('sets localStorage and calls onClose on Get Started', () => {
+  it('sets localStorage and calls onClose on Create First Project', () => {
     const onClose = vi.fn()
-    render(<OnboardingModal open={true} onClose={onClose} />)
+    render(
+      <MemoryRouter>
+        <OnboardingModal open={true} onClose={onClose} />
+      </MemoryRouter>
+    )
 
     fireEvent.click(screen.getByText('NEXT'))
     fireEvent.click(screen.getByText('NEXT'))
-    fireEvent.click(screen.getByText('GET STARTED'))
+    fireEvent.click(screen.getByText('NEXT'))
+    fireEvent.click(screen.getByText('CREATE FIRST PROJECT'))
 
     expect(localStorageMock.setItem).toHaveBeenCalledWith('lu_onboarding_complete', 'true')
     expect(onClose).toHaveBeenCalledTimes(1)
@@ -232,7 +258,11 @@ describe('OnboardingModal', () => {
 
   it('sets localStorage and calls onClose on Skip', () => {
     const onClose = vi.fn()
-    render(<OnboardingModal open={true} onClose={onClose} />)
+    render(
+      <MemoryRouter>
+        <OnboardingModal open={true} onClose={onClose} />
+      </MemoryRouter>
+    )
 
     fireEvent.click(screen.getByLabelText('Skip onboarding'))
 
@@ -241,16 +271,16 @@ describe('OnboardingModal', () => {
   })
 
   it('has dialog role and aria attributes', () => {
-    render(<OnboardingModal open={true} onClose={vi.fn()} />)
+    renderOnboarding()
     const dialog = screen.getByRole('dialog')
     expect(dialog).toHaveAttribute('aria-modal', 'true')
     expect(dialog).toHaveAttribute('aria-labelledby', 'onboarding-title')
   })
 
   it('shows step indicator dots', () => {
-    render(<OnboardingModal open={true} onClose={vi.fn()} />)
-    const dots = document.querySelectorAll('[aria-label^="Step"]')
-    expect(dots.length).toBe(3)
+    renderOnboarding()
+    const dots = document.querySelectorAll('[aria-label^="Go to step"]')
+    expect(dots.length).toBe(4)
   })
 })
 

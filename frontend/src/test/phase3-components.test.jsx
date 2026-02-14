@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { createApiMock, createSwarmQueryMock, createMutationsMock, TestQueryWrapper } from './test-utils'
 
 // --- SwarmHistory ---
 import SwarmHistory from '../components/SwarmHistory'
@@ -85,6 +86,23 @@ describe('SwarmHistory', () => {
 })
 
 // --- TerminalOutput ---
+vi.mock('../lib/api', () => createApiMock({
+  createAbortable: vi.fn(() => ({ signal: undefined, abort: vi.fn() })),
+  sendSwarmInput: vi.fn(),
+  getSwarmAgents: vi.fn(() => Promise.resolve({ agents: [] })),
+  stopSwarmAgent: vi.fn(),
+  getSystemInfo: vi.fn(() => Promise.resolve({})),
+  getSystemHealth: vi.fn(() => Promise.resolve({ status: 'ok' })),
+  getMetrics: vi.fn(() => Promise.resolve('')),
+  getHealthTrends: vi.fn(() => Promise.resolve({})),
+  getProjectHealth: vi.fn(() => Promise.resolve({ crash_rate: 0, trend: 'stable', classification: 'healthy', total_runs: 0 })),
+  getProjectQuota: vi.fn(() => Promise.resolve({})),
+  getRunCheckpoints: vi.fn(() => Promise.resolve([])),
+}))
+
+vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock())
+vi.mock('../hooks/useMutations', () => createMutationsMock())
+
 import TerminalOutput, { stripAnsi, parseAnsiLine } from '../components/TerminalOutput'
 
 describe('TerminalOutput', () => {
@@ -101,7 +119,7 @@ describe('TerminalOutput', () => {
     await act(async () => {
       render(<TerminalOutput projectId={1} fetchOutput={fetchOutput} />)
     })
-    expect(screen.getByText('No output yet')).toBeInTheDocument()
+    expect(screen.getByText(/No output yet/)).toBeInTheDocument()
   })
 
   it('renders output lines', async () => {
@@ -111,8 +129,10 @@ describe('TerminalOutput', () => {
     }))
     await act(async () => {
       render(<TerminalOutput projectId={1} fetchOutput={fetchOutput} />)
-      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(200)
     })
+    // Virtual scroll renders visible items; advance timers for ResizeObserver mock
+    await act(async () => { await vi.advanceTimersByTimeAsync(50) })
     expect(screen.getByText(/Hello world/)).toBeInTheDocument()
     expect(screen.getByText(/Debug info/)).toBeInTheDocument()
   })
@@ -122,7 +142,7 @@ describe('TerminalOutput', () => {
     await act(async () => {
       render(<TerminalOutput projectId={1} fetchOutput={fetchOutput} />)
     })
-    expect(screen.getByText('Terminal Output')).toBeInTheDocument()
+    expect(screen.getByText('Terminal')).toBeInTheDocument()
   })
 
   it('has log role for accessibility', async () => {
@@ -164,14 +184,15 @@ describe('TerminalOutput', () => {
     }))
     await act(async () => {
       render(<TerminalOutput projectId={1} fetchOutput={fetchOutput} />)
-      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(200)
     })
+    await act(async () => { await vi.advanceTimersByTimeAsync(50) })
     expect(screen.getByText(/line 1/)).toBeInTheDocument()
 
     await act(async () => {
       fireEvent.click(screen.getByText('Clear'))
     })
-    expect(screen.getByText('No output yet')).toBeInTheDocument()
+    expect(screen.getByText(/No output yet/)).toBeInTheDocument()
   })
 
   it('calls fetchOutput with projectId and offset', async () => {
@@ -179,7 +200,7 @@ describe('TerminalOutput', () => {
     await act(async () => {
       render(<TerminalOutput projectId={42} fetchOutput={fetchOutput} />)
     })
-    expect(fetchOutput).toHaveBeenCalledWith(42, 0)
+    expect(fetchOutput).toHaveBeenCalledWith(42, 0, null, expect.objectContaining({}))
   })
 })
 
@@ -213,30 +234,34 @@ describe('ANSI parsing', () => {
 // --- ProjectSettings ---
 import ProjectSettings from '../components/ProjectSettings'
 
+function renderPS(props = {}) {
+  return render(<TestQueryWrapper><ProjectSettings projectId={1} onSave={vi.fn()} {...props} /></TestQueryWrapper>)
+}
+
 describe('ProjectSettings', () => {
   it('renders form fields', () => {
-    render(<ProjectSettings projectId={1} onSave={vi.fn()} />)
+    renderPS()
     expect(screen.getByLabelText('Agent Count')).toBeInTheDocument()
     expect(screen.getByLabelText('Max Phases')).toBeInTheDocument()
     expect(screen.getByLabelText('Custom Prompts')).toBeInTheDocument()
   })
 
   it('renders with default values', () => {
-    render(<ProjectSettings projectId={1} onSave={vi.fn()} />)
+    renderPS()
     expect(screen.getByLabelText('Agent Count')).toHaveValue(4)
     expect(screen.getByLabelText('Max Phases')).toHaveValue(24)
   })
 
   it('renders with initial config', () => {
     const config = { agent_count: 6, max_phases: 5, custom_prompts: 'Focus on tests' }
-    render(<ProjectSettings projectId={1} initialConfig={config} onSave={vi.fn()} />)
+    renderPS({ initialConfig: config })
     expect(screen.getByLabelText('Agent Count')).toHaveValue(6)
     expect(screen.getByLabelText('Max Phases')).toHaveValue(5)
     expect(screen.getByLabelText('Custom Prompts')).toHaveValue('Focus on tests')
   })
 
   it('updates agent count on input', () => {
-    render(<ProjectSettings projectId={1} onSave={vi.fn()} />)
+    renderPS()
     const input = screen.getByLabelText('Agent Count')
     fireEvent.change(input, { target: { value: '8' } })
     expect(input).toHaveValue(8)
@@ -244,7 +269,7 @@ describe('ProjectSettings', () => {
 
   it('calls onSave with config on submit', async () => {
     const onSave = vi.fn(() => Promise.resolve())
-    render(<ProjectSettings projectId={42} onSave={onSave} />)
+    renderPS({ projectId: 42, onSave })
 
     await act(async () => {
       fireEvent.click(screen.getByText('Save Settings'))
@@ -259,7 +284,7 @@ describe('ProjectSettings', () => {
   it('shows saving state during save', async () => {
     let resolvePromise
     const onSave = vi.fn(() => new Promise((resolve) => { resolvePromise = resolve }))
-    render(<ProjectSettings projectId={1} onSave={onSave} />)
+    renderPS({ onSave })
 
     await act(async () => {
       fireEvent.click(screen.getByText('Save Settings'))
@@ -271,12 +296,12 @@ describe('ProjectSettings', () => {
   })
 
   it('renders header label', () => {
-    render(<ProjectSettings projectId={1} onSave={vi.fn()} />)
+    renderPS()
     expect(screen.getByText('Project Settings')).toBeInTheDocument()
   })
 
   it('has submit button', () => {
-    render(<ProjectSettings projectId={1} onSave={vi.fn()} />)
+    renderPS()
     expect(screen.getByText('Save Settings')).toBeInTheDocument()
   })
 })

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { renderHook } from '@testing-library/react'
+import { createApiMock, createProjectQueryMock, createSwarmQueryMock, createMutationsMock, TestQueryWrapper } from './test-utils'
 
 // Mock react-router-dom
 const mockNavigate = vi.fn()
@@ -11,7 +12,8 @@ vi.mock('react-router-dom', () => ({
 }))
 
 // Mock api module
-vi.mock('../lib/api', () => ({
+vi.mock('../lib/api', () => createApiMock({
+  createAbortable: vi.fn(() => ({ signal: undefined, abort: vi.fn() })),
   getTemplates: vi.fn(() => Promise.resolve([])),
   createProject: vi.fn(() => Promise.resolve({ id: 42, name: 'Test' })),
   launchSwarm: vi.fn(() => Promise.resolve({ status: 'launched' })),
@@ -19,6 +21,29 @@ vi.mock('../lib/api', () => ({
   updateTemplate: vi.fn(() => Promise.resolve({ id: 1, name: 'Updated' })),
   deleteTemplate: vi.fn(() => Promise.resolve(null)),
   browseDirectory: vi.fn(() => Promise.resolve({ entries: [] })),
+  getProjectQuota: vi.fn(() => Promise.resolve({ project_id: 1, quota: {}, usage: {} })),
+  getProjectHealth: vi.fn(() => Promise.resolve({ project_id: 1, crash_rate: 0, status: 'healthy', trend: 'stable', run_count: 0 })),
+  getHealthTrends: vi.fn(() => Promise.resolve({ projects: [], computed_at: new Date().toISOString() })),
+  getRunCheckpoints: vi.fn(() => Promise.resolve({ run_id: 1, checkpoints: [], total: 0 })),
+}))
+
+// Configurable mock for useTemplates (per-test override via mockUseTemplates.mockReturnValue)
+const mockUseTemplates = vi.fn(() => ({ data: [], isLoading: false, error: null }))
+vi.mock('../hooks/useProjectQuery', () => ({
+  ...createProjectQueryMock(),
+  useTemplates: (...args) => mockUseTemplates(...args),
+}))
+vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock())
+
+// Configurable mutation mocks (per-test override)
+const mockCreateProjectMutateAsync = vi.fn(() => Promise.resolve({ id: 42, name: 'Test' }))
+const mockLaunchSwarmMutateAsync = vi.fn(() => Promise.resolve({ status: 'launched' }))
+const mockCreateTemplateMutateAsync = vi.fn(() => Promise.resolve({ id: 1, name: 'New' }))
+vi.mock('../hooks/useMutations', () => ({
+  ...createMutationsMock(),
+  useCreateProject: () => ({ mutateAsync: mockCreateProjectMutateAsync, isPending: false }),
+  useLaunchSwarm: () => ({ mutateAsync: mockLaunchSwarmMutateAsync, isPending: false }),
+  useCreateTemplate: () => ({ mutateAsync: mockCreateTemplateMutateAsync, isPending: false }),
 }))
 
 import { getTemplates, createProject, launchSwarm, createTemplate, updateTemplate, deleteTemplate, browseDirectory } from '../lib/api'
@@ -31,9 +56,11 @@ import { useDebounce } from '../hooks/useDebounce'
 
 function renderNewProject(props = {}) {
   return render(
-    <ToastProvider>
-      <NewProject onProjectChange={vi.fn()} {...props} />
-    </ToastProvider>
+    <TestQueryWrapper>
+      <ToastProvider>
+        <NewProject onProjectChange={vi.fn()} {...props} />
+      </ToastProvider>
+    </TestQueryWrapper>
   )
 }
 
@@ -50,10 +77,14 @@ describe('NewProject template selector', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockNavigate.mockClear()
+    // Re-set defaults after clearAllMocks
+    mockUseTemplates.mockReturnValue({ data: [], isLoading: false, error: null })
+    mockCreateProjectMutateAsync.mockResolvedValue({ id: 42, name: 'Test' })
+    mockLaunchSwarmMutateAsync.mockResolvedValue({ status: 'launched' })
   })
 
   it('shows "no templates" message when no templates exist', async () => {
-    getTemplates.mockResolvedValue([])
+    mockUseTemplates.mockReturnValue({ data: [], isLoading: false, error: null })
     await act(async () => { renderNewProject() })
 
     // Label always shown, but dropdown is not rendered - shows empty state message instead
@@ -63,9 +94,9 @@ describe('NewProject template selector', () => {
   })
 
   it('shows template dropdown when templates exist', async () => {
-    getTemplates.mockResolvedValue([
+    mockUseTemplates.mockReturnValue({ data: [
       { id: 1, name: 'FastAPI Standard', description: '4-agent setup', config: { agent_count: 4, max_phases: 6 } },
-    ])
+    ], isLoading: false, error: null })
     await act(async () => { renderNewProject() })
 
     expect(screen.getByText('Start from Template')).toBeInTheDocument()
@@ -73,7 +104,7 @@ describe('NewProject template selector', () => {
   })
 
   it('populates form fields when template is selected', async () => {
-    getTemplates.mockResolvedValue([
+    mockUseTemplates.mockReturnValue({ data: [
       {
         id: 1,
         name: 'React Template',
@@ -86,7 +117,7 @@ describe('NewProject template selector', () => {
           complexity: 'Complex',
         },
       },
-    ])
+    ], isLoading: false, error: null })
     await act(async () => { renderNewProject() })
 
     // Select the template
@@ -101,14 +132,14 @@ describe('NewProject template selector', () => {
   })
 
   it('shows template config info (agents and phases)', async () => {
-    getTemplates.mockResolvedValue([
+    mockUseTemplates.mockReturnValue({ data: [
       {
         id: 1,
         name: 'Config Template',
         description: '',
         config: { agent_count: 6, max_phases: 10 },
       },
-    ])
+    ], isLoading: false, error: null })
     await act(async () => { renderNewProject() })
 
     const select = screen.getByDisplayValue('Custom (no template)')
@@ -119,14 +150,14 @@ describe('NewProject template selector', () => {
   })
 
   it('resets form when deselecting template', async () => {
-    getTemplates.mockResolvedValue([
+    mockUseTemplates.mockReturnValue({ data: [
       {
         id: 1,
         name: 'Reset Test',
         description: '',
         config: { project_type: 'CLI Tool', tech_stack: 'Rust' },
       },
-    ])
+    ], isLoading: false, error: null })
     await act(async () => { renderNewProject() })
 
     const select = screen.getByDisplayValue('Custom (no template)')
@@ -140,8 +171,7 @@ describe('NewProject template selector', () => {
   })
 
   it('submits create project form', async () => {
-    getTemplates.mockResolvedValue([])
-    createProject.mockResolvedValue({ id: 42, name: 'My App' })
+    mockCreateProjectMutateAsync.mockResolvedValue({ id: 42, name: 'My App' })
 
     await act(async () => { renderNewProject() })
 
@@ -155,7 +185,7 @@ describe('NewProject template selector', () => {
       fireEvent.click(screen.getByText('Create Project'))
     })
 
-    expect(createProject).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockCreateProjectMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
       name: 'My App',
       goal: 'Build something',
       folder_path: 'F:/MyApp',
@@ -164,16 +194,15 @@ describe('NewProject template selector', () => {
   })
 
   it('uses template config for Create & Launch', async () => {
-    getTemplates.mockResolvedValue([
+    mockUseTemplates.mockReturnValue({ data: [
       {
         id: 1,
         name: 'Launch Template',
         description: '',
         config: { agent_count: 8, max_phases: 12 },
       },
-    ])
-    createProject.mockResolvedValue({ id: 55, name: 'Launched' })
-    launchSwarm.mockResolvedValue({ status: 'launched' })
+    ], isLoading: false, error: null })
+    mockCreateProjectMutateAsync.mockResolvedValue({ id: 55, name: 'Launched' })
 
     await act(async () => { renderNewProject() })
 
@@ -191,7 +220,7 @@ describe('NewProject template selector', () => {
       fireEvent.click(screen.getByText('Create & Launch'))
     })
 
-    expect(launchSwarm).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockLaunchSwarmMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
       project_id: 55,
       agent_count: 8,
       max_phases: 12,
@@ -199,8 +228,7 @@ describe('NewProject template selector', () => {
   })
 
   it('shows error message on create failure', async () => {
-    getTemplates.mockResolvedValue([])
-    createProject.mockRejectedValue(new Error('400: Name required'))
+    mockCreateProjectMutateAsync.mockRejectedValue(new Error('400: Name required'))
 
     await act(async () => { renderNewProject() })
 
@@ -217,7 +245,7 @@ describe('NewProject template selector', () => {
   })
 
   it('renders complexity buttons and allows selection', async () => {
-    getTemplates.mockResolvedValue([])
+    mockUseTemplates.mockReturnValue({ data: [], isLoading: false, error: null })
     await act(async () => { renderNewProject() })
 
     const complexBtn = screen.getByText('Complex')

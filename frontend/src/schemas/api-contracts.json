@@ -1,0 +1,4073 @@
+{
+  "AgentEventOut": {
+    "properties": {
+      "agent_name": {
+        "title": "Agent Name",
+        "type": "string"
+      },
+      "detail": {
+        "default": "",
+        "title": "Detail",
+        "type": "string"
+      },
+      "event_type": {
+        "title": "Event Type",
+        "type": "string"
+      },
+      "id": {
+        "title": "Id",
+        "type": "integer"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Run Id"
+      },
+      "timestamp": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Timestamp"
+      }
+    },
+    "required": [
+      "id",
+      "project_id",
+      "agent_name",
+      "event_type"
+    ],
+    "title": "AgentEventOut",
+    "type": "object"
+  },
+  "AgentEventsListOut": {
+    "$defs": {
+      "AgentEventOut": {
+        "properties": {
+          "agent_name": {
+            "title": "Agent Name",
+            "type": "string"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "integer"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "agent_name",
+          "event_type"
+        ],
+        "title": "AgentEventOut",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "events": {
+        "items": {
+          "$ref": "#/$defs/AgentEventOut"
+        },
+        "title": "Events",
+        "type": "array"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "total": {
+        "title": "Total",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "project_id",
+      "events",
+      "total"
+    ],
+    "title": "AgentEventsListOut",
+    "type": "object"
+  },
+  "AgentHeartbeat": {
+    "properties": {
+      "last_heartbeat": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Last Heartbeat"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "title": "AgentHeartbeat",
+    "type": "object"
+  },
+  "AgentLogOut": {
+    "properties": {
+      "agent": {
+        "title": "Agent",
+        "type": "string"
+      },
+      "lines": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Lines",
+        "type": "array"
+      }
+    },
+    "required": [
+      "agent",
+      "lines"
+    ],
+    "title": "AgentLogOut",
+    "type": "object"
+  },
+  "AgentMetric": {
+    "properties": {
+      "alive": {
+        "title": "Alive",
+        "type": "boolean"
+      },
+      "cpu_percent": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cpu Percent"
+      },
+      "memory_mb": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Memory Mb"
+      },
+      "memory_percent": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Memory Percent"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "pid": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Pid"
+      },
+      "threads": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Threads"
+      },
+      "uptime_seconds": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Uptime Seconds"
+      }
+    },
+    "required": [
+      "name",
+      "alive"
+    ],
+    "title": "AgentMetric",
+    "type": "object"
+  },
+  "AgentMetricsOut": {
+    "$defs": {
+      "AgentMetric": {
+        "properties": {
+          "alive": {
+            "title": "Alive",
+            "type": "boolean"
+          },
+          "cpu_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cpu Percent"
+          },
+          "memory_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Memory Mb"
+          },
+          "memory_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Memory Percent"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Pid"
+          },
+          "threads": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Threads"
+          },
+          "uptime_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Uptime Seconds"
+          }
+        },
+        "required": [
+          "name",
+          "alive"
+        ],
+        "title": "AgentMetric",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "agents": {
+        "items": {
+          "$ref": "#/$defs/AgentMetric"
+        },
+        "title": "Agents",
+        "type": "array"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "psutil_available": {
+        "default": true,
+        "title": "Psutil Available",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "project_id",
+      "agents"
+    ],
+    "title": "AgentMetricsOut",
+    "type": "object"
+  },
+  "AgentStatusOut": {
+    "properties": {
+      "alive": {
+        "title": "Alive",
+        "type": "boolean"
+      },
+      "circuit_state": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Circuit State"
+      },
+      "exit_code": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Exit Code"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "output_lines": {
+        "default": 0,
+        "title": "Output Lines",
+        "type": "integer"
+      },
+      "pid": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Pid"
+      },
+      "started_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Started At"
+      },
+      "supports_stdin": {
+        "default": false,
+        "title": "Supports Stdin",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "name",
+      "alive"
+    ],
+    "title": "AgentStatusOut",
+    "type": "object"
+  },
+  "AgentStopOut": {
+    "properties": {
+      "agent": {
+        "title": "Agent",
+        "type": "string"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "agent",
+      "project_id",
+      "status"
+    ],
+    "title": "AgentStopOut",
+    "type": "object"
+  },
+  "AgentsListOut": {
+    "$defs": {
+      "AgentStatusOut": {
+        "properties": {
+          "alive": {
+            "title": "Alive",
+            "type": "boolean"
+          },
+          "circuit_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Circuit State"
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Exit Code"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "output_lines": {
+            "default": 0,
+            "title": "Output Lines",
+            "type": "integer"
+          },
+          "pid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Pid"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "supports_stdin": {
+            "default": false,
+            "title": "Supports Stdin",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "alive"
+        ],
+        "title": "AgentStatusOut",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "agents": {
+        "items": {
+          "$ref": "#/$defs/AgentStatusOut"
+        },
+        "title": "Agents",
+        "type": "array"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "project_id",
+      "agents"
+    ],
+    "title": "AgentsListOut",
+    "type": "object"
+  },
+  "BrowseDirEntry": {
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "path": {
+        "title": "Path",
+        "type": "string"
+      }
+    },
+    "required": [
+      "name",
+      "path"
+    ],
+    "title": "BrowseDirEntry",
+    "type": "object"
+  },
+  "BrowseOut": {
+    "$defs": {
+      "BrowseDirEntry": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path"
+        ],
+        "title": "BrowseDirEntry",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "dirs": {
+        "items": {
+          "$ref": "#/$defs/BrowseDirEntry"
+        },
+        "title": "Dirs",
+        "type": "array"
+      },
+      "parent": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Parent"
+      },
+      "path": {
+        "title": "Path",
+        "type": "string"
+      },
+      "truncated": {
+        "default": false,
+        "title": "Truncated",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "path",
+      "dirs"
+    ],
+    "title": "BrowseOut",
+    "type": "object"
+  },
+  "BulkArchiveOut": {
+    "properties": {
+      "already_archived": {
+        "items": {
+          "type": "integer"
+        },
+        "title": "Already Archived",
+        "type": "array"
+      },
+      "archived": {
+        "items": {
+          "type": "integer"
+        },
+        "title": "Archived",
+        "type": "array"
+      },
+      "not_found": {
+        "items": {
+          "type": "integer"
+        },
+        "title": "Not Found",
+        "type": "array"
+      }
+    },
+    "title": "BulkArchiveOut",
+    "type": "object"
+  },
+  "BulkArchiveRequest": {
+    "properties": {
+      "project_ids": {
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 50,
+        "minItems": 1,
+        "title": "Project Ids",
+        "type": "array"
+      }
+    },
+    "required": [
+      "project_ids"
+    ],
+    "title": "BulkArchiveRequest",
+    "type": "object"
+  },
+  "BulkUnarchiveOut": {
+    "properties": {
+      "not_archived": {
+        "items": {
+          "type": "integer"
+        },
+        "title": "Not Archived",
+        "type": "array"
+      },
+      "not_found": {
+        "items": {
+          "type": "integer"
+        },
+        "title": "Not Found",
+        "type": "array"
+      },
+      "unarchived": {
+        "items": {
+          "type": "integer"
+        },
+        "title": "Unarchived",
+        "type": "array"
+      }
+    },
+    "title": "BulkUnarchiveOut",
+    "type": "object"
+  },
+  "CheckpointOut": {
+    "properties": {
+      "agent_name": {
+        "title": "Agent Name",
+        "type": "string"
+      },
+      "checkpoint_type": {
+        "title": "Checkpoint Type",
+        "type": "string"
+      },
+      "data": {
+        "additionalProperties": true,
+        "title": "Data",
+        "type": "object"
+      },
+      "id": {
+        "title": "Id",
+        "type": "integer"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Run Id"
+      },
+      "timestamp": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Timestamp"
+      }
+    },
+    "required": [
+      "id",
+      "project_id",
+      "agent_name",
+      "checkpoint_type"
+    ],
+    "title": "CheckpointOut",
+    "type": "object"
+  },
+  "CheckpointsListOut": {
+    "$defs": {
+      "CheckpointOut": {
+        "properties": {
+          "agent_name": {
+            "title": "Agent Name",
+            "type": "string"
+          },
+          "checkpoint_type": {
+            "title": "Checkpoint Type",
+            "type": "string"
+          },
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "integer"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "agent_name",
+          "checkpoint_type"
+        ],
+        "title": "CheckpointOut",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "checkpoints": {
+        "items": {
+          "$ref": "#/$defs/CheckpointOut"
+        },
+        "title": "Checkpoints",
+        "type": "array"
+      },
+      "run_id": {
+        "title": "Run Id",
+        "type": "integer"
+      },
+      "total": {
+        "title": "Total",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "run_id",
+      "checkpoints",
+      "total"
+    ],
+    "title": "CheckpointsListOut",
+    "type": "object"
+  },
+  "DirectiveOut": {
+    "properties": {
+      "agent": {
+        "title": "Agent",
+        "type": "string"
+      },
+      "priority": {
+        "default": "normal",
+        "title": "Priority",
+        "type": "string"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "agent",
+      "project_id",
+      "status"
+    ],
+    "title": "DirectiveOut",
+    "type": "object"
+  },
+  "DirectiveStatusOut": {
+    "properties": {
+      "pending": {
+        "title": "Pending",
+        "type": "boolean"
+      },
+      "queued_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Queued At"
+      },
+      "text": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Text"
+      }
+    },
+    "required": [
+      "pending"
+    ],
+    "title": "DirectiveStatusOut",
+    "type": "object"
+  },
+  "ErrorDetail": {
+    "description": "Standard error response body.",
+    "properties": {
+      "detail": {
+        "title": "Detail",
+        "type": "string"
+      }
+    },
+    "required": [
+      "detail"
+    ],
+    "title": "ErrorDetail",
+    "type": "object"
+  },
+  "FileReadOut": {
+    "properties": {
+      "content": {
+        "title": "Content",
+        "type": "string"
+      },
+      "path": {
+        "title": "Path",
+        "type": "string"
+      }
+    },
+    "required": [
+      "path",
+      "content"
+    ],
+    "title": "FileReadOut",
+    "type": "object"
+  },
+  "FileWriteOut": {
+    "properties": {
+      "path": {
+        "title": "Path",
+        "type": "string"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "path",
+      "status"
+    ],
+    "title": "FileWriteOut",
+    "type": "object"
+  },
+  "GuardrailResultOut": {
+    "properties": {
+      "action": {
+        "title": "Action",
+        "type": "string"
+      },
+      "detail": {
+        "default": "",
+        "title": "Detail",
+        "type": "string"
+      },
+      "passed": {
+        "title": "Passed",
+        "type": "boolean"
+      },
+      "pattern": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Pattern"
+      },
+      "rule_type": {
+        "title": "Rule Type",
+        "type": "string"
+      },
+      "threshold": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Threshold"
+      }
+    },
+    "required": [
+      "rule_type",
+      "action",
+      "passed"
+    ],
+    "title": "GuardrailResultOut",
+    "type": "object"
+  },
+  "GuardrailRule": {
+    "description": "A single guardrail validation rule applied to swarm output.",
+    "properties": {
+      "action": {
+        "default": "warn",
+        "description": "Action on violation: warn (emit event, continue) or halt (fail run, stop chaining)",
+        "enum": [
+          "warn",
+          "halt"
+        ],
+        "title": "Action",
+        "type": "string"
+      },
+      "pattern": {
+        "anyOf": [
+          {
+            "maxLength": 200,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Regex pattern (required for regex_match and regex_reject types)",
+        "title": "Pattern"
+      },
+      "threshold": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Numeric threshold (required for min_lines and max_errors types)",
+        "title": "Threshold"
+      },
+      "type": {
+        "description": "Rule type: regex_match (require pattern), regex_reject (reject pattern), min_lines (minimum output lines), max_errors (max error count)",
+        "enum": [
+          "regex_match",
+          "regex_reject",
+          "min_lines",
+          "max_errors"
+        ],
+        "title": "Type",
+        "type": "string"
+      }
+    },
+    "required": [
+      "type"
+    ],
+    "title": "GuardrailRule",
+    "type": "object"
+  },
+  "GuardrailValidationOut": {
+    "$defs": {
+      "GuardrailResultOut": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Pattern"
+          },
+          "rule_type": {
+            "title": "Rule Type",
+            "type": "string"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Threshold"
+          }
+        },
+        "required": [
+          "rule_type",
+          "action",
+          "passed"
+        ],
+        "title": "GuardrailResultOut",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "guardrails": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Guardrails",
+        "type": "array"
+      },
+      "last_results": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/$defs/GuardrailResultOut"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Last Results"
+      },
+      "last_run_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Last Run Id"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "project_id"
+    ],
+    "title": "GuardrailValidationOut",
+    "type": "object"
+  },
+  "HealthOut": {
+    "properties": {
+      "active_processes": {
+        "title": "Active Processes",
+        "type": "integer"
+      },
+      "app": {
+        "title": "App",
+        "type": "string"
+      },
+      "db": {
+        "title": "Db",
+        "type": "string"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      },
+      "uptime_seconds": {
+        "title": "Uptime Seconds",
+        "type": "integer"
+      },
+      "version": {
+        "title": "Version",
+        "type": "string"
+      }
+    },
+    "required": [
+      "app",
+      "version",
+      "uptime_seconds",
+      "status",
+      "db",
+      "active_processes"
+    ],
+    "title": "HealthOut",
+    "type": "object"
+  },
+  "HealthTrendsOut": {
+    "$defs": {
+      "ProjectHealthScore": {
+        "properties": {
+          "avg_duration_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Avg Duration Seconds"
+          },
+          "crash_rate": {
+            "default": 0.0,
+            "title": "Crash Rate",
+            "type": "number"
+          },
+          "error_density": {
+            "default": 0.0,
+            "title": "Error Density",
+            "type": "number"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "integer"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "status": {
+            "default": "healthy",
+            "title": "Status",
+            "type": "string"
+          },
+          "total_runs_analyzed": {
+            "default": 0,
+            "title": "Total Runs Analyzed",
+            "type": "integer"
+          },
+          "trend": {
+            "default": "stable",
+            "title": "Trend",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "project_name"
+        ],
+        "title": "ProjectHealthScore",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "computed_at": {
+        "title": "Computed At",
+        "type": "string"
+      },
+      "projects": {
+        "items": {
+          "$ref": "#/$defs/ProjectHealthScore"
+        },
+        "title": "Projects",
+        "type": "array"
+      }
+    },
+    "required": [
+      "projects",
+      "computed_at"
+    ],
+    "title": "HealthTrendsOut",
+    "type": "object"
+  },
+  "LogSearchOut": {
+    "$defs": {
+      "LogSearchResult": {
+        "properties": {
+          "agent": {
+            "title": "Agent",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "agent"
+        ],
+        "title": "LogSearchResult",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "results": {
+        "items": {
+          "$ref": "#/$defs/LogSearchResult"
+        },
+        "title": "Results",
+        "type": "array"
+      },
+      "total": {
+        "title": "Total",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "results",
+      "total"
+    ],
+    "title": "LogSearchOut",
+    "type": "object"
+  },
+  "LogSearchResult": {
+    "properties": {
+      "agent": {
+        "title": "Agent",
+        "type": "string"
+      },
+      "text": {
+        "title": "Text",
+        "type": "string"
+      }
+    },
+    "required": [
+      "text",
+      "agent"
+    ],
+    "title": "LogSearchResult",
+    "type": "object"
+  },
+  "LogsOut": {
+    "$defs": {
+      "AgentLogOut": {
+        "properties": {
+          "agent": {
+            "title": "Agent",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "agent",
+          "lines"
+        ],
+        "title": "AgentLogOut",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "logs": {
+        "items": {
+          "$ref": "#/$defs/AgentLogOut"
+        },
+        "title": "Logs",
+        "type": "array"
+      }
+    },
+    "required": [
+      "logs"
+    ],
+    "title": "LogsOut",
+    "type": "object"
+  },
+  "OutputSearchMatch": {
+    "properties": {
+      "agent": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Agent"
+      },
+      "context_after": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Context After",
+        "type": "array"
+      },
+      "context_before": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Context Before",
+        "type": "array"
+      },
+      "line_number": {
+        "title": "Line Number",
+        "type": "integer"
+      },
+      "text": {
+        "title": "Text",
+        "type": "string"
+      }
+    },
+    "required": [
+      "line_number",
+      "text"
+    ],
+    "title": "OutputSearchMatch",
+    "type": "object"
+  },
+  "OutputSearchOut": {
+    "$defs": {
+      "OutputSearchMatch": {
+        "properties": {
+          "agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Agent"
+          },
+          "context_after": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Context After",
+            "type": "array"
+          },
+          "context_before": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Context Before",
+            "type": "array"
+          },
+          "line_number": {
+            "title": "Line Number",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_number",
+          "text"
+        ],
+        "title": "OutputSearchMatch",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "matches": {
+        "items": {
+          "$ref": "#/$defs/OutputSearchMatch"
+        },
+        "title": "Matches",
+        "type": "array"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "query": {
+        "title": "Query",
+        "type": "string"
+      },
+      "total_matches": {
+        "title": "Total Matches",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "project_id",
+      "query",
+      "total_matches",
+      "matches"
+    ],
+    "title": "OutputSearchOut",
+    "type": "object"
+  },
+  "PluginOut": {
+    "properties": {
+      "config": {
+        "additionalProperties": true,
+        "title": "Config",
+        "type": "object"
+      },
+      "description": {
+        "default": "",
+        "title": "Description",
+        "type": "string"
+      },
+      "enabled": {
+        "default": true,
+        "title": "Enabled",
+        "type": "boolean"
+      },
+      "hooks": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "title": "Hooks",
+        "type": "object"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "source_path": {
+        "default": "",
+        "title": "Source Path",
+        "type": "string"
+      },
+      "version": {
+        "default": "1.0.0",
+        "title": "Version",
+        "type": "string"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "title": "PluginOut",
+    "type": "object"
+  },
+  "PluginToggleOut": {
+    "properties": {
+      "enabled": {
+        "title": "Enabled",
+        "type": "boolean"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      }
+    },
+    "required": [
+      "name",
+      "enabled"
+    ],
+    "title": "PluginToggleOut",
+    "type": "object"
+  },
+  "ProjectAnalyticsOut": {
+    "$defs": {
+      "RunTrend": {
+        "properties": {
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ended At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "tasks_completed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tasks Completed"
+          }
+        },
+        "title": "RunTrend",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "avg_duration": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Avg Duration"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "run_trends": {
+        "items": {
+          "$ref": "#/$defs/RunTrend"
+        },
+        "title": "Run Trends",
+        "type": "array"
+      },
+      "success_rate": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Success Rate"
+      },
+      "total_runs": {
+        "title": "Total Runs",
+        "type": "integer"
+      },
+      "total_tasks": {
+        "title": "Total Tasks",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "project_id",
+      "total_runs",
+      "total_tasks",
+      "run_trends"
+    ],
+    "title": "ProjectAnalyticsOut",
+    "type": "object"
+  },
+  "ProjectConfig": {
+    "$defs": {
+      "GuardrailRule": {
+        "description": "A single guardrail validation rule applied to swarm output.",
+        "properties": {
+          "action": {
+            "default": "warn",
+            "description": "Action on violation: warn (emit event, continue) or halt (fail run, stop chaining)",
+            "enum": [
+              "warn",
+              "halt"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "pattern": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Regex pattern (required for regex_match and regex_reject types)",
+            "title": "Pattern"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Numeric threshold (required for min_lines and max_errors types)",
+            "title": "Threshold"
+          },
+          "type": {
+            "description": "Rule type: regex_match (require pattern), regex_reject (reject pattern), min_lines (minimum output lines), max_errors (max error count)",
+            "enum": [
+              "regex_match",
+              "regex_reject",
+              "min_lines",
+              "max_errors"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "GuardrailRule",
+        "type": "object"
+      }
+    },
+    "description": "Project agent configuration: control swarm behavior.",
+    "properties": {
+      "agent_count": {
+        "anyOf": [
+          {
+            "maximum": 16,
+            "minimum": 1,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "examples": [
+          4
+        ],
+        "title": "Agent Count"
+      },
+      "auto_stop_minutes": {
+        "anyOf": [
+          {
+            "maximum": 1440,
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Auto-stop swarm if no output for N minutes (0 = disabled)",
+        "examples": [
+          0
+        ],
+        "title": "Auto Stop Minutes"
+      },
+      "circuit_breaker_max_failures": {
+        "anyOf": [
+          {
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Max failures within window before circuit opens (1-10, None = disabled)",
+        "title": "Circuit Breaker Max Failures"
+      },
+      "circuit_breaker_recovery_seconds": {
+        "anyOf": [
+          {
+            "maximum": 600,
+            "minimum": 30,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Wait time before half-open probe attempt (30-600, None = 60)",
+        "title": "Circuit Breaker Recovery Seconds"
+      },
+      "circuit_breaker_window_seconds": {
+        "anyOf": [
+          {
+            "maximum": 3600,
+            "minimum": 60,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Failure counting window in seconds (60-3600, None = 300)",
+        "title": "Circuit Breaker Window Seconds"
+      },
+      "custom_prompts": {
+        "anyOf": [
+          {
+            "maxLength": 5000,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Custom Prompts"
+      },
+      "guardrails": {
+        "anyOf": [
+          {
+            "items": {
+              "$ref": "#/$defs/GuardrailRule"
+            },
+            "maxItems": 20,
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Output guardrail rules validated when all agents exit (None = disabled)",
+        "title": "Guardrails"
+      },
+      "max_agents_concurrent": {
+        "anyOf": [
+          {
+            "maximum": 20,
+            "minimum": 1,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Max concurrent agents (1-20, None = unlimited)",
+        "title": "Max Agents Concurrent"
+      },
+      "max_duration_hours": {
+        "anyOf": [
+          {
+            "maximum": 48,
+            "minimum": 0.5,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Max swarm duration in hours (0.5-48, None = unlimited)",
+        "title": "Max Duration Hours"
+      },
+      "max_phases": {
+        "anyOf": [
+          {
+            "maximum": 24,
+            "minimum": 1,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "examples": [
+          12
+        ],
+        "title": "Max Phases"
+      },
+      "max_restarts_per_agent": {
+        "anyOf": [
+          {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Max restarts per agent (0-10, None = unlimited)",
+        "title": "Max Restarts Per Agent"
+      }
+    },
+    "title": "ProjectConfig",
+    "type": "object"
+  },
+  "ProjectConfigUpdateOut": {
+    "properties": {
+      "config": {
+        "additionalProperties": true,
+        "title": "Config",
+        "type": "object"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "project_id",
+      "config"
+    ],
+    "title": "ProjectConfigUpdateOut",
+    "type": "object"
+  },
+  "ProjectCreate": {
+    "description": "Create a new project to manage with Claude Swarm.",
+    "properties": {
+      "complexity": {
+        "default": "Medium",
+        "examples": [
+          "Medium"
+        ],
+        "maxLength": 50,
+        "title": "Complexity",
+        "type": "string"
+      },
+      "folder_path": {
+        "examples": [
+          "F:/Projects/MyWebApp"
+        ],
+        "maxLength": 500,
+        "minLength": 1,
+        "title": "Folder Path",
+        "type": "string"
+      },
+      "goal": {
+        "examples": [
+          "Build a task management dashboard with React + FastAPI"
+        ],
+        "maxLength": 2000,
+        "minLength": 1,
+        "title": "Goal",
+        "type": "string"
+      },
+      "name": {
+        "examples": [
+          "My Web App"
+        ],
+        "maxLength": 200,
+        "minLength": 1,
+        "title": "Name",
+        "type": "string"
+      },
+      "project_type": {
+        "default": "Web Application (frontend + backend)",
+        "examples": [
+          "Web Application (frontend + backend)"
+        ],
+        "maxLength": 200,
+        "title": "Project Type",
+        "type": "string"
+      },
+      "requirements": {
+        "default": "",
+        "examples": [
+          "Must include authentication and real-time updates"
+        ],
+        "maxLength": 5000,
+        "title": "Requirements",
+        "type": "string"
+      },
+      "tech_stack": {
+        "default": "auto-detect based on project type",
+        "examples": [
+          "Python + FastAPI + React"
+        ],
+        "maxLength": 200,
+        "title": "Tech Stack",
+        "type": "string"
+      }
+    },
+    "required": [
+      "name",
+      "goal",
+      "folder_path"
+    ],
+    "title": "ProjectCreate",
+    "type": "object"
+  },
+  "ProjectDashboardOut": {
+    "$defs": {
+      "AgentStatusOut": {
+        "properties": {
+          "alive": {
+            "title": "Alive",
+            "type": "boolean"
+          },
+          "circuit_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Circuit State"
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Exit Code"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "output_lines": {
+            "default": 0,
+            "title": "Output Lines",
+            "type": "integer"
+          },
+          "pid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Pid"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "supports_stdin": {
+            "default": false,
+            "title": "Supports Stdin",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "alive"
+        ],
+        "title": "AgentStatusOut",
+        "type": "object"
+      },
+      "RecentRunSummary": {
+        "properties": {
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Duration Seconds"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ended At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "RecentRunSummary",
+        "type": "object"
+      },
+      "TaskProgress": {
+        "properties": {
+          "done": {
+            "default": 0,
+            "title": "Done",
+            "type": "integer"
+          },
+          "percent": {
+            "default": 0,
+            "title": "Percent",
+            "type": "number"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "TaskProgress",
+        "type": "object"
+      }
+    },
+    "description": "Combined dashboard data in a single response to reduce frontend round-trips.",
+    "properties": {
+      "agents": {
+        "items": {
+          "$ref": "#/$defs/AgentStatusOut"
+        },
+        "title": "Agents",
+        "type": "array"
+      },
+      "any_alive": {
+        "title": "Any Alive",
+        "type": "boolean"
+      },
+      "avg_duration_seconds": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Avg Duration Seconds"
+      },
+      "folder_path": {
+        "title": "Folder Path",
+        "type": "string"
+      },
+      "last_output_lines": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Last Output Lines",
+        "type": "array"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "output_line_count": {
+        "title": "Output Line Count",
+        "type": "integer"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "recent_runs": {
+        "items": {
+          "$ref": "#/$defs/RecentRunSummary"
+        },
+        "title": "Recent Runs",
+        "type": "array"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      },
+      "success_rate": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Success Rate"
+      },
+      "tasks": {
+        "$ref": "#/$defs/TaskProgress"
+      },
+      "total_runs": {
+        "title": "Total Runs",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "project_id",
+      "name",
+      "status",
+      "folder_path",
+      "agents",
+      "any_alive",
+      "tasks",
+      "total_runs",
+      "recent_runs",
+      "output_line_count"
+    ],
+    "title": "ProjectDashboardOut",
+    "type": "object"
+  },
+  "ProjectHealthOut": {
+    "properties": {
+      "avg_duration_seconds": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Avg Duration Seconds"
+      },
+      "crash_rate": {
+        "default": 0.0,
+        "title": "Crash Rate",
+        "type": "number"
+      },
+      "error_density": {
+        "default": 0.0,
+        "title": "Error Density",
+        "type": "number"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "run_count": {
+        "default": 0,
+        "title": "Run Count",
+        "type": "integer"
+      },
+      "status": {
+        "default": "healthy",
+        "title": "Status",
+        "type": "string"
+      },
+      "trend": {
+        "default": "stable",
+        "title": "Trend",
+        "type": "string"
+      }
+    },
+    "required": [
+      "project_id"
+    ],
+    "title": "ProjectHealthOut",
+    "type": "object"
+  },
+  "ProjectHealthScore": {
+    "properties": {
+      "avg_duration_seconds": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Avg Duration Seconds"
+      },
+      "crash_rate": {
+        "default": 0.0,
+        "title": "Crash Rate",
+        "type": "number"
+      },
+      "error_density": {
+        "default": 0.0,
+        "title": "Error Density",
+        "type": "number"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "project_name": {
+        "title": "Project Name",
+        "type": "string"
+      },
+      "status": {
+        "default": "healthy",
+        "title": "Status",
+        "type": "string"
+      },
+      "total_runs_analyzed": {
+        "default": 0,
+        "title": "Total Runs Analyzed",
+        "type": "integer"
+      },
+      "trend": {
+        "default": "stable",
+        "title": "Trend",
+        "type": "string"
+      }
+    },
+    "required": [
+      "project_id",
+      "project_name"
+    ],
+    "title": "ProjectHealthScore",
+    "type": "object"
+  },
+  "ProjectOut": {
+    "properties": {
+      "archived_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Archived At"
+      },
+      "complexity": {
+        "title": "Complexity",
+        "type": "string"
+      },
+      "config": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Config"
+      },
+      "created_at": {
+        "title": "Created At",
+        "type": "string"
+      },
+      "folder_path": {
+        "title": "Folder Path",
+        "type": "string"
+      },
+      "goal": {
+        "title": "Goal",
+        "type": "string"
+      },
+      "id": {
+        "title": "Id",
+        "type": "integer"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "project_type": {
+        "title": "Project Type",
+        "type": "string"
+      },
+      "requirements": {
+        "title": "Requirements",
+        "type": "string"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      },
+      "swarm_pid": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Swarm Pid"
+      },
+      "tech_stack": {
+        "title": "Tech Stack",
+        "type": "string"
+      },
+      "updated_at": {
+        "title": "Updated At",
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "goal",
+      "project_type",
+      "tech_stack",
+      "complexity",
+      "requirements",
+      "folder_path",
+      "status",
+      "created_at",
+      "updated_at"
+    ],
+    "title": "ProjectOut",
+    "type": "object"
+  },
+  "ProjectStatsOut": {
+    "properties": {
+      "avg_duration_seconds": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Avg Duration Seconds"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "total_runs": {
+        "title": "Total Runs",
+        "type": "integer"
+      },
+      "total_tasks_completed": {
+        "title": "Total Tasks Completed",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "project_id",
+      "total_runs",
+      "total_tasks_completed"
+    ],
+    "title": "ProjectStatsOut",
+    "type": "object"
+  },
+  "ProjectUpdate": {
+    "properties": {
+      "complexity": {
+        "anyOf": [
+          {
+            "maxLength": 50,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Complexity"
+      },
+      "folder_path": {
+        "anyOf": [
+          {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Folder Path"
+      },
+      "goal": {
+        "anyOf": [
+          {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Goal"
+      },
+      "name": {
+        "anyOf": [
+          {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Name"
+      },
+      "project_type": {
+        "anyOf": [
+          {
+            "maxLength": 200,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Project Type"
+      },
+      "requirements": {
+        "anyOf": [
+          {
+            "maxLength": 5000,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Requirements"
+      },
+      "status": {
+        "anyOf": [
+          {
+            "enum": [
+              "created",
+              "running",
+              "stopped",
+              "completed",
+              "error"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "Project status (created, running, stopped, completed, error)",
+        "title": "Status"
+      },
+      "tech_stack": {
+        "anyOf": [
+          {
+            "maxLength": 200,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Tech Stack"
+      }
+    },
+    "title": "ProjectUpdate",
+    "type": "object"
+  },
+  "PromptUpdateOut": {
+    "properties": {
+      "agent": {
+        "title": "Agent",
+        "type": "string"
+      },
+      "old_prompt": {
+        "title": "Old Prompt",
+        "type": "string"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "agent",
+      "project_id",
+      "old_prompt",
+      "status"
+    ],
+    "title": "PromptUpdateOut",
+    "type": "object"
+  },
+  "QuotaConfig": {
+    "properties": {
+      "max_agents_concurrent": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Max Agents Concurrent"
+      },
+      "max_duration_hours": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Max Duration Hours"
+      },
+      "max_restarts_per_agent": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Max Restarts Per Agent"
+      }
+    },
+    "title": "QuotaConfig",
+    "type": "object"
+  },
+  "QuotaOut": {
+    "$defs": {
+      "QuotaConfig": {
+        "properties": {
+          "max_agents_concurrent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Agents Concurrent"
+          },
+          "max_duration_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Duration Hours"
+          },
+          "max_restarts_per_agent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Restarts Per Agent"
+          }
+        },
+        "title": "QuotaConfig",
+        "type": "object"
+      },
+      "QuotaUsage": {
+        "properties": {
+          "agent_count": {
+            "default": 0,
+            "title": "Agent Count",
+            "type": "integer"
+          },
+          "elapsed_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Elapsed Hours"
+          },
+          "restart_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Restart Counts",
+            "type": "object"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          }
+        },
+        "title": "QuotaUsage",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "quota": {
+        "$ref": "#/$defs/QuotaConfig"
+      },
+      "usage": {
+        "$ref": "#/$defs/QuotaUsage"
+      }
+    },
+    "required": [
+      "project_id",
+      "quota",
+      "usage"
+    ],
+    "title": "QuotaOut",
+    "type": "object"
+  },
+  "QuotaUsage": {
+    "properties": {
+      "agent_count": {
+        "default": 0,
+        "title": "Agent Count",
+        "type": "integer"
+      },
+      "elapsed_hours": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Elapsed Hours"
+      },
+      "restart_counts": {
+        "additionalProperties": {
+          "type": "integer"
+        },
+        "title": "Restart Counts",
+        "type": "object"
+      },
+      "started_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Started At"
+      }
+    },
+    "title": "QuotaUsage",
+    "type": "object"
+  },
+  "RecentRunSummary": {
+    "properties": {
+      "duration_seconds": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Duration Seconds"
+      },
+      "ended_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Ended At"
+      },
+      "id": {
+        "title": "Id",
+        "type": "integer"
+      },
+      "started_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Started At"
+      },
+      "status": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Status"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "title": "RecentRunSummary",
+    "type": "object"
+  },
+  "RunComparisonOut": {
+    "$defs": {
+      "RunComparisonSide": {
+        "properties": {
+          "agent_count": {
+            "default": 0,
+            "title": "Agent Count",
+            "type": "integer"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Duration Seconds"
+          },
+          "error_count": {
+            "default": 0,
+            "title": "Error Count",
+            "type": "integer"
+          },
+          "output_lines": {
+            "default": 0,
+            "title": "Output Lines",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "integer"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "title": "RunComparisonSide",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "agent_count_delta": {
+        "default": 0,
+        "title": "Agent Count Delta",
+        "type": "integer"
+      },
+      "duration_delta_seconds": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Duration Delta Seconds"
+      },
+      "error_count_delta": {
+        "default": 0,
+        "title": "Error Count Delta",
+        "type": "integer"
+      },
+      "output_lines_delta": {
+        "default": 0,
+        "title": "Output Lines Delta",
+        "type": "integer"
+      },
+      "run_a": {
+        "$ref": "#/$defs/RunComparisonSide"
+      },
+      "run_b": {
+        "$ref": "#/$defs/RunComparisonSide"
+      }
+    },
+    "required": [
+      "run_a",
+      "run_b"
+    ],
+    "title": "RunComparisonOut",
+    "type": "object"
+  },
+  "RunComparisonSide": {
+    "properties": {
+      "agent_count": {
+        "default": 0,
+        "title": "Agent Count",
+        "type": "integer"
+      },
+      "duration_seconds": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Duration Seconds"
+      },
+      "error_count": {
+        "default": 0,
+        "title": "Error Count",
+        "type": "integer"
+      },
+      "output_lines": {
+        "default": 0,
+        "title": "Output Lines",
+        "type": "integer"
+      },
+      "run_id": {
+        "title": "Run Id",
+        "type": "integer"
+      },
+      "status": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Status"
+      }
+    },
+    "required": [
+      "run_id"
+    ],
+    "title": "RunComparisonSide",
+    "type": "object"
+  },
+  "RunSummaryOut": {
+    "properties": {
+      "agent_count": {
+        "default": 0,
+        "title": "Agent Count",
+        "type": "integer"
+      },
+      "agents": {
+        "additionalProperties": true,
+        "title": "Agents",
+        "type": "object"
+      },
+      "duration_seconds": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Duration Seconds"
+      },
+      "error_count": {
+        "default": 0,
+        "title": "Error Count",
+        "type": "integer"
+      },
+      "signals_created": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Signals Created",
+        "type": "array"
+      },
+      "tasks_completed_percent": {
+        "default": 0,
+        "title": "Tasks Completed Percent",
+        "type": "number"
+      },
+      "total_output_lines": {
+        "default": 0,
+        "title": "Total Output Lines",
+        "type": "integer"
+      }
+    },
+    "title": "RunSummaryOut",
+    "type": "object"
+  },
+  "RunTrend": {
+    "properties": {
+      "ended_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Ended At"
+      },
+      "started_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Started At"
+      },
+      "status": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Status"
+      },
+      "tasks_completed": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Tasks Completed"
+      }
+    },
+    "title": "RunTrend",
+    "type": "object"
+  },
+  "SwarmHistoryOut": {
+    "$defs": {
+      "SwarmRunOut": {
+        "properties": {
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Duration Seconds"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ended At"
+          },
+          "guardrail_results": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Guardrail Results"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Label"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Notes"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Phase"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Summary"
+          },
+          "task_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Task Summary"
+          },
+          "tasks_completed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tasks Completed"
+          }
+        },
+        "required": [
+          "id",
+          "project_id"
+        ],
+        "title": "SwarmRunOut",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "runs": {
+        "items": {
+          "$ref": "#/$defs/SwarmRunOut"
+        },
+        "title": "Runs",
+        "type": "array"
+      }
+    },
+    "required": [
+      "project_id",
+      "runs"
+    ],
+    "title": "SwarmHistoryOut",
+    "type": "object"
+  },
+  "SwarmInputOut": {
+    "properties": {
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "status",
+      "project_id"
+    ],
+    "title": "SwarmInputOut",
+    "type": "object"
+  },
+  "SwarmLaunchOut": {
+    "properties": {
+      "agents_failed": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Agents Failed",
+        "type": "array"
+      },
+      "agents_launched": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Agents Launched",
+        "type": "array"
+      },
+      "pid": {
+        "title": "Pid",
+        "type": "integer"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "status",
+      "pid",
+      "project_id"
+    ],
+    "title": "SwarmLaunchOut",
+    "type": "object"
+  },
+  "SwarmOutputOut": {
+    "properties": {
+      "agent": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Agent"
+      },
+      "has_more": {
+        "title": "Has More",
+        "type": "boolean"
+      },
+      "limit": {
+        "title": "Limit",
+        "type": "integer"
+      },
+      "lines": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Lines",
+        "type": "array"
+      },
+      "next_offset": {
+        "title": "Next Offset",
+        "type": "integer"
+      },
+      "offset": {
+        "title": "Offset",
+        "type": "integer"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "total": {
+        "title": "Total",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "project_id",
+      "offset",
+      "limit",
+      "total",
+      "next_offset",
+      "has_more",
+      "lines"
+    ],
+    "title": "SwarmOutputOut",
+    "type": "object"
+  },
+  "SwarmRunAnnotationOut": {
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "integer"
+      },
+      "label": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Label"
+      },
+      "notes": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Notes"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "status": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Status"
+      }
+    },
+    "required": [
+      "id",
+      "project_id"
+    ],
+    "title": "SwarmRunAnnotationOut",
+    "type": "object"
+  },
+  "SwarmRunOut": {
+    "properties": {
+      "duration_seconds": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Duration Seconds"
+      },
+      "ended_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Ended At"
+      },
+      "guardrail_results": {
+        "anyOf": [
+          {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Guardrail Results"
+      },
+      "id": {
+        "title": "Id",
+        "type": "integer"
+      },
+      "label": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Label"
+      },
+      "notes": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Notes"
+      },
+      "phase": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Phase"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "started_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Started At"
+      },
+      "status": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Status"
+      },
+      "summary": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Summary"
+      },
+      "task_summary": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Task Summary"
+      },
+      "tasks_completed": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Tasks Completed"
+      }
+    },
+    "required": [
+      "id",
+      "project_id"
+    ],
+    "title": "SwarmRunOut",
+    "type": "object"
+  },
+  "SwarmStatusOut": {
+    "$defs": {
+      "AgentHeartbeat": {
+        "properties": {
+          "last_heartbeat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Last Heartbeat"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AgentHeartbeat",
+        "type": "object"
+      },
+      "TaskProgress": {
+        "properties": {
+          "done": {
+            "default": 0,
+            "title": "Done",
+            "type": "integer"
+          },
+          "percent": {
+            "default": 0,
+            "title": "Percent",
+            "type": "number"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "TaskProgress",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "agents": {
+        "items": {
+          "$ref": "#/$defs/AgentHeartbeat"
+        },
+        "title": "Agents",
+        "type": "array"
+      },
+      "phase": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Phase"
+      },
+      "process_alive": {
+        "title": "Process Alive",
+        "type": "boolean"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "signals": {
+        "additionalProperties": {
+          "type": "boolean"
+        },
+        "title": "Signals",
+        "type": "object"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      },
+      "swarm_pid": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Swarm Pid"
+      },
+      "tasks": {
+        "$ref": "#/$defs/TaskProgress"
+      }
+    },
+    "required": [
+      "project_id",
+      "status",
+      "process_alive",
+      "agents",
+      "signals",
+      "tasks"
+    ],
+    "title": "SwarmStatusOut",
+    "type": "object"
+  },
+  "SwarmStopOut": {
+    "properties": {
+      "project_id": {
+        "title": "Project Id",
+        "type": "integer"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "status",
+      "project_id"
+    ],
+    "title": "SwarmStopOut",
+    "type": "object"
+  },
+  "SystemInfoOut": {
+    "properties": {
+      "app_version": {
+        "title": "App Version",
+        "type": "string"
+      },
+      "cpu_count": {
+        "title": "Cpu Count",
+        "type": "integer"
+      },
+      "cpu_percent": {
+        "title": "Cpu Percent",
+        "type": "number"
+      },
+      "db_size_bytes": {
+        "title": "Db Size Bytes",
+        "type": "integer"
+      },
+      "disk_free_gb": {
+        "title": "Disk Free Gb",
+        "type": "number"
+      },
+      "disk_percent": {
+        "title": "Disk Percent",
+        "type": "number"
+      },
+      "disk_total_gb": {
+        "title": "Disk Total Gb",
+        "type": "number"
+      },
+      "memory_percent": {
+        "title": "Memory Percent",
+        "type": "number"
+      },
+      "memory_total_mb": {
+        "title": "Memory Total Mb",
+        "type": "integer"
+      },
+      "memory_used_mb": {
+        "title": "Memory Used Mb",
+        "type": "integer"
+      },
+      "platform": {
+        "title": "Platform",
+        "type": "string"
+      },
+      "python_version": {
+        "title": "Python Version",
+        "type": "string"
+      },
+      "uptime_seconds": {
+        "title": "Uptime Seconds",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "cpu_percent",
+      "memory_percent",
+      "memory_used_mb",
+      "memory_total_mb",
+      "disk_percent",
+      "disk_free_gb",
+      "disk_total_gb",
+      "python_version",
+      "platform",
+      "app_version",
+      "uptime_seconds",
+      "db_size_bytes",
+      "cpu_count"
+    ],
+    "title": "SystemInfoOut",
+    "type": "object"
+  },
+  "TaskProgress": {
+    "properties": {
+      "done": {
+        "default": 0,
+        "title": "Done",
+        "type": "integer"
+      },
+      "percent": {
+        "default": 0,
+        "title": "Percent",
+        "type": "number"
+      },
+      "total": {
+        "default": 0,
+        "title": "Total",
+        "type": "integer"
+      }
+    },
+    "title": "TaskProgress",
+    "type": "object"
+  },
+  "TemplateOut": {
+    "properties": {
+      "config": {
+        "additionalProperties": true,
+        "title": "Config",
+        "type": "object"
+      },
+      "created_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Created At"
+      },
+      "description": {
+        "default": "",
+        "title": "Description",
+        "type": "string"
+      },
+      "id": {
+        "title": "Id",
+        "type": "integer"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "updated_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Updated At"
+      }
+    },
+    "required": [
+      "id",
+      "name"
+    ],
+    "title": "TemplateOut",
+    "type": "object"
+  },
+  "WatchStatusOut": {
+    "properties": {
+      "folder": {
+        "title": "Folder",
+        "type": "string"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "status",
+      "folder"
+    ],
+    "title": "WatchStatusOut",
+    "type": "object"
+  },
+  "WebhookOut": {
+    "properties": {
+      "created_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Created At"
+      },
+      "enabled": {
+        "default": true,
+        "title": "Enabled",
+        "type": "boolean"
+      },
+      "events": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Events",
+        "type": "array"
+      },
+      "has_secret": {
+        "default": false,
+        "title": "Has Secret",
+        "type": "boolean"
+      },
+      "id": {
+        "title": "Id",
+        "type": "integer"
+      },
+      "project_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Project Id"
+      },
+      "updated_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Updated At"
+      },
+      "url": {
+        "title": "Url",
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "url",
+      "events"
+    ],
+    "title": "WebhookOut",
+    "type": "object"
+  }
+}

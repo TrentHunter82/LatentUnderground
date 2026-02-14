@@ -7,6 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react'
+import { TestQueryWrapper, createApiMock } from './test-utils'
 
 // ============================================================
 // ConfirmDialog - ARIA alertdialog, focus trap, keyboard nav
@@ -16,21 +17,21 @@ import ConfirmDialog from '../components/ConfirmDialog'
 describe('ConfirmDialog Accessibility', () => {
   it('has role="alertdialog" when open', () => {
     render(
-      <ConfirmDialog open={true} title="Test" message="Msg" onConfirm={vi.fn()} onCancel={vi.fn()} />
+      <TestQueryWrapper><ConfirmDialog open={true} title="Test" message="Msg" onConfirm={vi.fn()} onCancel={vi.fn()} /></TestQueryWrapper>
     )
     expect(screen.getByRole('alertdialog')).toBeInTheDocument()
   })
 
   it('has aria-modal="true"', () => {
     render(
-      <ConfirmDialog open={true} title="Test" message="Msg" onConfirm={vi.fn()} onCancel={vi.fn()} />
+      <TestQueryWrapper><ConfirmDialog open={true} title="Test" message="Msg" onConfirm={vi.fn()} onCancel={vi.fn()} /></TestQueryWrapper>
     )
     expect(screen.getByRole('alertdialog')).toHaveAttribute('aria-modal', 'true')
   })
 
   it('has aria-labelledby pointing to title', () => {
     render(
-      <ConfirmDialog open={true} title="Confirm Delete" message="Are you sure?" onConfirm={vi.fn()} onCancel={vi.fn()} />
+      <TestQueryWrapper><ConfirmDialog open={true} title="Confirm Delete" message="Are you sure?" onConfirm={vi.fn()} onCancel={vi.fn()} /></TestQueryWrapper>
     )
     const dialog = screen.getByRole('alertdialog')
     expect(dialog).toHaveAttribute('aria-labelledby', 'confirm-dialog-title')
@@ -39,7 +40,7 @@ describe('ConfirmDialog Accessibility', () => {
 
   it('has aria-describedby pointing to message', () => {
     render(
-      <ConfirmDialog open={true} title="Title" message="Detailed message here" onConfirm={vi.fn()} onCancel={vi.fn()} />
+      <TestQueryWrapper><ConfirmDialog open={true} title="Title" message="Detailed message here" onConfirm={vi.fn()} onCancel={vi.fn()} /></TestQueryWrapper>
     )
     const dialog = screen.getByRole('alertdialog')
     expect(dialog).toHaveAttribute('aria-describedby', 'confirm-dialog-message')
@@ -48,7 +49,7 @@ describe('ConfirmDialog Accessibility', () => {
 
   it('does not render when closed', () => {
     render(
-      <ConfirmDialog open={false} title="T" message="M" onConfirm={vi.fn()} onCancel={vi.fn()} />
+      <TestQueryWrapper><ConfirmDialog open={false} title="T" message="M" onConfirm={vi.fn()} onCancel={vi.fn()} /></TestQueryWrapper>
     )
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
@@ -56,7 +57,7 @@ describe('ConfirmDialog Accessibility', () => {
   it('closes on Escape key', () => {
     const onCancel = vi.fn()
     render(
-      <ConfirmDialog open={true} title="T" message="M" onConfirm={vi.fn()} onCancel={onCancel} />
+      <TestQueryWrapper><ConfirmDialog open={true} title="T" message="M" onConfirm={vi.fn()} onCancel={onCancel} /></TestQueryWrapper>
     )
     fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' })
     expect(onCancel).toHaveBeenCalledTimes(1)
@@ -64,15 +65,17 @@ describe('ConfirmDialog Accessibility', () => {
 
   it('renders both confirm and cancel buttons', () => {
     render(
-      <ConfirmDialog
-        open={true}
-        title="T"
-        message="M"
-        confirmLabel="Yes"
-        cancelLabel="No"
-        onConfirm={vi.fn()}
-        onCancel={vi.fn()}
-      />
+      <TestQueryWrapper>
+        <ConfirmDialog
+          open={true}
+          title="T"
+          message="M"
+          confirmLabel="Yes"
+          cancelLabel="No"
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      </TestQueryWrapper>
     )
     expect(screen.getByText('Yes')).toBeInTheDocument()
     expect(screen.getByText('No')).toBeInTheDocument()
@@ -86,24 +89,24 @@ import TaskProgress from '../components/TaskProgress'
 
 describe('TaskProgress Accessibility', () => {
   it('has role="progressbar"', () => {
-    render(<TaskProgress tasks={{ total: 10, done: 5, percent: 50 }} />)
+    render(<TestQueryWrapper><TaskProgress tasks={{ total: 10, done: 5, percent: 50 }} /></TestQueryWrapper>)
     expect(screen.getByRole('progressbar')).toBeInTheDocument()
   })
 
   it('has correct aria-valuenow', () => {
-    render(<TaskProgress tasks={{ total: 10, done: 7, percent: 70 }} />)
+    render(<TestQueryWrapper><TaskProgress tasks={{ total: 10, done: 7, percent: 70 }} /></TestQueryWrapper>)
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '70')
   })
 
   it('has aria-valuemin=0 and aria-valuemax=100', () => {
-    render(<TaskProgress tasks={{ total: 10, done: 5, percent: 50 }} />)
+    render(<TestQueryWrapper><TaskProgress tasks={{ total: 10, done: 5, percent: 50 }} /></TestQueryWrapper>)
     const bar = screen.getByRole('progressbar')
     expect(bar).toHaveAttribute('aria-valuemin', '0')
     expect(bar).toHaveAttribute('aria-valuemax', '100')
   })
 
   it('has descriptive aria-label', () => {
-    render(<TaskProgress tasks={{ total: 8, done: 3, percent: 37.5 }} />)
+    render(<TestQueryWrapper><TaskProgress tasks={{ total: 8, done: 3, percent: 37.5 }} /></TestQueryWrapper>)
     expect(screen.getByRole('progressbar')).toHaveAttribute(
       'aria-label',
       'Task progress: 3 of 8 complete'
@@ -111,12 +114,12 @@ describe('TaskProgress Accessibility', () => {
   })
 
   it('aria-valuenow is 0 for empty tasks', () => {
-    render(<TaskProgress tasks={{ total: 0, done: 0, percent: 0 }} />)
+    render(<TestQueryWrapper><TaskProgress tasks={{ total: 0, done: 0, percent: 0 }} /></TestQueryWrapper>)
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0')
   })
 
   it('aria-valuenow is 100 when all tasks done', () => {
-    render(<TaskProgress tasks={{ total: 5, done: 5, percent: 100 }} />)
+    render(<TestQueryWrapper><TaskProgress tasks={{ total: 5, done: 5, percent: 100 }} /></TestQueryWrapper>)
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
   })
 })
@@ -128,22 +131,30 @@ import ThemeToggle from '../components/ThemeToggle'
 import { ThemeProvider } from '../hooks/useTheme.jsx'
 
 describe('ThemeToggle Accessibility', () => {
+  beforeEach(() => {
+    localStorage.setItem('latent-theme', 'dark')
+  })
+
   it('renders as a button element', () => {
     render(
-      <ThemeProvider>
-        <ThemeToggle />
-      </ThemeProvider>
+      <TestQueryWrapper>
+        <ThemeProvider>
+          <ThemeToggle />
+        </ThemeProvider>
+      </TestQueryWrapper>
     )
-    // Default theme is 'dark', so label should say "Switch to light mode"
-    const btn = screen.getByRole('button', { name: /switch to light mode/i })
+    // Default theme is 'dark', label indicates current mode and next action
+    const btn = screen.getByRole('button', { name: /dark mode/i })
     expect(btn).toBeInTheDocument()
   })
 
   it('has matching aria-label and title', () => {
     render(
-      <ThemeProvider>
-        <ThemeToggle />
-      </ThemeProvider>
+      <TestQueryWrapper>
+        <ThemeProvider>
+          <ThemeToggle />
+        </ThemeProvider>
+      </TestQueryWrapper>
     )
     const btn = screen.getByRole('button')
     const ariaLabel = btn.getAttribute('aria-label')
@@ -153,15 +164,18 @@ describe('ThemeToggle Accessibility', () => {
 
   it('aria-label updates after toggle', () => {
     render(
-      <ThemeProvider>
-        <ThemeToggle />
-      </ThemeProvider>
+      <TestQueryWrapper>
+        <ThemeProvider>
+          <ThemeToggle />
+        </ThemeProvider>
+      </TestQueryWrapper>
     )
     const btn = screen.getByRole('button')
-    expect(btn).toHaveAttribute('aria-label', 'Switch to light mode')
+    // Dark mode → click → light mode
+    expect(btn).toHaveAttribute('aria-label', 'Dark mode (click for light)')
 
     fireEvent.click(btn)
-    expect(btn).toHaveAttribute('aria-label', 'Switch to dark mode')
+    expect(btn).toHaveAttribute('aria-label', 'Light mode (click for system)')
   })
 })
 
@@ -175,7 +189,31 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }))
 
-vi.mock('../lib/api', () => ({
+const { createProjectQueryMock, createSwarmQueryMock, createMutationsMock } = await vi.hoisted(() => import('./test-utils'))
+
+vi.mock('../hooks/useProjectQuery', () => createProjectQueryMock({
+  useProject: () => ({ data: { id: 1, name: 'Test', goal: 'Test goal', config: '{}' }, isLoading: false, error: null }),
+  useProjectStats: () => ({ data: null, isLoading: false, error: null }),
+  useProjectHealth: () => ({ data: null, isLoading: false, error: null }),
+  useProjectQuota: () => ({ data: null, isLoading: false, error: null }),
+}))
+
+vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock({
+  useSwarmStatus: () => ({ data: { status: 'created', agents: [], signals: {}, tasks: { total: 0, done: 0, percent: 0 }, phase: null }, isLoading: false, error: null }),
+}))
+
+vi.mock('../hooks/useMutations', () => createMutationsMock())
+
+vi.mock('@tanstack/react-query', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    useQueryClient: () => ({ invalidateQueries: vi.fn(), removeQueries: vi.fn() }),
+  }
+})
+
+vi.mock('../lib/api', () => createApiMock({
+  createAbortable: vi.fn(() => ({ signal: undefined, abort: vi.fn() })),
   getProject: vi.fn(() => Promise.resolve({ id: 1, name: 'Test', config: '{}' })),
   getSwarmHistory: vi.fn(() => Promise.resolve({ runs: [] })),
   getSwarmOutput: vi.fn(() => Promise.resolve({ lines: [], next_offset: 0 })),
@@ -193,15 +231,21 @@ vi.mock('../lib/api', () => ({
   startWatch: vi.fn(() => Promise.resolve()),
   getTemplates: vi.fn(() => Promise.resolve([])),
   createTemplate: vi.fn(),
+  getProjectQuota: vi.fn(() => Promise.resolve({ project_id: 1, quota: {}, usage: {} })),
+  getProjectHealth: vi.fn(() => Promise.resolve({ project_id: 1, crash_rate: 0, status: 'healthy', trend: 'stable', run_count: 0 })),
+  getHealthTrends: vi.fn(() => Promise.resolve({ projects: [], computed_at: new Date().toISOString() })),
+  getRunCheckpoints: vi.fn(() => Promise.resolve({ run_id: 1, checkpoints: [], total: 0 })),
 }))
 
 import ProjectView from '../components/ProjectView'
 
 function renderProjectView() {
   return render(
-    <ToastProvider>
-      <ProjectView wsEvents={[]} onProjectChange={vi.fn()} />
-    </ToastProvider>
+    <TestQueryWrapper>
+      <ToastProvider>
+        <ProjectView wsEvents={[]} onProjectChange={vi.fn()} />
+      </ToastProvider>
+    </TestQueryWrapper>
   )
 }
 
@@ -281,9 +325,11 @@ function renderSidebar(props = {}) {
     onToggle: vi.fn(),
   }
   return render(
-    <ToastProvider>
-      <Sidebar {...defaults} {...props} />
-    </ToastProvider>
+    <TestQueryWrapper>
+      <ToastProvider>
+        <Sidebar {...defaults} {...props} />
+      </ToastProvider>
+    </TestQueryWrapper>
   )
 }
 
@@ -333,7 +379,7 @@ import NewProject from '../components/NewProject'
 
 describe('NewProject Form Accessibility', () => {
   it('all inputs have associated labels', () => {
-    render(<ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider>)
+    render(<TestQueryWrapper><ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider></TestQueryWrapper>)
     // Check that labels exist for major fields
     expect(screen.getByText('Project Name')).toBeInTheDocument()
     expect(screen.getByText('Goal')).toBeInTheDocument()
@@ -345,7 +391,7 @@ describe('NewProject Form Accessibility', () => {
   })
 
   it('required fields have required attribute', () => {
-    render(<ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider>)
+    render(<TestQueryWrapper><ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider></TestQueryWrapper>)
     const nameInput = screen.getByPlaceholderText('My Awesome App')
     expect(nameInput).toHaveAttribute('required')
 
@@ -357,14 +403,14 @@ describe('NewProject Form Accessibility', () => {
   })
 
   it('submit button is a button element', () => {
-    render(<ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider>)
+    render(<TestQueryWrapper><ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider></TestQueryWrapper>)
     const btn = screen.getByText('Create Project')
     expect(btn.tagName).toBe('BUTTON')
     expect(btn).toHaveAttribute('type', 'submit')
   })
 
   it('complexity options are buttons', () => {
-    render(<ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider>)
+    render(<TestQueryWrapper><ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider></TestQueryWrapper>)
     const simpleBtn = screen.getByText('Simple')
     const mediumBtn = screen.getByText('Medium')
     const complexBtn = screen.getByText('Complex')
@@ -374,7 +420,7 @@ describe('NewProject Form Accessibility', () => {
   })
 
   it('complexity buttons have type="button" to prevent form submit', () => {
-    render(<ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider>)
+    render(<TestQueryWrapper><ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider></TestQueryWrapper>)
     const simpleBtn = screen.getByText('Simple')
     expect(simpleBtn).toHaveAttribute('type', 'button')
   })
@@ -384,7 +430,7 @@ describe('NewProject Form Accessibility', () => {
     const { createProject } = await import('../lib/api')
     createProject.mockImplementation(() => new Promise(() => {}))
 
-    render(<ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider>)
+    render(<TestQueryWrapper><ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider></TestQueryWrapper>)
 
     // Fill required fields
     fireEvent.change(screen.getByPlaceholderText('My Awesome App'), { target: { value: 'Test' } })
@@ -412,9 +458,11 @@ function renderSwarmControls(props = {}) {
     onAction: vi.fn(),
   }
   return render(
-    <ToastProvider>
-      <SwarmControls {...defaults} {...props} />
-    </ToastProvider>
+    <TestQueryWrapper>
+      <ToastProvider>
+        <SwarmControls {...defaults} {...props} />
+      </ToastProvider>
+    </TestQueryWrapper>
   )
 }
 
@@ -459,7 +507,7 @@ describe('TerminalOutput Accessibility', () => {
   it('has role="log" for screen reader live region', async () => {
     const fetchOutput = vi.fn(() => Promise.resolve({ lines: [], next_offset: 0 }))
     await act(async () => {
-      render(<TerminalOutput projectId={1} fetchOutput={fetchOutput} />)
+      render(<TestQueryWrapper><TerminalOutput projectId={1} fetchOutput={fetchOutput} /></TestQueryWrapper>)
     })
     expect(screen.getByRole('log')).toBeInTheDocument()
   })

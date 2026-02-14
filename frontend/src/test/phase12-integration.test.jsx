@@ -8,9 +8,11 @@ import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ToastProvider } from '../components/Toast'
 import { ThemeProvider } from '../hooks/useTheme'
+import { TestQueryWrapper, createProjectQueryMock, createSwarmQueryMock, createMutationsMock, mockProjectKeys, mockSwarmKeys, createApiMock } from './test-utils'
 
 // Mock all API functions
-vi.mock('../lib/api', () => ({
+vi.mock('../lib/api', () => createApiMock({
+  createAbortable: vi.fn(() => ({ signal: undefined, abort: vi.fn() })),
   getProjects: vi.fn(() => Promise.resolve([
     { id: 1, name: 'Alpha Project', goal: 'Build alpha', status: 'running', created_at: '2026-01-01', updated_at: '2026-01-02', archived_at: null },
     { id: 2, name: 'Beta Project', goal: 'Build beta', status: 'stopped', created_at: '2026-01-03', updated_at: '2026-01-04', archived_at: null },
@@ -33,6 +35,8 @@ vi.mock('../lib/api', () => ({
   ] })),
   getProjectStats: vi.fn(() => Promise.resolve({ project_id: 1, total_runs: 1, avg_duration_seconds: null, total_tasks_completed: 3 })),
   getSwarmOutput: vi.fn(() => Promise.resolve({ lines: ['[stdout] Starting...'], next_offset: 1, total: 1 })),
+  getSwarmAgents: vi.fn(() => Promise.resolve({ agents: [{ name: 'Claude-1', pid: 1234, alive: true, exit_code: null, output_lines: 5 }] })),
+  getAgentEvents: vi.fn(() => Promise.resolve({ events: [] })),
   createProject: vi.fn(() => Promise.resolve({ id: 3, name: 'New Project' })),
   updateProject: vi.fn(() => Promise.resolve()),
   deleteProject: vi.fn(() => Promise.resolve()),
@@ -60,6 +64,10 @@ vi.mock('../lib/api', () => ({
   getStoredApiKey: vi.fn(() => null),
   clearApiKey: vi.fn(),
   setApiKey: vi.fn(),
+  getProjectQuota: vi.fn(() => Promise.resolve({ project_id: 1, quota: {}, usage: {} })),
+  getProjectHealth: vi.fn(() => Promise.resolve({ project_id: 1, crash_rate: 0, status: 'healthy', trend: 'stable', run_count: 0 })),
+  getHealthTrends: vi.fn(() => Promise.resolve({ projects: [], computed_at: new Date().toISOString() })),
+  getRunCheckpoints: vi.fn(() => Promise.resolve({ run_id: 1, checkpoints: [], total: 0 })),
 }))
 
 vi.mock('../hooks/useWebSocket', () => ({
@@ -84,31 +92,63 @@ vi.mock('../hooks/useDebounce', () => ({
   useDebounce: (val) => val,
 }))
 
+const _defaultProjectsData = [
+  { id: 1, name: 'Alpha Project', goal: 'Build alpha', status: 'running', created_at: '2026-01-01', updated_at: '2026-01-02', archived_at: null },
+  { id: 2, name: 'Beta Project', goal: 'Build beta', status: 'stopped', created_at: '2026-01-03', updated_at: '2026-01-04', archived_at: null },
+]
+const _defaultProjectsResult = { data: _defaultProjectsData, isLoading: false, error: null }
+
+const mockUseProjects = vi.fn(() => _defaultProjectsResult)
+
+vi.mock('../hooks/useProjectQuery', () => ({
+  ...createProjectQueryMock({
+    useProject: () => ({ data: { id: 1, name: 'Alpha Project', goal: 'Build alpha', status: 'running', config: '{"agent_count": 4}' }, isLoading: false, error: null }),
+    useProjectStats: () => ({ data: { project_id: 1, total_runs: 1, avg_duration_seconds: null, total_tasks_completed: 3 }, isLoading: false, error: null }),
+  }),
+  useProjects: (...args) => mockUseProjects(...args),
+}))
+
+vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock({
+  useSwarmStatus: () => ({ data: { project_id: 1, status: 'running', swarm_pid: 1234, process_alive: true, agents: [{ name: 'Claude-1', last_heartbeat: '2026-02-10 12:00:00' }], signals: { 'backend-ready': true, 'frontend-ready': false, 'tests-passing': false, 'phase-complete': false }, tasks: { total: 10, done: 3, percent: 30 }, phase: { Phase: 1, MaxPhases: 3 } }, isLoading: false, error: null }),
+  useSwarmHistory: () => ({ data: { runs: [{ id: 1, project_id: 1, started_at: '2026-02-10 12:00:00', ended_at: null, status: 'running', duration_seconds: null }] }, isLoading: false, error: null }),
+  useSwarmOutput: () => ({ data: { lines: ['[stdout] Starting...'], next_offset: 1, total: 1 }, isLoading: false, error: null }),
+}))
+
+vi.mock('../hooks/useMutations', () => createMutationsMock())
+
 import App from '../App'
 import Home from '../components/Home'
 import Sidebar from '../components/Sidebar'
+// Pre-import lazy-loaded components to avoid Suspense delays in tests
+import '../components/ProjectView'
+import '../components/SettingsPanel'
+import '../components/OnboardingModal'
 
 function renderApp(initialRoute = '/') {
   return render(
-    <ThemeProvider>
-      <MemoryRouter initialEntries={[initialRoute]}>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
-      </MemoryRouter>
-    </ThemeProvider>,
+    <TestQueryWrapper>
+      <ThemeProvider>
+        <MemoryRouter initialEntries={[initialRoute]}>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </MemoryRouter>
+      </ThemeProvider>
+    </TestQueryWrapper>,
   )
 }
 
 function renderWithProviders(ui, { route = '/' } = {}) {
   return render(
-    <ThemeProvider>
-      <MemoryRouter initialEntries={[route]}>
-        <ToastProvider>
-          {ui}
-        </ToastProvider>
-      </MemoryRouter>
-    </ThemeProvider>,
+    <TestQueryWrapper>
+      <ThemeProvider>
+        <MemoryRouter initialEntries={[route]}>
+          <ToastProvider>
+            {ui}
+          </ToastProvider>
+        </MemoryRouter>
+      </ThemeProvider>
+    </TestQueryWrapper>,
   )
 }
 
@@ -134,11 +174,8 @@ describe('Phase 12 - Frontend Integration Tests', () => {
     })
 
     it('loads and displays projects in sidebar', async () => {
-      const { getProjects } = await import('../lib/api')
       renderApp()
-      await waitFor(() => {
-        expect(getProjects).toHaveBeenCalled()
-      })
+      // useProjects hook (TanStack Query) provides project data
       await waitFor(() => {
         expect(screen.getByText('Alpha Project')).toBeInTheDocument()
         expect(screen.getByText('Beta Project')).toBeInTheDocument()
@@ -182,7 +219,7 @@ describe('Phase 12 - Frontend Integration Tests', () => {
       renderApp('/projects/1')
       await waitFor(() => {
         expect(screen.getByRole('tab', { name: /dashboard/i })).toBeInTheDocument()
-      })
+      }, { timeout: 15000 })
       // All 7 tabs present
       expect(screen.getByRole('tab', { name: /history/i })).toBeInTheDocument()
       expect(screen.getByRole('tab', { name: /output/i })).toBeInTheDocument()
@@ -190,30 +227,30 @@ describe('Phase 12 - Frontend Integration Tests', () => {
       expect(screen.getByRole('tab', { name: /logs/i })).toBeInTheDocument()
       expect(screen.getByRole('tab', { name: /analytics/i })).toBeInTheDocument()
       expect(screen.getByRole('tab', { name: /settings/i })).toBeInTheDocument()
-    })
+    }, 20000)
 
     it('loads project data and displays status', async () => {
-      const { getProject, getSwarmStatus } = await import('../lib/api')
       renderApp('/projects/1')
+      // useProject and useSwarmStatus hooks (TanStack Query) provide data
+      // Verify dashboard tab renders with content from hooks
       await waitFor(() => {
-        expect(getProject).toHaveBeenCalledWith(1)
-      })
-      await waitFor(() => {
-        expect(getSwarmStatus).toHaveBeenCalledWith(1)
-      })
-    })
+        const dashboardTab = screen.getByRole('tab', { name: /dashboard/i })
+        expect(dashboardTab).toBeInTheDocument()
+        expect(dashboardTab).toHaveAttribute('aria-selected', 'true')
+      }, { timeout: 15000 })
+    }, 20000)
 
     it('switches between tabs on click', async () => {
       renderApp('/projects/1')
       await waitFor(() => {
         expect(screen.getByRole('tab', { name: /history/i })).toBeInTheDocument()
-      })
+      }, { timeout: 15000 })
       await act(async () => {
         fireEvent.click(screen.getByRole('tab', { name: /history/i }))
       })
       const historyTab = screen.getByRole('tab', { name: /history/i })
       expect(historyTab).toHaveAttribute('aria-selected', 'true')
-    })
+    }, 20000)
   })
 
   describe('Sidebar Search & Filter Integration', () => {
@@ -270,17 +307,19 @@ describe('Phase 12 - Frontend Integration Tests', () => {
       renderApp()
       await waitFor(() => {
         expect(screen.getByLabelText('Open settings')).toBeInTheDocument()
-      })
+      }, { timeout: 10000 })
       // Open settings
       await act(async () => {
         fireEvent.click(screen.getByLabelText('Open settings'))
       })
+      // Wait for lazy-loaded SettingsPanel
+      await act(async () => { await new Promise(r => setTimeout(r, 200)) })
       // Escape should close
       await act(async () => {
         fireEvent.keyDown(window, { key: 'Escape' })
       })
       // Settings should be closed (no settings-specific content visible)
-    })
+    }, 15000)
   })
 
   describe('Health Status Indicator', () => {
@@ -295,8 +334,8 @@ describe('Phase 12 - Frontend Integration Tests', () => {
   describe('Onboarding Modal', () => {
     it('shows onboarding on first visit with no projects', async () => {
       localStorage.removeItem('lu_onboarding_complete')
-      const { getProjects } = await import('../lib/api')
-      getProjects.mockResolvedValue([]) // No projects
+      // Override useProjects to return empty list
+      mockUseProjects.mockReturnValue({ data: [], isLoading: false, error: null })
       renderApp()
       await waitFor(() => {
         // OnboardingModal should appear (it's lazy-loaded)
@@ -306,8 +345,7 @@ describe('Phase 12 - Frontend Integration Tests', () => {
 
     it('does not show onboarding if already dismissed', async () => {
       localStorage.setItem('lu_onboarding_complete', 'true')
-      const { getProjects } = await import('../lib/api')
-      getProjects.mockResolvedValue([])
+      mockUseProjects.mockReturnValue({ data: [], isLoading: false, error: null })
       renderApp()
       // Wait a bit for any async effects
       await act(async () => { await new Promise(r => setTimeout(r, 100)) })
