@@ -3,7 +3,7 @@ import { getTemplates, createTemplate, updateTemplate, deleteTemplate } from '..
 import ConfirmDialog from './ConfirmDialog'
 import { useToast } from './Toast'
 
-const emptyForm = { name: '', description: '', config: { agent_count: 4, max_phases: 24 } }
+const emptyForm = { name: '', description: '', config: { agent_count: 4, max_phases: 999 } }
 
 export default function TemplateManager({ onTemplatesChange }) {
   const [templates, setTemplates] = useState([])
@@ -34,7 +34,7 @@ export default function TemplateManager({ onTemplatesChange }) {
     setForm({
       name: tmpl.name,
       description: tmpl.description || '',
-      config: tmpl.config || { agent_count: 4, max_phases: 24 },
+      config: tmpl.config || { agent_count: 4, max_phases: 999 },
     })
     setEditing(tmpl.id)
   }
@@ -130,13 +130,13 @@ export default function TemplateManager({ onTemplatesChange }) {
               <input
                 type="number"
                 className={inputClass}
-                value={form.config.max_phases ?? 24}
+                value={form.config.max_phases ?? 999}
                 onChange={(e) => setForm((f) => ({
                   ...f,
-                  config: { ...f.config, max_phases: parseInt(e.target.value) || 24 },
+                  config: { ...f.config, max_phases: parseInt(e.target.value) || 999 },
                 }))}
                 min={1}
-                max={24}
+                max={999}
               />
             </div>
           </div>

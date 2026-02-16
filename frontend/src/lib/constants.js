@@ -67,4 +67,9 @@ export const DEFAULT_TEMPLATE_PRESETS = [
     description: 'Focused debugging session with log analysis and fix verification',
     config: { agent_count: 3, max_phases: 8, model: 'sonnet' },
   },
+  {
+    name: 'Long-Running Build',
+    description: 'Extended project with many phases for complex features or new directions',
+    config: { agent_count: 4, max_phases: 100, model: 'opus' },
+  },
 ]

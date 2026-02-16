@@ -211,3 +211,30 @@ export const getOutputTail = (projectId, lines = 50, agent = null, opts) => {
 // Watchers
 export const startWatch = (projectId) => request(`/watch/${projectId}`, { method: 'POST' })
 export const stopWatch = (projectId) => request(`/unwatch/${projectId}`, { method: 'POST' })
+
+// Message Bus
+export const sendBusMessage = (projectId, data) =>
+  request(`/bus/${projectId}/send`, { method: 'POST', body: JSON.stringify(data) })
+
+export const getBusInbox = (projectId, agent, { since, unackedOnly = true, limit = 50 } = {}) => {
+  const params = new URLSearchParams({ unacked_only: unackedOnly, limit })
+  if (since) params.set('since', since)
+  return request(`/bus/${projectId}/inbox/${agent}?${params}`)
+}
+
+export const ackBusMessage = (projectId, messageId, agent) =>
+  request(`/bus/${projectId}/ack/${messageId}?agent=${agent}`, { method: 'POST' })
+
+export const getBusChannelMessages = (projectId, channel, { since, limit = 50 } = {}) => {
+  const params = new URLSearchParams({ limit })
+  if (since) params.set('since', since)
+  return request(`/bus/${projectId}/channels/${channel}/messages?${params}`)
+}
+
+export const getBusMessages = (projectId, { since, channel, priority, limit = 100 } = {}, opts) => {
+  const params = new URLSearchParams({ limit })
+  if (since) params.set('since', since)
+  if (channel) params.set('channel', channel)
+  if (priority) params.set('priority', priority)
+  return request(`/bus/${projectId}/messages?${params}`, opts)
+}

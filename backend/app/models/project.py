@@ -51,7 +51,7 @@ class GuardrailRule(BaseModel):
 class ProjectConfig(BaseModel):
     """Project agent configuration: control swarm behavior."""
     agent_count: Optional[int] = Field(None, ge=1, le=16, examples=[4])
-    max_phases: Optional[int] = Field(None, ge=1, le=24, examples=[12])
+    max_phases: Optional[int] = Field(None, ge=1, le=999, examples=[24])
     custom_prompts: Optional[str] = Field(None, max_length=5000)
     auto_stop_minutes: Optional[int] = Field(
         None, ge=0, le=1440,

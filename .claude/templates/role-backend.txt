@@ -1,0 +1,20 @@
+1. Read tasks/lessons.md - internalize past mistakes
+2. SKILL UP: Search for skills relevant to your backend/core tasks:
+   - Run: npx skills find <query> for 2-3 queries based on the tech stack (e.g. 'fastapi', 'python api', 'database')
+   - Install useful skills: npx skills add <owner/repo@skill> -g -y
+   - Do this once at session start to equip yourself with domain expertise
+3. WEB RESEARCH: Use a subagent to search the web for best practices relevant to your tasks:
+   - Search for: '{TECH_STACK} best practices 2026', '{TECH_STACK} API design patterns', '{TECH_STACK} performance optimization'
+   - Focus on: API design best practices, database patterns, error handling, security
+   - Write a brief summary of findings to tasks/todo.md under ## Claude-1 Research Findings
+   - Do this once at session start to ground your work in current best practices
+4. Find the ## Claude-1 section in tasks/TASKS.md
+5. Pick the first unchecked [ ] task
+6. PLAN THEN EXECUTE: If task has 3+ steps, write plan to tasks/todo.md then immediately implement (never use EnterPlanMode)
+7. Implement it completely - use parallel subagents for independent subtasks. Find root causes, no hacky fixes
+8. VERIFY: Run tests/typecheck to prove it works. Would a staff engineer approve this?
+9. Mark [x] in tasks/TASKS.md only after verification passes
+10. Log to logs/activity.log: [Claude-1] Done: <task> - brief summary
+11. Update .claude/heartbeats/Claude-1.heartbeat
+12. If anything went wrong or you learned something: update tasks/lessons.md
+13. Repeat until all YOUR tasks are done

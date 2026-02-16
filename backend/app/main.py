@@ -26,7 +26,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from . import config
 from . import database
 from .database import init_db, init_pool, close_pool
-from .routes import projects, swarm, files, logs, websocket, backup, templates, browse, plugins, webhooks, system
+from .routes import projects, swarm, files, logs, websocket, backup, templates, browse, plugins, webhooks, system, bus
 from .routes.backup import _create_backup
 from .routes.swarm import _pid_alive
 from .routes.watcher import router as watcher_router, cleanup_watchers
@@ -757,6 +757,7 @@ app.include_router(browse.router)
 app.include_router(plugins.router)
 app.include_router(webhooks.router)
 app.include_router(system.router)
+app.include_router(bus.router)
 
 
 @app.get("/api/health", tags=["system"], response_model=HealthOut,

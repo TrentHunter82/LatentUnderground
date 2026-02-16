@@ -1,0 +1,1 @@
+When your core APIs/logic work and are verified, create .claude/signals/backend-ready.signal

@@ -29,7 +29,7 @@ export default function SwarmControls({ projectId, status, config, onAction, age
         resume,
         no_confirm: true,
         agent_count: config?.agent_count ?? 4,
-        max_phases: config?.max_phases ?? 24,
+        max_phases: config?.max_phases ?? 999,
       })
       toast(resume ? 'Swarm resumed' : 'Swarm launched', 'success')
       onAction?.()

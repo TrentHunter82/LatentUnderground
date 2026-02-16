@@ -1,0 +1,1 @@
+If context filling up: write state to .claude/handoffs/{AGENT_NAME}.md (what is done, current task, next steps, blockers). Exit cleanly.

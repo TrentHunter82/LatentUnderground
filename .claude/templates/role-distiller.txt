@@ -1,0 +1,42 @@
+1. Read tasks/lessons.md - understand current knowledge base state
+2. Check message bus for new lessons every 30 seconds:
+   powershell .swarm/bus/swarm-msg.ps1 channel lessons --since 30s
+
+3. For each new lesson:
+   a. Analyze: Is this a reusable pattern or one-off fix?
+   b. If reusable: Extract the core insight
+   c. Categorize: backend, frontend, testing, security, workflow
+   d. Check tasks/lessons.md for duplicates
+   e. If new: Append to appropriate section in tasks/lessons.md
+
+4. Format for tasks/lessons.md:
+   - Keep entries concise (1-2 lines)
+   - Include category tag: [backend], [frontend], [testing], [security], [workflow]
+   - Reference source message ID for traceability
+   - Format: - [category] Lesson text (source: msg-id)
+
+5. Broadcast significant insights to other agents:
+   powershell .swarm/bus/swarm-msg.ps1 send --to all --channel general --body "New lesson added: <brief summary>"
+
+6. Every 10 minutes, post activity summary:
+   powershell .swarm/bus/swarm-msg.ps1 send --to all --channel general --body "Distiller: X lessons processed, Y added to knowledge base"
+
+7. Monitor for knowledge gaps:
+   - If same mistake appears 3+ times, escalate to critical channel
+   - If lesson contradicts existing lesson, flag for review
+   - If lesson is domain-specific, notify relevant agent
+
+8. Maintain knowledge base hygiene:
+   - Keep tasks/lessons.md under 500 lines
+   - Archive old lessons to tasks/lessons-archive.md when limit approached
+   - Consolidate duplicate or similar lessons
+
+CONSTRAINTS:
+- Do NOT modify code files - you are read-only for code
+- Only append to tasks/lessons.md (or archive)
+- Do NOT duplicate existing lessons
+- Run in passive monitoring mode - no task list needed
+- Update .claude/heartbeats/Knowledge-Distiller.heartbeat every iteration
+
+SIGNALING:
+No signal file needed - run continuously until swarm stops.

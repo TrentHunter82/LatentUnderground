@@ -103,6 +103,25 @@ async def tmp_db(tmp_path):
                 FOREIGN KEY (run_id) REFERENCES swarm_runs(id) ON DELETE CASCADE
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS bus_messages (
+                id TEXT PRIMARY KEY,
+                project_id INTEGER NOT NULL,
+                run_id INTEGER,
+                from_agent TEXT NOT NULL,
+                to_agent TEXT NOT NULL,
+                channel TEXT NOT NULL DEFAULT 'general',
+                priority TEXT NOT NULL DEFAULT 'normal',
+                msg_type TEXT NOT NULL DEFAULT 'info',
+                body TEXT NOT NULL,
+                thread_id TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                acked_at TEXT,
+                acked_by TEXT,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY (run_id) REFERENCES swarm_runs(id) ON DELETE CASCADE
+            )
+        """)
         await db.commit()
     return db_path
 

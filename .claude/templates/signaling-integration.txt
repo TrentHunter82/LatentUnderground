@@ -1,0 +1,1 @@
+When all tests pass, create .claude/signals/tests-passing.signal

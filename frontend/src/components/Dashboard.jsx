@@ -9,6 +9,7 @@ import AgentGrid from './AgentGrid'
 import SignalPanel from './SignalPanel'
 import TaskProgress from './TaskProgress'
 import ActivityFeed from './ActivityFeed'
+import MessageBusPanel from './MessageBusPanel'
 import { DashboardSkeleton } from './Skeleton'
 import Sparkline from './Sparkline'
 import RunSummary from './RunSummary'
@@ -315,6 +316,11 @@ export default memo(function Dashboard({ wsEvents, onProjectChange }) {
         {/* Signals */}
         <div>
           <SignalPanel signals={status?.signals} phase={status?.phase} />
+        </div>
+
+        {/* Message Bus */}
+        <div className="col-span-full">
+          <MessageBusPanel projectId={projectId} wsEvents={wsEvents} />
         </div>
 
         {/* Agent Timeline */}

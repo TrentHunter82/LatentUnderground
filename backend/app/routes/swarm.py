@@ -1345,7 +1345,7 @@ class SwarmLaunchRequest(BaseModel):
     resume: bool = Field(default=False, description="Resume a previous swarm session")
     no_confirm: bool = Field(default=True, description="Skip confirmation prompts")
     agent_count: int = Field(default=4, ge=1, le=16, examples=[4])
-    max_phases: int = Field(default=24, ge=1, le=24, examples=[12])
+    max_phases: int = Field(default=999, ge=1, le=999, examples=[24])
 
 
 class SwarmStopRequest(BaseModel):
@@ -1426,7 +1426,7 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
     project_desc = project.get("description") or project_name
 
     if not config_file.exists():
-        config = {
+        swarm_cfg = {
             "Goal": project_desc,
             "ProjectType": "Custom Project",
             "TechStack": "auto-detect based on project type",
@@ -1435,7 +1435,7 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
             "StartTime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "AgentCount": req.agent_count,
         }
-        config_file.write_text(json.dumps(config, indent=2), encoding="utf-8")
+        config_file.write_text(json.dumps(swarm_cfg, indent=2), encoding="utf-8")
         logger.info("Created swarm config for project %d", req.project_id)
 
     # Always create fresh TASKS.md so agents don't inherit stale checkmarks.
@@ -1532,7 +1532,29 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
     (folder / ".claude" / "heartbeats").mkdir(parents=True, exist_ok=True)
     (folder / ".claude" / "signals").mkdir(parents=True, exist_ok=True)
     (folder / ".claude" / "handoffs").mkdir(parents=True, exist_ok=True)
+    (folder / ".claude" / "attention").mkdir(parents=True, exist_ok=True)
+    (folder / ".swarm").mkdir(parents=True, exist_ok=True)
+    (folder / ".swarm" / "bus").mkdir(parents=True, exist_ok=True)
     (folder / "logs").mkdir(parents=True, exist_ok=True)
+
+    # Create bus.json for CLI client discovery
+    bus_config = {
+        "port": config.PORT,
+        "project_id": req.project_id,
+        "api_key": config.API_KEY or "",
+    }
+    bus_json_path = folder / ".swarm" / "bus.json"
+    bus_json_path.write_text(json.dumps(bus_config, indent=2), encoding="utf-8")
+
+    # Copy CLI client to project for agent access
+    bus_client_dir = Path(__file__).parent.parent.parent / "bus-client"
+    bus_dest_dir = folder / ".swarm" / "bus"
+    for script_name in ("swarm-msg.ps1", "swarm-msg.cmd"):
+        src = bus_client_dir / script_name
+        dest = bus_dest_dir / script_name
+        if src.exists():
+            shutil.copy2(src, dest)
+            logger.debug("Copied %s to %s", src, dest)
 
     # --- Phase 3: Spawn agents ---
     agents_launched = []
@@ -1556,7 +1578,9 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
 
         try:
             # Strip CLAUDECODE env var so spawned agents don't think they're nested
+            # Add AGENT_NAME for CLI client identification
             spawn_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+            spawn_env["AGENT_NAME"] = agent_name
             popen_kwargs = dict(
                 cwd=str(folder),
                 stdin=subprocess.DEVNULL,  # --print mode needs stdin EOF to start
@@ -1714,22 +1738,32 @@ async def stop_swarm(req: SwarmStopRequest, db: aiosqlite.Connection = Depends(g
 
 
 # ---------------------------------------------------------------------------
-# POST /input — send stdin to agents
+# POST /input — send message to agents via message bus
 # ---------------------------------------------------------------------------
 
 @router.post("/input", response_model=SwarmInputOut,
              summary="Send swarm input", responses={**_404, **_400})
 async def swarm_input(req: SwarmInputRequest, db: aiosqlite.Connection = Depends(get_db)):
-    """Send text to a running agent's stdin. If agent is omitted, sends to all."""
+    """Send a message to agent(s) via the message bus.
+
+    Routes human messages through the bus instead of broken stdin injection.
+    Messages are delivered with critical channel and high priority for
+    immediate agent pickup.
+    """
+    import uuid
+
     row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (req.project_id,))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")
 
     project = dict(row)
+    folder = Path(project["folder_path"])
+
     if project["status"] != "running":
         raise HTTPException(status_code=400, detail="Swarm is not running")
 
-    targets: list[tuple[str, subprocess.Popen]] = []
+    # Validate agent if specified
+    to_agent = req.agent or "all"
     if req.agent:
         if not _validate_agent_name(req.agent):
             raise HTTPException(status_code=400, detail="Invalid agent name format")
@@ -1737,56 +1771,81 @@ async def swarm_input(req: SwarmInputRequest, db: aiosqlite.Connection = Depends
         proc = _agent_processes.get(key)
         if not proc or proc.poll() is not None:
             raise HTTPException(status_code=400, detail=f"Agent {req.agent} is not running")
-        targets.append((req.agent, proc))
-    else:
-        for key in _project_agent_keys(req.project_id):
-            proc = _agent_processes.get(key)
-            if proc and proc.poll() is None:
-                agent_name = key.split(":")[1]
-                targets.append((agent_name, proc))
 
-    if not targets:
-        raise HTTPException(status_code=400, detail="No running agents found")
+    # Check at least one agent is running for broadcast
+    if not req.agent:
+        running = [k for k in _project_agent_keys(req.project_id)
+                   if (p := _agent_processes.get(k)) and p.poll() is None]
+        if not running:
+            raise HTTPException(status_code=400, detail="No running agents found")
 
-    # Agents in --print mode use stdin=DEVNULL and don't accept stdin input
-    has_stdin = any(proc.stdin for _, proc in targets)
-    if not has_stdin:
-        raise HTTPException(
-            status_code=400,
-            detail="Agents in --print mode do not accept stdin input",
+    # Get current run_id for message association
+    run_row = await (
+        await db.execute(
+            "SELECT id FROM swarm_runs WHERE project_id = ? AND status = 'running' "
+            "ORDER BY started_at DESC LIMIT 1",
+            (req.project_id,),
         )
+    ).fetchone()
+    run_id = run_row["id"] if run_row else None
 
-    errors = []
-    for agent_name, proc in targets:
-        try:
-            if not proc.stdin:
-                raise OSError("stdin not available")
-            proc.stdin.write((req.text + "\n").encode("utf-8"))
-            proc.stdin.flush()
-        except (BrokenPipeError, OSError) as e:
-            logger.error("stdin write failed for %s: %s", agent_name, e)
-            errors.append(agent_name)
+    # Create message in bus
+    message_id = str(uuid.uuid4())
+    created_at = datetime.now().isoformat()
 
-    if errors and len(errors) == len(targets):
-        raise HTTPException(status_code=500, detail="Failed to write to all agent stdin")
+    await db.execute(
+        """INSERT INTO bus_messages
+           (id, project_id, run_id, from_agent, to_agent, channel, priority, msg_type, body, created_at)
+           VALUES (?, ?, ?, 'human', ?, 'critical', 'high', 'request', ?, ?)""",
+        (message_id, req.project_id, run_id, to_agent, req.text, created_at),
+    )
+    await db.commit()
 
-    # Echo in output buffers (only for agents that received input)
-    error_set = set(errors)
+    # Create attention file(s) for immediate pickup
+    attention_dir = folder / ".claude" / "attention"
+    attention_dir.mkdir(parents=True, exist_ok=True)
+    attention_content = f"{message_id}\n{created_at}"
+
+    try:
+        if to_agent == "all":
+            # Create attention file for all running agents
+            for key in _project_agent_keys(req.project_id):
+                proc = _agent_processes.get(key)
+                if proc and proc.poll() is None:
+                    agent_name = key.split(":")[1]
+                    (attention_dir / f"{agent_name}.attention").write_text(
+                        attention_content, encoding="utf-8"
+                    )
+        else:
+            (attention_dir / f"{to_agent}.attention").write_text(
+                attention_content, encoding="utf-8"
+            )
+    except OSError as e:
+        logger.warning("Failed to create attention file: %s", e)
+
+    # Broadcast via WebSocket for UI visibility
+    await ws_manager.broadcast({
+        "type": "bus_message",
+        "project_id": req.project_id,
+        "message": {
+            "id": message_id,
+            "from_agent": "human",
+            "to_agent": to_agent,
+            "channel": "critical",
+            "priority": "high",
+            "body": req.text[:200] + "..." if len(req.text) > 200 else req.text,
+            "created_at": created_at,
+        },
+    })
+
+    # Echo in output buffers for visibility
     with _buffers_lock:
-        for agent_name, _ in targets:
-            if agent_name not in error_set:
-                key = _agent_key(req.project_id, agent_name)
-                agent_buf = _agent_output_buffers.setdefault(
-                    key, deque(maxlen=_MAX_OUTPUT_LINES),
-                )
-                agent_buf.append(f"> {req.text}")
         buf = _project_output_buffers.setdefault(
             req.project_id, deque(maxlen=_MAX_OUTPUT_LINES),
         )
-        target_label = req.agent or "all"
-        buf.append(f"[stdin:{target_label}] {req.text}")
+        buf.append(f"[bus:human->{to_agent}] {req.text}")
 
-    logger.info("Sent stdin to project %d [%s]: %s", req.project_id, req.agent or "all", req.text[:50])
+    logger.info("Sent bus message to project %d [%s]: %s", req.project_id, to_agent, req.text[:50])
     return {"status": "sent", "project_id": req.project_id}
 
 

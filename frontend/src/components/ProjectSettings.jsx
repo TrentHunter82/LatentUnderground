@@ -149,12 +149,12 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
   const [guardrailRules, setGuardrailRules] = useState([])
 
   // Track the "saved" state for dirty detection
-  const savedConfig = useRef({ agent_count: 4, max_phases: 24, custom_prompts: '', max_agents_concurrent: null, max_duration_hours: null, max_restarts_per_agent: null, circuit_breaker_max_failures: 3, circuit_breaker_window_seconds: 300, circuit_breaker_recovery_seconds: 60, guardrails: [] })
+  const savedConfig = useRef({ agent_count: 4, max_phases: 999, custom_prompts: '', max_agents_concurrent: null, max_duration_hours: null, max_restarts_per_agent: null, circuit_breaker_max_failures: 3, circuit_breaker_window_seconds: 300, circuit_breaker_recovery_seconds: 60, guardrails: [] })
 
   useEffect(() => {
     if (initialConfig) {
       const ac = initialConfig.agent_count ?? 4
-      const mp = initialConfig.max_phases ?? 24
+      const mp = initialConfig.max_phases ?? 999
       const cp = initialConfig.custom_prompts ?? ''
       const mac = initialConfig.max_agents_concurrent ?? null
       const mdh = initialConfig.max_duration_hours ?? null
@@ -298,22 +298,22 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
             id="maxPhases"
             type="number"
             min={1}
-            max={24}
+            max={999}
             value={maxPhases}
             onChange={(e) => {
               const raw = Number(e.target.value) || 1
-              const clamped = Math.min(24, Math.max(1, raw))
+              const clamped = Math.min(999, Math.max(1, raw))
               setMaxPhases(clamped)
               setFieldErrors(prev => ({
                 ...prev,
-                maxPhases: raw !== clamped ? `Value clamped to ${clamped} (must be 1\u201324)` : null
+                maxPhases: raw !== clamped ? `Value clamped to ${clamped} (must be 1\u2013999)` : null
               }))
             }}
             aria-describedby="maxPhases-hint maxPhases-error"
             aria-required="true"
             className="retro-input w-full px-3 py-2 rounded text-sm"
           />
-          <span id="maxPhases-hint" className="text-[10px] text-zinc-600 font-mono mt-0.5 block">Must be between 1 and 24</span>
+          <span id="maxPhases-hint" className="text-[10px] text-zinc-600 font-mono mt-0.5 block">Must be between 1 and 999</span>
           {fieldErrors.maxPhases && (
             <span id="maxPhases-error" role="alert" className="text-[10px] text-signal-red font-mono mt-0.5 block">
               {fieldErrors.maxPhases}

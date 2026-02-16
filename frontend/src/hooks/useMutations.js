@@ -14,9 +14,10 @@ import {
   restartAgent,
   sendSwarmInput,
   createTemplate,
+  sendBusMessage,
 } from '../lib/api'
 import { projectKeys, templateKeys } from './useProjectQuery'
-import { swarmKeys } from './useSwarmQuery'
+import { swarmKeys, busKeys } from './useSwarmQuery'
 
 export function useCreateProject(options = {}) {
   const queryClient = useQueryClient()
@@ -169,6 +170,17 @@ export function useCreateTemplate(options = {}) {
     mutationFn: createTemplate,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: templateKeys.list() })
+    },
+    ...options,
+  })
+}
+
+export function useSendBusMessage(options = {}) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ projectId, data }) => sendBusMessage(projectId, data),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: busKeys.messages(projectId, {}) })
     },
     ...options,
   })

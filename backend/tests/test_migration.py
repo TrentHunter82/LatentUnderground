@@ -57,7 +57,7 @@ async def test_fresh_database_migration(tmp_path):
         # Verify final version
         version = await _get_schema_version(db)
         assert version == SCHEMA_VERSION
-        assert version == 6
+        assert version == SCHEMA_VERSION
 
     # Reconnect and verify schema
     async with aiosqlite.connect(db_path) as db:
@@ -67,7 +67,7 @@ async def test_fresh_database_migration(tmp_path):
         rows = await (await db.execute(
             "SELECT version FROM schema_version ORDER BY version"
         )).fetchall()
-        assert len(rows) == 6
+        assert len(rows) == SCHEMA_VERSION
         assert rows[0]["version"] == 1
         assert rows[1]["version"] == 2
         assert rows[2]["version"] == 3
@@ -204,7 +204,7 @@ async def test_incremental_migration_v1_to_v2(tmp_path):
 
         # Verify now at v6
         version = await _get_schema_version(db)
-        assert version == 6
+        assert version == SCHEMA_VERSION
 
     # Reconnect and verify
     async with aiosqlite.connect(db_path) as db:
@@ -214,7 +214,7 @@ async def test_incremental_migration_v1_to_v2(tmp_path):
         rows = await (await db.execute(
             "SELECT version FROM schema_version ORDER BY version"
         )).fetchall()
-        assert len(rows) == 6
+        assert len(rows) == SCHEMA_VERSION
         assert rows[0]["version"] == 1
         assert rows[1]["version"] == 2
         assert rows[2]["version"] == 3
@@ -285,7 +285,7 @@ async def test_idempotent_migration_rerun(tmp_path):
         rows = await (await db.execute(
             "SELECT version FROM schema_version ORDER BY version"
         )).fetchall()
-        assert len(rows) == 6
+        assert len(rows) == SCHEMA_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -458,7 +458,7 @@ async def test_legacy_database_migration(tmp_path):
         rows = await (await db.execute(
             "SELECT version FROM schema_version ORDER BY version"
         )).fetchall()
-        assert len(rows) == 6
+        assert len(rows) == SCHEMA_VERSION
 
         # Verify migration additions were added via _safe_add_column
         # Note: CREATE TABLE IF NOT EXISTS does NOT add columns to existing tables
@@ -742,13 +742,13 @@ async def test_migration_ordering(tmp_path):
 
         # Verify final version
         version = await _get_schema_version(db)
-        assert version == 6
+        assert version == SCHEMA_VERSION
 
         # Verify migration records are in order
         rows = await (await db.execute(
             "SELECT version, applied_at FROM schema_version ORDER BY version"
         )).fetchall()
-        assert len(rows) == 6
+        assert len(rows) == SCHEMA_VERSION
         assert rows[0]["version"] == 1
         assert rows[1]["version"] == 2
         assert rows[2]["version"] == 3
@@ -802,7 +802,7 @@ async def test_migration_skip_already_applied(tmp_path):
 
         # Verify at v6
         version = await _get_schema_version(db)
-        assert version == 6
+        assert version == SCHEMA_VERSION
 
         # Verify label/notes added
         cursor = await db.execute("PRAGMA table_info(swarm_runs)")
@@ -814,7 +814,7 @@ async def test_migration_skip_already_applied(tmp_path):
         rows = await (await db.execute(
             "SELECT version FROM schema_version ORDER BY version"
         )).fetchall()
-        assert len(rows) == 6
+        assert len(rows) == SCHEMA_VERSION
         assert rows[0]["version"] == 1
         assert rows[1]["version"] == 2
         assert rows[2]["version"] == 3

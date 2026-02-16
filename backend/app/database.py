@@ -148,7 +148,7 @@ async def get_db():
 # ---------------------------------------------------------------------------
 
 # Current schema version — increment when adding new migrations
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 async def _get_schema_version(db: aiosqlite.Connection) -> int:
@@ -353,6 +353,53 @@ async def _migration_006(db: aiosqlite.Connection):
     await _safe_add_column(db, "swarm_runs", "guardrail_results", "TEXT")
 
 
+async def _migration_007(db: aiosqlite.Connection):
+    """Add bus_messages table for inter-agent message bus.
+
+    Replaces unreliable file-based inbox with database-backed message queue.
+    Supports channels, priorities, threading, and acknowledgments.
+    """
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS bus_messages (
+            id TEXT PRIMARY KEY,
+            project_id INTEGER NOT NULL,
+            run_id INTEGER,
+            from_agent TEXT NOT NULL,
+            to_agent TEXT NOT NULL,
+            channel TEXT NOT NULL DEFAULT 'general',
+            priority TEXT NOT NULL DEFAULT 'normal',
+            msg_type TEXT NOT NULL DEFAULT 'info',
+            body TEXT NOT NULL,
+            thread_id TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            acked_at TEXT,
+            acked_by TEXT,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (run_id) REFERENCES swarm_runs(id) ON DELETE CASCADE
+        )
+    """)
+    # Index for inbox queries: find unacked messages for an agent
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_bus_to_acked "
+        "ON bus_messages(project_id, to_agent, acked_at)"
+    )
+    # Index for channel queries: messages in a channel by time
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_bus_channel "
+        "ON bus_messages(project_id, channel, created_at)"
+    )
+    # Index for timeline/history: all messages by time with tiebreaker
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_bus_created "
+        "ON bus_messages(project_id, created_at DESC, id DESC)"
+    )
+    # Index for thread queries
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_bus_thread "
+        "ON bus_messages(thread_id)"
+    )
+
+
 # Ordered list of all migrations
 _MIGRATIONS = [
     (1, _migration_001),
@@ -361,6 +408,7 @@ _MIGRATIONS = [
     (4, _migration_004),
     (5, _migration_005),
     (6, _migration_006),
+    (7, _migration_007),
 ]
 
 

@@ -40,10 +40,10 @@ class TestSwarmLaunchValidation:
 
     @pytest.mark.asyncio
     async def test_max_phases_over_max_rejected(self, client, created_project):
-        """max_phases=25 should be rejected (maximum is 24)."""
+        """max_phases=1000 should be rejected (maximum is 999)."""
         resp = await client.post("/api/swarm/launch", json={
             "project_id": created_project["id"],
-            "max_phases": 25,
+            "max_phases": 1000,
         })
         assert resp.status_code == 422
 

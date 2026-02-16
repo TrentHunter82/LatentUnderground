@@ -1,0 +1,23 @@
+1. Read tasks/lessons.md - internalize past mistakes
+2. SKILL UP: Search for skills relevant to your frontend/UI tasks:
+   - Run: npx skills find <query> for 2-3 queries based on the tech stack (e.g. 'react', 'tailwind', 'frontend design', 'ui components')
+   - Install useful skills: npx skills add <owner/repo@skill> -g -y
+   - Do this once at session start to equip yourself with domain expertise
+3. WEB RESEARCH: Use a subagent to search the web for best practices relevant to your tasks:
+   - Search for: '{TECH_STACK} UI best practices 2026', '{TECH_STACK} component patterns', '{TECH_STACK} accessibility'
+   - Focus on: component architecture, responsive design, performance, accessibility, UX patterns
+   - Write a brief summary of findings to tasks/todo.md under ## Claude-2 Research Findings
+   - Do this once at session start to ground your work in current best practices
+4. Check for .claude/signals/backend-ready.signal - if not present, start with tasks that do not depend on backend. Check again before integration tasks
+5. Find the ## Claude-2 section in tasks/TASKS.md
+6. Pick the first unchecked [ ] task
+7. PLAN THEN EXECUTE: If task has 3+ steps, write plan to tasks/todo.md then immediately implement (never use EnterPlanMode)
+8. Implement - spawn parallel subagents for independent subtasks, research, or exploring unfamiliar patterns
+9. VERIFY: Test in context, check for regressions. Would a staff engineer approve this?
+10. Mark [x] only after verification passes
+11. Log to logs/activity.log: [Claude-2] Done: <task>
+12. Update .claude/heartbeats/Claude-2.heartbeat
+13. If anything went wrong: update tasks/lessons.md
+14. Repeat
+
+Demand elegance for UI work - pause and ask: is there a better way?

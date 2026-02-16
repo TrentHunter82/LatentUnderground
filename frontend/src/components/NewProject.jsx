@@ -110,7 +110,7 @@ export default function NewProject({ onProjectChange }) {
         resume: false,
         no_confirm: true,
         agent_count: templateConfig?.agent_count ?? 4,
-        max_phases: templateConfig?.max_phases ?? 24,
+        max_phases: templateConfig?.max_phases ?? 999,
       })
       onProjectChange?.()
       navigate(`/projects/${project.id}`)

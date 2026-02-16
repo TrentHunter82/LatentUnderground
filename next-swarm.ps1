@@ -25,7 +25,7 @@ Write-Host ""
 $phaseFile = ".claude\swarm-phase.json"
 $phase = @{
     Phase = 13
-    MaxPhases = 24
+    MaxPhases = 999
     StartedAt = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 } | ConvertTo-Json
 Set-Content -Path $phaseFile -Value $phase -Encoding UTF8

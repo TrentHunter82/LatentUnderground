@@ -1,0 +1,1 @@
+When frontend connects to backend and works, create .claude/signals/frontend-ready.signal

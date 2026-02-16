@@ -1,22 +1,22 @@
 # Claude Swarm v3 - Autonomous Multi-Agent Launcher
 # Features: Orchestration rules, self-improvement loop, supervisor, signals, auto-recovery, auto-chain
-# Usage: .\swarm.ps1 [-Resume] [-NoConfirm] [-AgentCount 4] [-MaxPhases 24]
+# Usage: .\swarm.ps1 [-Resume] [-NoConfirm] [-AgentCount 4] [-MaxPhases 999]
 # Double-click: Use swarm.bat wrapper
 # Auto-chain: When a phase completes, supervisor automatically launches the next swarm
-#             up to MaxPhases (default 24). Override with -MaxPhases N.
+#             up to MaxPhases (default 999 = no limit). Override with -MaxPhases N.
 
 param(
     [switch]$Resume,
     [switch]$NoConfirm,
     [int]$AgentCount = 4,
-    [int]$MaxPhases = 24,
+    [int]$MaxPhases = 999,
     [switch]$SetupOnly
 )
 
 $ErrorActionPreference = "Stop"
 
 # === DIRECTORY SETUP (must happen first) ===
-$dirs = @(".claude", ".claude/signals", ".claude/heartbeats", ".claude/handoffs", ".claude/prompts", "tasks", "logs")
+$dirs = @(".claude", ".claude/signals", ".claude/heartbeats", ".claude/handoffs", ".claude/prompts", ".claude/attention", ".swarm", ".swarm/bus", "tasks", "logs")
 foreach ($dir in $dirs) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }
@@ -504,7 +504,7 @@ $supervisorScript = @'
 param(
     [int]$CheckInterval = 30,
     [int]$StaleThreshold = 120,
-    [int]$MaxPhases = 24
+    [int]$MaxPhases = 999
 )
 
 $logFile = "logs/supervisor.log"
@@ -794,6 +794,85 @@ $testingRules = Read-RulesFile "TESTING_RULES.md"
 $windowsRules = Read-RulesFile "WINDOWS_RULES.md"
 $securityRules = Read-RulesFile "SECURITY_RULES.md"
 
+# === TEMPLATE-BASED PROMPT GENERATION ===
+function Read-TemplateFile([string]$Filename) {
+    $path = ".claude/templates/$Filename"
+    if (Test-Path $path) {
+        return (Get-Content $path -Raw -Encoding UTF8)
+    }
+    return ""
+}
+
+function Build-PromptFromTemplate {
+    param(
+        [string]$AgentName,
+        [string]$RoleTitle,
+        [string]$Goal,
+        [string]$TechStack,
+        [string]$RoleKey,      # backend, frontend, integration, polish, distiller
+        [string[]]$RuleFiles   # Array of rule file contents
+    )
+
+    # Read template files
+    $baseTemplate = Read-TemplateFile "base-prompt.txt"
+    $sharedRulesTemplate = Read-TemplateFile "shared-rules.txt"
+    $roleWorkflow = Read-TemplateFile "role-$RoleKey.txt"
+    $handoffProtocol = Read-TemplateFile "handoff-protocol.txt"
+    $signaling = Read-TemplateFile "signaling-$RoleKey.txt"
+
+    # Combine role rules
+    $combinedRules = ($RuleFiles | Where-Object { $_ -ne "" }) -join "`n`n"
+
+    # Check if templates exist (fallback to legacy mode if not)
+    if (-not $baseTemplate -or -not $sharedRulesTemplate) {
+        Write-Host "  Templates not found, using legacy prompt generation" -ForegroundColor Yellow
+        return $null
+    }
+
+    # Build prompt from template with placeholder substitution
+    $prompt = $baseTemplate `
+        -replace '\{AGENT_NAME\}', $AgentName `
+        -replace '\{ROLE_TITLE\}', $RoleTitle `
+        -replace '\{GOAL\}', $Goal `
+        -replace '\{TECH_STACK\}', $TechStack `
+        -replace '\{SHARED_RULES\}', $sharedRulesTemplate `
+        -replace '\{ROLE_RULES\}', $combinedRules `
+        -replace '\{ROLE_WORKFLOW\}', $roleWorkflow `
+        -replace '\{SIGNALING\}', $signaling `
+        -replace '\{HANDOFF_PROTOCOL\}', $handoffProtocol
+
+    return $prompt
+}
+
+# Role configurations for template-based generation
+$roleConfigs = @{
+    "Claude-1" = @{
+        RoleTitle = "Backend/Core"
+        RoleKey = "backend"
+        RuleFiles = @($backendRules, $windowsRules, $securityRules)
+    }
+    "Claude-2" = @{
+        RoleTitle = "Frontend/Interface"
+        RoleKey = "frontend"
+        RuleFiles = @($frontendRules, $securityRules)
+    }
+    "Claude-3" = @{
+        RoleTitle = "Integration/Testing"
+        RoleKey = "integration"
+        RuleFiles = @($testingRules, $backendRules, $frontendRules)
+    }
+    "Claude-4" = @{
+        RoleTitle = "Polish/Review"
+        RoleKey = "polish"
+        RuleFiles = @($backendRules, $frontendRules, $testingRules, $windowsRules, $securityRules)
+    }
+    "Knowledge-Distiller" = @{
+        RoleTitle = "Knowledge Extraction"
+        RoleKey = "distiller"
+        RuleFiles = @()
+    }
+}
+
 # === DEFINE AGENT PROMPTS ===
 $sharedRules = "CRITICAL: You are running FULLY AUTONOMOUSLY. Never wait for user input. Never use EnterPlanMode or AskUserQuestion. Plan internally and execute immediately. You are unattended - act decisively.`n`n" +
     "ORCHESTRATION RULES (non-negotiable):`n" +
@@ -827,7 +906,22 @@ $sharedRules = "CRITICAL: You are running FULLY AUTONOMOUSLY. Never wait for use
     "1. Check .claude/directives/{your-agent-name}.directive (e.g. .claude/directives/Claude-1.directive)`n" +
     "2. Check .claude/directives/all.directive (broadcast directives for all agents)`n" +
     "If a directive file exists: read it, execute the instructions as HIGHEST PRIORITY (override current task), then delete the file when done.`n" +
-    "This allows the orchestrator to redirect you at any point without restarting."
+    "This allows the orchestrator to redirect you at any point without restarting.`n`n" +
+    "MESSAGE BUS PROTOCOL:`n" +
+    "Use swarm-msg for reliable inter-agent communication (replaces file polling):`n`n" +
+    "CHECK MESSAGES (after each task):`n" +
+    "  powershell .swarm/bus/swarm-msg.ps1 inbox`n`n" +
+    "SEND MESSAGE to another agent:`n" +
+    "  powershell .swarm/bus/swarm-msg.ps1 send --to Claude-2 --body ""API endpoints ready""`n`n" +
+    "BROADCAST (urgent, all agents):`n" +
+    "  powershell .swarm/bus/swarm-msg.ps1 send --to all --channel critical --priority high --body ""STOP: circular dependency found""`n`n" +
+    "POST LESSON (shared with all agents):`n" +
+    "  powershell .swarm/bus/swarm-msg.ps1 lesson ""Always run typecheck before committing""`n`n" +
+    "ATTENTION FILES:`n" +
+    "Before each task, check: if (Test-Path .claude/attention/{your-name}.attention) { check inbox immediately }`n" +
+    "This signals a high-priority message requiring immediate attention.`n`n" +
+    "CHANNELS: general (default), critical (urgent), review (code review), handoff (context pass), lessons (learnings)`n" +
+    "PRIORITIES: low, normal, high, critical (high/critical create attention files)"
 
 $prompt1 = "You are Claude-1 (Backend/Core) working on: $goal`n`n" +
     "FIRST: Read AGENTS.md, tasks/lessons.md, then tasks/TASKS.md.`n`n" +
@@ -982,8 +1076,29 @@ $agents = @(
 # === WRITE PROMPT FILES ===
 foreach ($agent in $agents) {
     $promptFile = ".claude/prompts/$($agent.Name).txt"
-    $agent.Prompt | Out-File -FilePath $promptFile -Encoding UTF8
-    Write-Host "  OK - Wrote $promptFile" -ForegroundColor Gray
+
+    # Try template-based generation first
+    $config = $roleConfigs[$agent.Name]
+    $templatePrompt = $null
+
+    if ($config) {
+        $templatePrompt = Build-PromptFromTemplate `
+            -AgentName $agent.Name `
+            -RoleTitle $config.RoleTitle `
+            -Goal $goal `
+            -TechStack $techStack `
+            -RoleKey $config.RoleKey `
+            -RuleFiles $config.RuleFiles
+    }
+
+    # Use template if available, otherwise fall back to legacy prompt
+    if ($templatePrompt) {
+        $templatePrompt | Out-File -FilePath $promptFile -Encoding UTF8
+        Write-Host "  OK - Wrote $promptFile (template)" -ForegroundColor Gray
+    } else {
+        $agent.Prompt | Out-File -FilePath $promptFile -Encoding UTF8
+        Write-Host "  OK - Wrote $promptFile (legacy)" -ForegroundColor Gray
+    }
 }
 
 # === SETUP-ONLY MODE ===

@@ -7,6 +7,9 @@ import {
   getAgentEvents,
   getLogs,
   searchLogs,
+  getBusMessages,
+  getBusInbox,
+  getBusChannelMessages,
 } from '../lib/api'
 
 // Query key factories
@@ -87,6 +90,47 @@ export function useLogSearch(projectId, filters = {}, options = {}) {
     queryFn: () => searchLogs(projectId, filters),
     enabled: !!projectId && !!(filters.from_date || filters.to_date),
     staleTime: 30_000,
+    ...options,
+  })
+}
+
+// Message Bus query keys
+export const busKeys = {
+  all: (projectId) => ['bus', projectId],
+  messages: (projectId, filters) => [...busKeys.all(projectId), 'messages', filters],
+  inbox: (projectId, agent) => [...busKeys.all(projectId), 'inbox', agent],
+  channel: (projectId, channel) => [...busKeys.all(projectId), 'channel', channel],
+}
+
+export function useBusMessages(projectId, filters = {}, options = {}) {
+  return useQuery({
+    queryKey: busKeys.messages(projectId, filters),
+    queryFn: () => getBusMessages(projectId, filters),
+    enabled: !!projectId,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
+    ...options,
+  })
+}
+
+export function useBusInbox(projectId, agent, options = {}) {
+  return useQuery({
+    queryKey: busKeys.inbox(projectId, agent),
+    queryFn: () => getBusInbox(projectId, agent),
+    enabled: !!projectId && !!agent,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
+    ...options,
+  })
+}
+
+export function useBusChannel(projectId, channel, filters = {}, options = {}) {
+  return useQuery({
+    queryKey: busKeys.channel(projectId, channel),
+    queryFn: () => getBusChannelMessages(projectId, channel, filters),
+    enabled: !!projectId && !!channel,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
     ...options,
   })
 }

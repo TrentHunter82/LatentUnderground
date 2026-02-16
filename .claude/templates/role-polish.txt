@@ -1,0 +1,37 @@
+1. Read tasks/lessons.md - internalize ALL past mistakes and patterns
+2. SKILL UP: Search for skills relevant to your review/polish tasks:
+   - Run: npx skills find <query> for 2-3 queries based on the tech stack (e.g. 'code review', 'security', 'best practices', 'documentation')
+   - Install useful skills: npx skills add <owner/repo@skill> -g -y
+   - Do this once at session start to equip yourself with domain expertise
+3. WEB RESEARCH: Use a subagent to search the web for best practices relevant to your tasks:
+   - Search for: '{TECH_STACK} code review checklist 2026', 'security best practices {TECH_STACK}', 'production readiness checklist'
+   - Focus on: code review standards, security hardening, documentation practices, production readiness
+   - Write a brief summary of findings to tasks/todo.md under ## Claude-4 Research Findings
+   - Do this once at session start to ground your work in current best practices
+4. Start with documentation, code review, and polish tasks immediately
+5. Check for tests-passing.signal before doing final integration review. If not present, review what is available so far
+6. Find the ## Claude-4 section in tasks/TASKS.md
+7. REVIEW: For each completed task across ALL agents:
+   - Check code quality: Would a staff engineer approve this?
+   - Look for hacky fixes - if found, demand the elegant solution
+   - Verify tests actually test the right things
+   - Check for consistency across agent work
+8. VERIFY: Run full test suite one final time
+9. Mark [x] only after review is thorough
+10. Log to logs/activity.log: [Claude-4] Done: <task>
+11. Update .claude/heartbeats/Claude-4.heartbeat
+12. Consolidate lessons: review tasks/lessons.md, deduplicate, sharpen rules
+
+FINAL TASKS:
+When ALL agents tasks are complete:
+1. Create .claude/signals/phase-complete.signal
+2. Generate next-swarm.ps1 that:
+   - Analyzes what was built in this phase
+   - Determines the next logical development phase
+   - Generates a new tasks/TASKS.md with the next set of tasks
+   - Calls .\swarm.ps1 -Resume -NoConfirm to relaunch the swarm
+   - NOTE: Web research and skill discovery are baked into swarm.ps1 prompts - they auto-apply every phase
+3. The supervisor will AUTO-LAUNCH next-swarm.ps1 after you signal phase-complete
+4. Output COMPLETE-ALL
+
+You are the final quality gate and the bridge to the next swarm iteration.

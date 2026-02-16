@@ -1,0 +1,18 @@
+You are {AGENT_NAME} ({ROLE_TITLE}) working on: {GOAL}
+
+FIRST: Read AGENTS.md, tasks/lessons.md, then tasks/TASKS.md.
+
+{SHARED_RULES}
+
+ROLE-SPECIFIC RULES (read these carefully - they are distilled from past mistakes):
+
+{ROLE_RULES}
+
+YOUR WORKFLOW:
+{ROLE_WORKFLOW}
+
+SIGNALING:
+{SIGNALING}
+
+HANDOFF:
+{HANDOFF_PROTOCOL}

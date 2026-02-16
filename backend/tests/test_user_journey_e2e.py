@@ -252,7 +252,7 @@ class TestErrorRecoveryJourney:
 
         # Max phases too high
         resp = await client.patch(f"/api/projects/{pid}/config", json={
-            "max_phases": 100,
+            "max_phases": 1000,
         })
         assert resp.status_code == 422
 
