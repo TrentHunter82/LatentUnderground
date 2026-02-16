@@ -42,6 +42,9 @@ Write-Host ""
 Write-Host "  ===== $AgentName - $AgentRole =====" -ForegroundColor $Color
 Write-Host ""
 
+# Set AGENT_NAME env var for swarm-msg client
+$env:AGENT_NAME = $AgentName
+
 # Non-blocking: just check signal status, always proceed
 $signalReady = Wait-ForSignal -Signal $WaitForSignal
 if (-not [string]::IsNullOrWhiteSpace($WaitForSignal) -and -not $signalReady) {

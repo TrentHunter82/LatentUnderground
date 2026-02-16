@@ -45,7 +45,6 @@ param(
     [ValidateSet("send", "inbox", "ack", "lesson", "channel", "help")]
     [string]$Command = "help",
 
-    [Alias("to")]
     [string]$To,
 
     [string]$Channel = "general",
@@ -53,7 +52,7 @@ param(
     [ValidateSet("low", "normal", "high", "critical")]
     [string]$Priority = "normal",
 
-    [Alias("body", "b")]
+    [Alias("b")]
     [string]$Body,
 
     [string]$Since,
@@ -71,7 +70,7 @@ function Get-BusConfig {
     .SYNOPSIS
         Load bus configuration from .swarm/bus.json
     #>
-    $configPath = Join-Path (Get-Location) ".swarm" "bus.json"
+    $configPath = Join-Path (Join-Path (Get-Location) ".swarm") "bus.json"
     if (-not (Test-Path $configPath)) {
         Write-Error "Bus config not found at $configPath. Is the swarm running?"
         exit 1
@@ -98,7 +97,7 @@ function Get-AgentName {
     }
 
     # Fall back to extracting from prompt file path
-    $promptDir = Join-Path (Get-Location) ".claude" "prompts"
+    $promptDir = Join-Path (Join-Path (Get-Location) ".claude") "prompts"
     if (Test-Path $promptDir) {
         $promptFiles = Get-ChildItem -Path $promptDir -Filter "Claude-*.txt"
         if ($promptFiles.Count -gt 0) {

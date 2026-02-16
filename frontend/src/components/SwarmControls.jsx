@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLaunchSwarm, useStopSwarm, useSendDirective } from '../hooks/useMutations'
+import { useLaunchSwarm, useStopSwarm, useSendDirective, useUpdateProjectConfig } from '../hooks/useMutations'
 import { useToast } from './Toast'
 import { useNotifications } from '../hooks/useNotifications'
 import ConfirmDialog from './ConfirmDialog'
@@ -10,12 +10,16 @@ export default function SwarmControls({ projectId, status, config, onAction, age
   const [showBroadcast, setShowBroadcast] = useState(false)
   const [broadcastText, setBroadcastText] = useState('')
   const [broadcasting, setBroadcasting] = useState(false)
+  const [togglingAutoQueue, setTogglingAutoQueue] = useState(false)
   const toast = useToast()
   const { requestPermission } = useNotifications()
 
   const launchMutation = useLaunchSwarm()
   const stopMutation = useStopSwarm()
   const directiveMutation = useSendDirective()
+  const updateConfigMutation = useUpdateProjectConfig()
+
+  const autoQueueEnabled = config?.auto_queue ?? false
 
   const isLoading = loadingAction !== null
 
@@ -73,6 +77,27 @@ export default function SwarmControls({ projectId, status, config, onAction, age
     }
   }
 
+  const handleToggleAutoQueue = async () => {
+    setTogglingAutoQueue(true)
+    const newValue = !autoQueueEnabled
+    try {
+      await updateConfigMutation.mutateAsync({
+        projectId,
+        config: {
+          ...config,
+          auto_queue: newValue,
+          auto_queue_delay_seconds: config?.auto_queue_delay_seconds ?? 30,
+        },
+      })
+      toast(newValue ? 'Auto-queue enabled' : 'Auto-queue disabled', 'success')
+      onAction?.()
+    } catch (e) {
+      toast(`Failed to toggle auto-queue: ${e.message}`, 'error')
+    } finally {
+      setTogglingAutoQueue(false)
+    }
+  }
+
   const aliveCount = agents?.filter(a => a.alive).length ?? 0
 
   const Spinner = () => (
@@ -107,6 +132,27 @@ export default function SwarmControls({ projectId, status, config, onAction, age
                 Direct All
               </button>
             )}
+            {/* Auto-Queue Toggle (also visible when running) */}
+            <button
+              onClick={handleToggleAutoQueue}
+              disabled={togglingAutoQueue}
+              title={autoQueueEnabled ? 'Auto-queue ON: will auto-resume when agents finish' : 'Auto-queue OFF: click to enable'}
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-mono cursor-pointer border transition-all flex items-center gap-1.5 ${
+                autoQueueEnabled
+                  ? 'bg-crt-green/20 border-crt-green/50 text-crt-green hover:bg-crt-green/30'
+                  : 'bg-transparent border-retro-border text-zinc-500 hover:text-zinc-300 hover:border-zinc-500'
+              } ${togglingAutoQueue ? 'opacity-50' : ''}`}
+              aria-pressed={autoQueueEnabled}
+              aria-label={autoQueueEnabled ? 'Disable auto-queue' : 'Enable auto-queue'}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 2l4 4-4 4" />
+                <path d="M3 11v-1a4 4 0 014-4h14" />
+                <path d="M7 22l-4-4 4-4" />
+                <path d="M21 13v1a4 4 0 01-4 4H3" />
+              </svg>
+              <span className="hidden sm:inline">{autoQueueEnabled ? 'Auto' : 'Auto'}</span>
+            </button>
           </>
         ) : (
           <>
@@ -128,6 +174,27 @@ export default function SwarmControls({ projectId, status, config, onAction, age
                 {loadingAction === 'resume' ? <><Spinner /> Resuming...</> : 'Resume'}
               </button>
             )}
+            {/* Auto-Queue Toggle */}
+            <button
+              onClick={handleToggleAutoQueue}
+              disabled={togglingAutoQueue}
+              title={autoQueueEnabled ? 'Auto-queue ON: will auto-resume when agents finish' : 'Auto-queue OFF: click to enable'}
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-mono cursor-pointer border transition-all flex items-center gap-1.5 ${
+                autoQueueEnabled
+                  ? 'bg-crt-green/20 border-crt-green/50 text-crt-green hover:bg-crt-green/30'
+                  : 'bg-transparent border-retro-border text-zinc-500 hover:text-zinc-300 hover:border-zinc-500'
+              } ${togglingAutoQueue ? 'opacity-50' : ''}`}
+              aria-pressed={autoQueueEnabled}
+              aria-label={autoQueueEnabled ? 'Disable auto-queue' : 'Enable auto-queue'}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 2l4 4-4 4" />
+                <path d="M3 11v-1a4 4 0 014-4h14" />
+                <path d="M7 22l-4-4 4-4" />
+                <path d="M21 13v1a4 4 0 01-4 4H3" />
+              </svg>
+              <span className="hidden sm:inline">{autoQueueEnabled ? 'Auto' : 'Auto'}</span>
+            </button>
           </>
         )}
       </div>

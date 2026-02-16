@@ -145,11 +145,15 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
   const [cbWindowSeconds, setCbWindowSeconds] = useState(300)
   const [cbRecoverySeconds, setCbRecoverySeconds] = useState(60)
 
+  // Auto-queue config
+  const [autoQueue, setAutoQueue] = useState(false)
+  const [autoQueueDelay, setAutoQueueDelay] = useState(30)
+
   // Guardrail rules
   const [guardrailRules, setGuardrailRules] = useState([])
 
   // Track the "saved" state for dirty detection
-  const savedConfig = useRef({ agent_count: 4, max_phases: 999, custom_prompts: '', max_agents_concurrent: null, max_duration_hours: null, max_restarts_per_agent: null, circuit_breaker_max_failures: 3, circuit_breaker_window_seconds: 300, circuit_breaker_recovery_seconds: 60, guardrails: [] })
+  const savedConfig = useRef({ agent_count: 4, max_phases: 999, custom_prompts: '', max_agents_concurrent: null, max_duration_hours: null, max_restarts_per_agent: null, circuit_breaker_max_failures: 3, circuit_breaker_window_seconds: 300, circuit_breaker_recovery_seconds: 60, auto_queue: false, auto_queue_delay_seconds: 30, guardrails: [] })
 
   useEffect(() => {
     if (initialConfig) {
@@ -168,9 +172,11 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
       setCbMaxFailures(initialConfig.circuit_breaker_max_failures ?? 3)
       setCbWindowSeconds(initialConfig.circuit_breaker_window_seconds ?? 300)
       setCbRecoverySeconds(initialConfig.circuit_breaker_recovery_seconds ?? 60)
+      setAutoQueue(initialConfig.auto_queue ?? false)
+      setAutoQueueDelay(initialConfig.auto_queue_delay_seconds ?? 30)
       const gr = Array.isArray(initialConfig.guardrails) ? initialConfig.guardrails : []
       setGuardrailRules(gr.map(r => ({ type: r.type, pattern: r.pattern || '', threshold: r.threshold ?? 0, action: r.action || 'warn' })))
-      savedConfig.current = { agent_count: ac, max_phases: mp, custom_prompts: cp, max_agents_concurrent: mac, max_duration_hours: mdh, max_restarts_per_agent: mra, circuit_breaker_max_failures: initialConfig.circuit_breaker_max_failures ?? 3, circuit_breaker_window_seconds: initialConfig.circuit_breaker_window_seconds ?? 300, circuit_breaker_recovery_seconds: initialConfig.circuit_breaker_recovery_seconds ?? 60, guardrails: gr }
+      savedConfig.current = { agent_count: ac, max_phases: mp, custom_prompts: cp, max_agents_concurrent: mac, max_duration_hours: mdh, max_restarts_per_agent: mra, circuit_breaker_max_failures: initialConfig.circuit_breaker_max_failures ?? 3, circuit_breaker_window_seconds: initialConfig.circuit_breaker_window_seconds ?? 300, circuit_breaker_recovery_seconds: initialConfig.circuit_breaker_recovery_seconds ?? 60, auto_queue: initialConfig.auto_queue ?? false, auto_queue_delay_seconds: initialConfig.auto_queue_delay_seconds ?? 30, guardrails: gr }
     }
   }, [initialConfig])
 
@@ -193,9 +199,11 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
       cbMaxFailures !== savedConfig.current.circuit_breaker_max_failures ||
       cbWindowSeconds !== savedConfig.current.circuit_breaker_window_seconds ||
       cbRecoverySeconds !== savedConfig.current.circuit_breaker_recovery_seconds ||
+      autoQueue !== savedConfig.current.auto_queue ||
+      autoQueueDelay !== savedConfig.current.auto_queue_delay_seconds ||
       grChanged
     )
-  }, [agentCount, maxPhases, customPrompts, maxAgentsConcurrent, maxDurationHours, maxRestartsPerAgent, cbMaxFailures, cbWindowSeconds, cbRecoverySeconds, guardrailRules])
+  }, [agentCount, maxPhases, customPrompts, maxAgentsConcurrent, maxDurationHours, maxRestartsPerAgent, cbMaxFailures, cbWindowSeconds, cbRecoverySeconds, autoQueue, autoQueueDelay, guardrailRules])
 
   // Warn on browser navigation/close when dirty
   useEffect(() => {
@@ -247,10 +255,12 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
         circuit_breaker_max_failures: cbMaxFailures,
         circuit_breaker_window_seconds: cbWindowSeconds,
         circuit_breaker_recovery_seconds: cbRecoverySeconds,
+        auto_queue: autoQueue || undefined,
+        auto_queue_delay_seconds: autoQueue ? autoQueueDelay : undefined,
         guardrails: cleanedRules.length > 0 ? cleanedRules : null,
       }
       await onSave(projectId, config)
-      savedConfig.current = { agent_count: agentCount, max_phases: maxPhases, custom_prompts: customPrompts || '', max_agents_concurrent: maxAgentsConcurrent, max_duration_hours: maxDurationHours, max_restarts_per_agent: maxRestartsPerAgent, circuit_breaker_max_failures: cbMaxFailures, circuit_breaker_window_seconds: cbWindowSeconds, circuit_breaker_recovery_seconds: cbRecoverySeconds, guardrails: cleanedRules }
+      savedConfig.current = { agent_count: agentCount, max_phases: maxPhases, custom_prompts: customPrompts || '', max_agents_concurrent: maxAgentsConcurrent, max_duration_hours: maxDurationHours, max_restarts_per_agent: maxRestartsPerAgent, circuit_breaker_max_failures: cbMaxFailures, circuit_breaker_window_seconds: cbWindowSeconds, circuit_breaker_recovery_seconds: cbRecoverySeconds, auto_queue: autoQueue, auto_queue_delay_seconds: autoQueueDelay, guardrails: cleanedRules }
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } finally {
@@ -409,6 +419,43 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
             />
             <p className="text-[10px] text-zinc-600 font-mono m-0">
               Circuit breaker prevents crash loops by blocking agent restarts after repeated failures.
+            </p>
+          </div>
+        </div>
+
+        {/* Auto-Queue */}
+        <div className="pt-3 border-t border-retro-border">
+          <h4 className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-mono mb-3 m-0">Auto-Queue</h4>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoQueue}
+                  onChange={(e) => setAutoQueue(e.target.checked)}
+                  className="sr-only peer"
+                  aria-label="Enable auto-queue"
+                />
+                <div className="w-9 h-5 bg-retro-grid rounded-full peer peer-checked:bg-crt-green/30 peer-focus:ring-2 peer-focus:ring-crt-green/50 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-zinc-400 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4 peer-checked:after:bg-crt-green"></div>
+              </label>
+              <span className="text-xs text-zinc-400 font-mono">
+                {autoQueue ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
+            {autoQueue && (
+              <QuotaSlider
+                id="autoQueueDelay"
+                label="Relaunch Delay"
+                value={autoQueueDelay}
+                onChange={(v) => setAutoQueueDelay(v ?? 30)}
+                min={5}
+                max={300}
+                step={5}
+                unit="s"
+              />
+            )}
+            <p className="text-[10px] text-zinc-600 font-mono m-0">
+              Auto-queue automatically relaunches agents when they all exit, keeping your swarm running continuously.
             </p>
           </div>
         </div>

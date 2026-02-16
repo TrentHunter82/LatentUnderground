@@ -21,6 +21,66 @@ foreach ($dir in $dirs) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }
 
+# === WINDOWS CONTROL MCP SERVER ===
+$mcpPath = "C:\Users\flipp\Downloads\windows-control-mcp-master\windows-control-mcp-master\target\release\windows-control-mcp.exe"
+if (Test-Path $mcpPath) {
+    # Check if already running
+    $mcpRunning = Get-Process -Name "windows-control-mcp" -ErrorAction SilentlyContinue
+    if (-not $mcpRunning) {
+        Write-Host "  Starting Windows Control MCP server..." -ForegroundColor Cyan
+        Start-Process -FilePath $mcpPath -WindowStyle Hidden
+        Start-Sleep -Seconds 2
+        Write-Host "  OK - Windows Control MCP server started" -ForegroundColor Green
+    } else {
+        Write-Host "  OK - Windows Control MCP server already running" -ForegroundColor Green
+    }
+} else {
+    Write-Host "  WARN - Windows Control MCP not found at: $mcpPath" -ForegroundColor Yellow
+}
+
+# === MESSAGE BUS SETUP ===
+$busClientSrc = "backend/bus-client/swarm-msg.ps1"
+$busClientDst = ".swarm/bus/swarm-msg.ps1"
+$busConfigFile = ".swarm/bus.json"
+
+# Copy swarm-msg.ps1 client to expected location
+if (Test-Path $busClientSrc) {
+    Copy-Item $busClientSrc $busClientDst -Force
+    Write-Host "  OK - Copied swarm-msg.ps1 to .swarm/bus/" -ForegroundColor Green
+} else {
+    Write-Host "  WARN - Bus client not found at: $busClientSrc" -ForegroundColor Yellow
+}
+
+# Create bus.json config if not exists
+if (-not (Test-Path $busConfigFile)) {
+    # Get project_id from backend API (assumes backend is running)
+    $busPort = 8000
+    $projectFolder = (Get-Location).Path -replace '\\', '/'
+
+    try {
+        # Try to find or create project in backend
+        $projectsResponse = Invoke-RestMethod -Uri "http://127.0.0.1:$busPort/api/projects" -Method GET -ErrorAction SilentlyContinue
+        $project = $projectsResponse.projects | Where-Object { $_.folder_path -eq $projectFolder } | Select-Object -First 1
+
+        if ($project) {
+            $projectId = $project.id
+        } else {
+            # Create project if not found
+            $body = @{ name = (Split-Path $projectFolder -Leaf); folder_path = $projectFolder } | ConvertTo-Json
+            $newProject = Invoke-RestMethod -Uri "http://127.0.0.1:$busPort/api/projects" -Method POST -Body $body -ContentType "application/json"
+            $projectId = $newProject.id
+        }
+
+        @{ port = $busPort; project_id = $projectId } | ConvertTo-Json | Out-File -FilePath $busConfigFile -Encoding UTF8
+        Write-Host "  OK - Created bus.json (project_id: $projectId)" -ForegroundColor Green
+    } catch {
+        Write-Host "  WARN - Backend not running, using default bus config (project_id: 1)" -ForegroundColor Yellow
+        @{ port = $busPort; project_id = 1 } | ConvertTo-Json | Out-File -FilePath $busConfigFile -Encoding UTF8
+    }
+} else {
+    Write-Host "  OK - Using existing bus.json config" -ForegroundColor Green
+}
+
 # === PRE-LAUNCH CLEANUP ===
 # Archive and clear stale artifacts from previous runs so agents start clean.
 if (-not $Resume) {

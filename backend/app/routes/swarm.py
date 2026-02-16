@@ -825,6 +825,28 @@ async def _get_project_auto_stop(project_id: int) -> int:
     return config.AUTO_STOP_MINUTES
 
 
+async def _get_project_auto_queue(project_id: int) -> tuple[bool, int]:
+    """Get auto-queue settings from project config.
+
+    Returns (enabled: bool, delay_seconds: int).
+    Default delay is 30 seconds if not specified.
+    """
+    try:
+        async with aiosqlite.connect(database.DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            row = await (await db.execute(
+                "SELECT config FROM projects WHERE id = ?", (project_id,)
+            )).fetchone()
+            if row and row["config"]:
+                cfg = json.loads(row["config"])
+                enabled = cfg.get("auto_queue", False)
+                delay = cfg.get("auto_queue_delay_seconds", 30)
+                return (bool(enabled), max(5, min(300, int(delay))))
+    except Exception:
+        pass
+    return (False, 30)
+
+
 _GUARDRAIL_MAX_PATTERN_LEN = 200  # Match output search limit
 _GUARDRAIL_MAX_SCAN_BYTES = 1_000_000  # 1MB max text scanned by regex
 _GUARDRAIL_REGEX_TIMEOUT = 5.0  # seconds
@@ -1025,6 +1047,181 @@ async def _generate_run_summary(project_id: int) -> dict | None:
     except Exception:
         logger.debug("Failed to generate run summary for project %d", project_id, exc_info=True)
         return None
+
+
+async def _auto_queue_relaunch_agents(project_id: int) -> bool:
+    """Relaunch agents for auto-queue continuation.
+
+    Returns True if agents were successfully relaunched, False otherwise.
+    This is a lightweight relaunch that preserves existing prompt files
+    and does not run setup again.
+    """
+    try:
+        # Get project folder
+        async with aiosqlite.connect(database.DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            row = await (await db.execute(
+                "SELECT folder_path FROM projects WHERE id = ?", (project_id,)
+            )).fetchone()
+            if not row:
+                logger.warning("Auto-queue: project %d not found", project_id)
+                return False
+            folder = Path(row["folder_path"])
+
+        if not folder.exists():
+            logger.warning("Auto-queue: folder %s does not exist", folder)
+            return False
+
+        # Find prompt files
+        prompts_dir = folder / ".claude" / "prompts"
+        if not prompts_dir.exists():
+            logger.warning("Auto-queue: no prompts directory for project %d", project_id)
+            return False
+
+        prompt_files = sorted(prompts_dir.glob("Claude-*.txt"))
+        if not prompt_files:
+            logger.warning("Auto-queue: no prompt files found for project %d", project_id)
+            return False
+
+        # Find claude CLI
+        try:
+            claude_cmd = _find_claude_cmd()
+        except FileNotFoundError:
+            logger.error("Auto-queue: claude CLI not found")
+            return False
+
+        # Clean up old processes for this project
+        await cancel_drain_tasks(project_id)
+
+        # Spawn agents
+        agents_launched = []
+        first_pid = None
+
+        for pf in prompt_files:
+            agent_name = pf.stem
+            try:
+                prompt_text = pf.read_text(encoding="utf-8-sig").strip()
+            except Exception as e:
+                logger.error("Auto-queue: failed to read prompt %s: %s", pf, e)
+                continue
+            if not prompt_text:
+                logger.warning("Auto-queue: empty prompt for %s, skipping", agent_name)
+                continue
+
+            key = _agent_key(project_id, agent_name)
+
+            try:
+                spawn_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+                spawn_env["AGENT_NAME"] = agent_name
+                popen_kwargs = dict(
+                    cwd=str(folder),
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    env=spawn_env,
+                )
+                if os.name == "nt":
+                    popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+                process = subprocess.Popen(
+                    [
+                        *claude_cmd,
+                        "--print",
+                        "--output-format", "stream-json",
+                        "--dangerously-skip-permissions",
+                        "--verbose",
+                        prompt_text,
+                    ],
+                    **popen_kwargs,
+                )
+            except Exception as e:
+                logger.error("Auto-queue: failed to spawn %s: %s", agent_name, e)
+                with _buffers_lock:
+                    buf = _project_output_buffers.setdefault(
+                        project_id, deque(maxlen=_MAX_OUTPUT_LINES),
+                    )
+                    buf.append(f"[{agent_name}] ERROR: Auto-queue spawn failed — {e}")
+                continue
+
+            # Set up log file
+            log_dir = folder / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_file = log_dir / f"{agent_name}_{timestamp}.output.log"
+            _agent_log_files[key] = log_file
+
+            # Start drain threads
+            stop_event = threading.Event()
+            stdout_thread = threading.Thread(
+                target=_drain_agent_stream,
+                args=(project_id, agent_name, process.stdout, "stdout", stop_event),
+                daemon=True,
+            )
+            stderr_thread = threading.Thread(
+                target=_drain_agent_stream,
+                args=(project_id, agent_name, process.stderr, "stderr", stop_event),
+                daemon=True,
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+
+            # Register in tracking dicts
+            _agent_processes[key] = process
+            _agent_drain_events[key] = stop_event
+            _agent_drain_threads[key] = [stdout_thread, stderr_thread]
+            _agent_started_at[key] = datetime.now().isoformat()
+
+            if first_pid is None:
+                first_pid = process.pid
+
+            with _buffers_lock:
+                _agent_output_buffers.setdefault(key, deque(maxlen=_MAX_OUTPUT_LINES))
+
+            agents_launched.append(agent_name)
+            with _buffers_lock:
+                buf = _project_output_buffers.setdefault(
+                    project_id, deque(maxlen=_MAX_OUTPUT_LINES),
+                )
+                buf.append(f"[auto-queue] Relaunched {agent_name} (pid={process.pid})")
+            logger.info("Auto-queue: launched %s (pid=%d) for project %d", agent_name, process.pid, project_id)
+
+            _record_event_sync(
+                project_id, agent_name, "agent_started",
+                f"pid={process.pid} (auto-queue)",
+            )
+
+        if not agents_launched:
+            logger.warning("Auto-queue: no agents could be launched for project %d", project_id)
+            return False
+
+        # Reset auto-stop timer
+        _last_output_at[project_id] = time.time()
+
+        # Update resource tracking
+        _project_resource_usage[project_id] = {
+            "agent_count": len(agents_launched),
+            "restart_counts": {},
+            "started_at": time.time(),
+        }
+
+        # Update DB — mark project as running again and create new swarm run
+        async with aiosqlite.connect(database.DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            await db.execute(
+                "UPDATE projects SET status = 'running', swarm_pid = ?, updated_at = datetime('now') WHERE id = ?",
+                (first_pid, project_id),
+            )
+            await db.execute(
+                "INSERT INTO swarm_runs (project_id, status) VALUES (?, 'running')",
+                (project_id,),
+            )
+            await db.commit()
+
+        logger.info("Auto-queue: successfully relaunched %d agents for project %d", len(agents_launched), project_id)
+        return True
+
+    except Exception:
+        logger.error("Auto-queue: relaunch failed for project %d", project_id, exc_info=True)
+        return False
 
 
 async def _supervisor_loop(project_id: int):
@@ -1325,6 +1522,58 @@ async def _supervisor_loop(project_id: int):
                 await emit_webhook_event("swarm_stopped", project_id, {"reason": "all_agents_exited"})
             except Exception:
                 logger.error("Webhook emit failed for project %d", project_id, exc_info=True)
+
+            # --- Auto-queue check ---
+            # If auto_queue is enabled and no guardrail halt, relaunch agents after delay
+            auto_queue_enabled, auto_queue_delay = await _get_project_auto_queue(project_id)
+            if auto_queue_enabled and run_status != "failed_guardrail":
+                logger.info(
+                    "Auto-queue enabled for project %d, relaunching in %d seconds",
+                    project_id, auto_queue_delay,
+                )
+                with _buffers_lock:
+                    buf = _project_output_buffers.setdefault(
+                        project_id, deque(maxlen=_MAX_OUTPUT_LINES),
+                    )
+                    buf.append(f"[system] Auto-queue: relaunching agents in {auto_queue_delay} seconds...")
+                try:
+                    await ws_manager.broadcast(json.dumps({
+                        "type": "auto_queue_pending",
+                        "project_id": project_id,
+                        "delay_seconds": auto_queue_delay,
+                    }))
+                except Exception:
+                    pass
+
+                await asyncio.sleep(auto_queue_delay)
+
+                # Attempt to relaunch agents
+                relaunch_ok = await _auto_queue_relaunch_agents(project_id)
+                if relaunch_ok:
+                    logger.info("Auto-queue relaunch successful for project %d", project_id)
+                    with _buffers_lock:
+                        buf = _project_output_buffers.setdefault(
+                            project_id, deque(maxlen=_MAX_OUTPUT_LINES),
+                        )
+                        buf.append("[system] Auto-queue: agents relaunched successfully")
+                    try:
+                        await ws_manager.broadcast(json.dumps({
+                            "type": "auto_queue_launched",
+                            "project_id": project_id,
+                        }))
+                    except Exception:
+                        pass
+                    # Reset reported_exited for the new agents
+                    reported_exited.clear()
+                    # Continue the supervisor loop to monitor new agents
+                    continue
+                else:
+                    logger.warning("Auto-queue relaunch failed for project %d", project_id)
+                    with _buffers_lock:
+                        buf = _project_output_buffers.setdefault(
+                            project_id, deque(maxlen=_MAX_OUTPUT_LINES),
+                        )
+                        buf.append("[system] Auto-queue: relaunch failed — stopping")
             break
     except asyncio.CancelledError:
         logger.info("Supervisor cancelled for project %d", project_id)

@@ -34,9 +34,25 @@ _SCAFFOLD_DIRS = [
     ".claude/signals",
     ".claude/handoffs",
     ".claude/prompts",
+    ".claude/attention",
+    ".swarm/bus",
     "tasks",
     "logs",
 ]
+
+# MCP server configuration for agents
+_MCP_CONFIG = {
+    "mcpServers": {
+        "windows-control": {
+            "type": "http",
+            "url": "http://localhost:3001/mcp"
+        },
+        "windows-control-2": {
+            "type": "http",
+            "url": "http://localhost:3002/mcp"
+        }
+    }
+}
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -72,6 +88,19 @@ async def create_project(project: ProjectCreate, db: aiosqlite.Connection = Depe
             shutil.copy2(src, dest)
             logger.info("Scaffolded %s into %s", script, folder)
 
+    # Copy message bus client
+    bus_src = _LU_ROOT / "backend" / "bus-client" / "swarm-msg.ps1"
+    bus_dest = folder / ".swarm" / "bus" / "swarm-msg.ps1"
+    if bus_src.exists() and not bus_dest.exists():
+        shutil.copy2(bus_src, bus_dest)
+        logger.info("Scaffolded swarm-msg.ps1 into %s", folder)
+
+    # Create .claude/settings.json with MCP config
+    settings_file = folder / ".claude" / "settings.json"
+    if not settings_file.exists():
+        settings_file.write_text(json.dumps(_MCP_CONFIG, indent=2), encoding="utf-8")
+        logger.info("Created .claude/settings.json with MCP config in %s", folder)
+
     # Sanitize user-provided string fields to prevent stored XSS
     name = sanitize_string(project.name)
     goal = sanitize_string(project.goal)
@@ -84,7 +113,16 @@ async def create_project(project: ProjectCreate, db: aiosqlite.Connection = Depe
          project.complexity, requirements, project.folder_path),
     )
     await db.commit()
-    row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (cursor.lastrowid,))).fetchone()
+    project_id = cursor.lastrowid
+
+    # Create bus.json with project_id (after insert so we have the ID)
+    bus_config_file = folder / ".swarm" / "bus.json"
+    if not bus_config_file.exists():
+        bus_config = {"port": 8000, "project_id": project_id}
+        bus_config_file.write_text(json.dumps(bus_config, indent=2), encoding="utf-8")
+        logger.info("Created .swarm/bus.json for project %d", project_id)
+
+    row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
     return dict(row)
 
 

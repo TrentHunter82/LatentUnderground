@@ -90,6 +90,15 @@ class ProjectConfig(BaseModel):
         description="Output guardrail rules validated when all agents exit (None = disabled)",
         max_length=20,
     )
+    # Auto-queue: automatically resume swarm when all agents exit
+    auto_queue: Optional[bool] = Field(
+        None,
+        description="Auto-resume swarm when all agents exit (True = enabled, None/False = disabled)",
+    )
+    auto_queue_delay_seconds: Optional[int] = Field(
+        None, ge=5, le=300,
+        description="Delay before auto-resume in seconds (5-300, default 30)",
+    )
 
 
 class ProjectOut(BaseModel):
