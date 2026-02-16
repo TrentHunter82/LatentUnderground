@@ -91,6 +91,12 @@ export default function SwarmControls({ projectId, status, config, onAction, age
       })
       toast(newValue ? 'Auto-queue enabled' : 'Auto-queue disabled', 'success')
       onAction?.()
+      // If enabling auto-queue and swarm is stopped with no agents, trigger resume immediately
+      if (newValue && status !== 'running' && aliveCount === 0) {
+        setTogglingAutoQueue(false)
+        handleLaunch(true)
+        return
+      }
     } catch (e) {
       toast(`Failed to toggle auto-queue: ${e.message}`, 'error')
     } finally {
