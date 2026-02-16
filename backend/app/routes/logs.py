@@ -27,17 +27,32 @@ async def get_logs(project_id: int, lines: int = 100, db: aiosqlite.Connection =
 
     result = []
     if logs_dir.exists():
+        # Group log files by agent name (extract from filename like "Claude-1_20260216_170040.output.log")
+        agent_logs = {}
         for log_file in sorted(logs_dir.glob("*.log")):
+            # Extract agent name: everything before _YYYYMMDD timestamp
+            stem = log_file.stem  # e.g. "Claude-1_20260216_170040.output"
+            parts = stem.split("_")
+            # Agent name is the first part (e.g. "Claude-1")
+            agent_name = parts[0] if parts else stem
             try:
                 all_lines = log_file.read_text(encoding="utf-8", errors="replace").splitlines()
                 recent = all_lines[-lines:] if len(all_lines) > lines else all_lines
-                result.append({
-                    "agent": log_file.stem,
-                    "lines": recent,
-                })
+                # Append to existing agent's lines or create new entry
+                if agent_name in agent_logs:
+                    agent_logs[agent_name].extend(recent)
+                else:
+                    agent_logs[agent_name] = recent
             except Exception:
                 logger.error("Failed to read log file %s", log_file, exc_info=True)
                 continue
+
+        # Convert to list format, keeping only most recent lines per agent
+        for agent_name, agent_lines in agent_logs.items():
+            result.append({
+                "agent": agent_name,
+                "lines": agent_lines[-lines:] if len(agent_lines) > lines else agent_lines,
+            })
 
     return {"logs": result}
 
@@ -106,7 +121,10 @@ async def search_logs(
     results = []
     if logs_dir.exists():
         for log_file in sorted(logs_dir.glob("*.log")):
-            agent_name = log_file.stem
+            # Extract agent name: everything before _YYYYMMDD timestamp
+            stem = log_file.stem  # e.g. "Claude-1_20260216_170040.output"
+            parts = stem.split("_")
+            agent_name = parts[0] if parts else stem
             if agent and agent_name != agent:
                 continue
             try:
