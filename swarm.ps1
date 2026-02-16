@@ -1149,5 +1149,5 @@ Write-Host ""
 Write-Host "  Control:" -ForegroundColor White
 Write-Host "    .\stop-swarm.ps1     - Stop all agents" -ForegroundColor Gray
 Write-Host "    .\swarm.ps1 -Resume  - Resume after stop" -ForegroundColor Gray
-Write-Host "    -MaxPhases N         - Change auto-chain limit (default: 24)" -ForegroundColor Gray
+Write-Host "    -MaxPhases N         - Change auto-chain limit (default: 999)" -ForegroundColor Gray
 Write-Host ""
