@@ -78,6 +78,33 @@ export default function SwarmControls({ projectId, status, config, onAction, age
   }
 
   const handleToggleAutoQueue = async () => {
+    // If stopped with no agents: enable auto-queue and resume immediately
+    if (status !== 'running' && aliveCount === 0) {
+      setTogglingAutoQueue(true)
+      try {
+        // Ensure auto_queue is enabled
+        if (!autoQueueEnabled) {
+          await updateConfigMutation.mutateAsync({
+            projectId,
+            config: {
+              ...config,
+              auto_queue: true,
+              auto_queue_delay_seconds: config?.auto_queue_delay_seconds ?? 30,
+            },
+          })
+        }
+        toast('Auto-queue enabled, launching...', 'success')
+        onAction?.()
+        setTogglingAutoQueue(false)
+        handleLaunch(true)
+        return
+      } catch (e) {
+        toast(`Failed: ${e.message}`, 'error')
+        setTogglingAutoQueue(false)
+        return
+      }
+    }
+    // If running: toggle auto-queue on/off
     setTogglingAutoQueue(true)
     const newValue = !autoQueueEnabled
     try {
@@ -91,12 +118,6 @@ export default function SwarmControls({ projectId, status, config, onAction, age
       })
       toast(newValue ? 'Auto-queue enabled' : 'Auto-queue disabled', 'success')
       onAction?.()
-      // If enabling auto-queue and swarm is stopped with no agents, trigger resume immediately
-      if (newValue && status !== 'running' && aliveCount === 0) {
-        setTogglingAutoQueue(false)
-        handleLaunch(true)
-        return
-      }
     } catch (e) {
       toast(`Failed to toggle auto-queue: ${e.message}`, 'error')
     } finally {
