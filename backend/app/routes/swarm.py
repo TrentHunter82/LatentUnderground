@@ -1232,6 +1232,10 @@ async def _supervisor_loop(project_id: int):
     Also auto-stops swarm if no output for configured idle timeout.
     """
     logger.info("Supervisor started for project %d", project_id)
+    # Announce supervisor start to UI
+    with _buffers_lock:
+        buf = _project_output_buffers.setdefault(project_id, deque(maxlen=_MAX_OUTPUT_LINES))
+        buf.append("[system] Supervisor started — monitoring agents")
     # Track which agents we've already reported as exited
     reported_exited: set[str] = set()
     # Load auto-stop config once at start
@@ -1444,6 +1448,9 @@ async def _supervisor_loop(project_id: int):
             await asyncio.sleep(2)
 
             logger.info("All agents exited for project %d, marking completed", project_id)
+            with _buffers_lock:
+                buf = _project_output_buffers.setdefault(project_id, deque(maxlen=_MAX_OUTPUT_LINES))
+                buf.append("[system] All agents exited — processing completion...")
 
             # Flush any pending checkpoints before generating summary
             await asyncio.to_thread(_flush_checkpoints)
@@ -1574,11 +1581,25 @@ async def _supervisor_loop(project_id: int):
                             project_id, deque(maxlen=_MAX_OUTPUT_LINES),
                         )
                         buf.append("[system] Auto-queue: relaunch failed — stopping")
+            else:
+                # Auto-queue not enabled or guardrail halt
+                with _buffers_lock:
+                    buf = _project_output_buffers.setdefault(project_id, deque(maxlen=_MAX_OUTPUT_LINES))
+                    if run_status == "failed_guardrail":
+                        buf.append("[system] Supervisor exiting — guardrail halt triggered")
+                    else:
+                        buf.append("[system] Supervisor exiting — auto-queue disabled")
             break
     except asyncio.CancelledError:
         logger.info("Supervisor cancelled for project %d", project_id)
+        with _buffers_lock:
+            buf = _project_output_buffers.setdefault(project_id, deque(maxlen=_MAX_OUTPUT_LINES))
+            buf.append("[system] Supervisor cancelled")
     except Exception:
         logger.error("Supervisor error for project %d", project_id, exc_info=True)
+        with _buffers_lock:
+            buf = _project_output_buffers.setdefault(project_id, deque(maxlen=_MAX_OUTPUT_LINES))
+            buf.append("[system] Supervisor error — check server logs")
     finally:
         _supervisor_tasks.pop(project_id, None)
         _known_directives.pop(project_id, None)
@@ -1687,33 +1708,38 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
         config_file.write_text(json.dumps(swarm_cfg, indent=2), encoding="utf-8")
         logger.info("Created swarm config for project %d", req.project_id)
 
-    # Always create fresh TASKS.md so agents don't inherit stale checkmarks.
-    # Old TASKS.md is already archived by _clean_project_artifacts / swarm.ps1 cleanup.
+    # Create fresh TASKS.md only on initial launch, preserve on resume
     tasks_dir = folder / "tasks"
     tasks_dir.mkdir(parents=True, exist_ok=True)
     tasks_file = tasks_dir / "TASKS.md"
-    tasks_file.write_text(
-        f"# {project_name}\n\n"
-        f"{project_desc}\n\n"
-        "## Claude-1 [Backend/Core]\n"
-        "- [ ] Analyze project structure and identify tasks\n"
-        "- [ ] Implement core functionality\n"
-        "- [ ] Add error handling and validation\n\n"
-        "## Claude-2 [Frontend/Interface]\n"
-        "- [ ] Set up UI scaffolding\n"
-        "- [ ] Implement main interface components\n"
-        "- [ ] Connect to backend APIs\n\n"
-        "## Claude-3 [Integration/Testing]\n"
-        "- [ ] Write unit tests for core modules\n"
-        "- [ ] Write integration tests\n"
-        "- [ ] Verify all components work together\n\n"
-        "## Claude-4 [Polish/Review]\n"
-        "- [ ] Code review all agent work\n"
-        "- [ ] Fix issues found in review\n"
-        "- [ ] FINAL: Generate next-swarm.ps1 for next phase\n",
-        encoding="utf-8",
-    )
-    logger.info("Created fresh TASKS.md for project %d", req.project_id)
+
+    if req.resume and tasks_file.exists():
+        # Resume mode: preserve existing TASKS.md with agent progress
+        logger.info("Resume mode: preserving existing TASKS.md for project %d", req.project_id)
+    else:
+        # Fresh launch: create new TASKS.md
+        tasks_file.write_text(
+            f"# {project_name}\n\n"
+            f"{project_desc}\n\n"
+            "## Claude-1 [Backend/Core]\n"
+            "- [ ] Analyze project structure and identify tasks\n"
+            "- [ ] Implement core functionality\n"
+            "- [ ] Add error handling and validation\n\n"
+            "## Claude-2 [Frontend/Interface]\n"
+            "- [ ] Set up UI scaffolding\n"
+            "- [ ] Implement main interface components\n"
+            "- [ ] Connect to backend APIs\n\n"
+            "## Claude-3 [Integration/Testing]\n"
+            "- [ ] Write unit tests for core modules\n"
+            "- [ ] Write integration tests\n"
+            "- [ ] Verify all components work together\n\n"
+            "## Claude-4 [Polish/Review]\n"
+            "- [ ] Code review all agent work\n"
+            "- [ ] Fix issues found in review\n"
+            "- [ ] FINAL: Generate next-swarm.ps1 for next phase\n",
+            encoding="utf-8",
+        )
+        logger.info("Created fresh TASKS.md for project %d", req.project_id)
 
     # Clear stale cached run_id to prevent reuse from previous launch
     _current_run_ids.pop(req.project_id, None)
