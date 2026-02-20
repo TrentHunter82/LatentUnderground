@@ -1501,13 +1501,21 @@ async def _supervisor_loop(project_id: int):
                         except Exception:
                             pass
 
+            # --- Auto-queue check (before marking stopped) ---
+            # Check auto_queue FIRST to avoid race condition where frontend
+            # sees 'stopped' and triggers a new launch that cancels us
+            auto_queue_enabled, auto_queue_delay = await _get_project_auto_queue(project_id)
+            will_auto_queue = auto_queue_enabled and run_status != "failed_guardrail"
+
             # Retry DB update up to 3 times with backoff
+            # If auto-queue will trigger, keep status as 'running' to prevent race
+            new_status = 'running' if will_auto_queue else 'stopped'
             for attempt in range(3):
                 try:
                     async with aiosqlite.connect(database.DB_PATH) as db:
                         db.row_factory = aiosqlite.Row
                         await db.execute(
-                            "UPDATE projects SET status = 'stopped', swarm_pid = NULL, "
+                            f"UPDATE projects SET status = '{new_status}', swarm_pid = NULL, "
                             "updated_at = datetime('now') WHERE id = ?",
                             (project_id,),
                         )
@@ -1525,15 +1533,14 @@ async def _supervisor_loop(project_id: int):
                                      project_id, exc_info=True)
                     else:
                         await asyncio.sleep(1 * (attempt + 1))
-            try:
-                await emit_webhook_event("swarm_stopped", project_id, {"reason": "all_agents_exited"})
-            except Exception:
-                logger.error("Webhook emit failed for project %d", project_id, exc_info=True)
+            if not will_auto_queue:
+                try:
+                    await emit_webhook_event("swarm_stopped", project_id, {"reason": "all_agents_exited"})
+                except Exception:
+                    logger.error("Webhook emit failed for project %d", project_id, exc_info=True)
 
-            # --- Auto-queue check ---
-            # If auto_queue is enabled and no guardrail halt, relaunch agents after delay
-            auto_queue_enabled, auto_queue_delay = await _get_project_auto_queue(project_id)
-            if auto_queue_enabled and run_status != "failed_guardrail":
+            # --- Auto-queue relaunch ---
+            if will_auto_queue:
                 logger.info(
                     "Auto-queue enabled for project %d, relaunching in %d seconds",
                     project_id, auto_queue_delay,
@@ -1581,6 +1588,20 @@ async def _supervisor_loop(project_id: int):
                             project_id, deque(maxlen=_MAX_OUTPUT_LINES),
                         )
                         buf.append("[system] Auto-queue: relaunch failed — stopping")
+                    # Now mark as stopped since relaunch failed
+                    try:
+                        async with aiosqlite.connect(database.DB_PATH) as db:
+                            await db.execute(
+                                "UPDATE projects SET status = 'stopped' WHERE id = ?",
+                                (project_id,),
+                            )
+                            await db.commit()
+                    except Exception:
+                        pass
+                    try:
+                        await emit_webhook_event("swarm_stopped", project_id, {"reason": "auto_queue_failed"})
+                    except Exception:
+                        pass
             else:
                 # Auto-queue not enabled or guardrail halt
                 with _buffers_lock:
@@ -1595,11 +1616,31 @@ async def _supervisor_loop(project_id: int):
         with _buffers_lock:
             buf = _project_output_buffers.setdefault(project_id, deque(maxlen=_MAX_OUTPUT_LINES))
             buf.append("[system] Supervisor cancelled")
+        # Ensure status is stopped on cancellation
+        try:
+            async with aiosqlite.connect(database.DB_PATH) as db:
+                await db.execute(
+                    "UPDATE projects SET status = 'stopped', swarm_pid = NULL WHERE id = ?",
+                    (project_id,),
+                )
+                await db.commit()
+        except Exception:
+            pass
     except Exception:
         logger.error("Supervisor error for project %d", project_id, exc_info=True)
         with _buffers_lock:
             buf = _project_output_buffers.setdefault(project_id, deque(maxlen=_MAX_OUTPUT_LINES))
             buf.append("[system] Supervisor error — check server logs")
+        # Ensure status is stopped on error
+        try:
+            async with aiosqlite.connect(database.DB_PATH) as db:
+                await db.execute(
+                    "UPDATE projects SET status = 'stopped', swarm_pid = NULL WHERE id = ?",
+                    (project_id,),
+                )
+                await db.commit()
+        except Exception:
+            pass
     finally:
         _supervisor_tasks.pop(project_id, None)
         _known_directives.pop(project_id, None)
