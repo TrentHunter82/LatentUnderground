@@ -5,6 +5,7 @@
 )
 
 $logFile = "logs/supervisor.log"
+$rateLimitSignal = ".claude/signals/rate-limited.signal"
 
 function Write-Log {
     param([string]$msg, [string]$level = "INFO")
@@ -51,6 +52,36 @@ function Get-TaskProgress {
     }
 }
 
+function Test-RateLimitActive {
+    # Check if rate limit signal exists and is still active
+    if (-not (Test-Path $rateLimitSignal)) {
+        return @{ Active = $false; SecondsRemaining = 0 }
+    }
+
+    try {
+        $content = Get-Content $rateLimitSignal -Raw | ConvertFrom-Json
+        $resetTimestamp = $content.reset_timestamp
+        $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+
+        if ($now -ge $resetTimestamp) {
+            # Rate limit expired, remove the signal file
+            Remove-Item $rateLimitSignal -Force -ErrorAction SilentlyContinue
+            return @{ Active = $false; SecondsRemaining = 0 }
+        }
+
+        $remaining = $resetTimestamp - $now
+        return @{
+            Active = $true
+            SecondsRemaining = [int]$remaining
+            DetectedBy = $content.detected_by
+            ResetAt = $content.reset_at
+        }
+    } catch {
+        Write-Log "Failed to parse rate limit signal: $_" "WARN"
+        return @{ Active = $false; SecondsRemaining = 0 }
+    }
+}
+
 Write-Host ""
 Write-Host "  ===== SWARM SUPERVISOR - Monitoring Active =====" -ForegroundColor Magenta
 Write-Host ""
@@ -81,6 +112,12 @@ while ($true) {
     $activeSignals = $signalNames | Where-Object { Test-Path ".claude/signals/$_.signal" }
     if ($activeSignals) {
         Write-Log "Signals: $($activeSignals -join ', ')" "OK"
+    }
+
+    # Check rate limit status
+    $rateLimit = Test-RateLimitActive
+    if ($rateLimit.Active) {
+        Write-Log "RATE LIMIT ACTIVE: $($rateLimit.SecondsRemaining)s remaining (detected by $($rateLimit.DetectedBy))" "WARN"
     }
 
     if (Test-Path "tasks/lessons.md") {
@@ -121,6 +158,16 @@ while ($true) {
                         Write-Log "Auto-chain limit reached ($MaxPhases phases). Stopping." "WARN"
                         Write-Host "  Run .\next-swarm.ps1 manually to continue, or re-run with -MaxPhases $($MaxPhases + 3)" -ForegroundColor Yellow
                     } else {
+                        # Check for rate limit before auto-chaining
+                        $rateLimitCheck = Test-RateLimitActive
+                        if ($rateLimitCheck.Active) {
+                            Write-Host ""
+                            Write-Log "Rate limit active - waiting $($rateLimitCheck.SecondsRemaining)s before auto-chain..." "WARN"
+                            $waitTime = [Math]::Min($rateLimitCheck.SecondsRemaining, 3600)  # Cap at 1 hour
+                            Write-Host "  Auto-chain delayed until $($rateLimitCheck.ResetAt)" -ForegroundColor Yellow
+                            Start-Sleep -Seconds $waitTime
+                        }
+
                         Write-Host ""
                         Write-Log "Auto-chaining to Phase $nextPhase of $MaxPhases..." "OK"
                         Write-Host "  Preparing next swarm in 10 seconds... (Ctrl+C to cancel)" -ForegroundColor Yellow

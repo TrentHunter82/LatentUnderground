@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "windows-control": {
+      "type": "http",
+      "url": "http://localhost:3001/mcp"
+    },
+    "windows-control-2": {
+      "type": "http",
+      "url": "http://localhost:3002/mcp"
+    }
+  }
+}

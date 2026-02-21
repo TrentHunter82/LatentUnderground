@@ -45,6 +45,23 @@ while ($true) {
         $color = if ($present) { "Green" } else { "DarkGray" }
         Write-Host "    $icon $_" -ForegroundColor $color
     }
+
+    # Rate limit status
+    $rateLimitSignal = ".claude/signals/rate-limited.signal"
+    if (Test-Path $rateLimitSignal) {
+        try {
+            $rlData = Get-Content $rateLimitSignal -Raw | ConvertFrom-Json
+            $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+            if ($now -lt $rlData.reset_timestamp) {
+                $remaining = $rlData.reset_timestamp - $now
+                Write-Host ""
+                Write-Host "  RATE LIMIT:" -ForegroundColor Red
+                Write-Host "    [!] Active - $([int]$remaining)s remaining" -ForegroundColor Red
+                Write-Host "    Detected by: $($rlData.detected_by)" -ForegroundColor Yellow
+                Write-Host "    Resets at: $($rlData.reset_at)" -ForegroundColor Yellow
+            }
+        } catch {}
+    }
     Write-Host ""
 
     Write-Host "  RECENT ACTIVITY:" -ForegroundColor Yellow

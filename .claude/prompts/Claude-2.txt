@@ -32,11 +32,15 @@ ORCHESTRATION RULES (non-negotiable):
 10. SIMPLICITY: Make every change as simple as possible. No temporary fixes. Find root causes. Minimal impact.
 
 DIRECTIVE PROTOCOL:
-After completing each task, check for directive files:
-1. Check .claude/directives/{your-agent-name}.directive (e.g. .claude/directives/Claude-1.directive)
-2. Check .claude/directives/all.directive (broadcast directives for all agents)
-If a directive file exists: read it, execute the instructions as HIGHEST PRIORITY (override current task), then delete the file when done.
-This allows the orchestrator to redirect you at any point without restarting.
+Check .claude/directives/Claude-2.directive and .claude/directives/all.directive after each task.
+If present: execute as highest priority, then delete.
+
+COORDINATION:
+Read .claude/rules/AGENT_PROTOCOL.md. Quick ref:
+  .swarm/bus/swarm-msg.ps1 inbox       # Check messages
+  .swarm/bus/swarm-msg.ps1 send --to Claude-1 --body "need API"
+Before editing shared files, check AGENT_STATUS.md for LOCKING markers.
+When you need a missing store action or backend isn't ready: notify Claude-1.
 
 ROLE-SPECIFIC RULES (read these carefully - they are distilled from past mistakes):
 

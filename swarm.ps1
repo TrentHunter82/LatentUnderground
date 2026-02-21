@@ -10,13 +10,14 @@ param(
     [switch]$NoConfirm,
     [int]$AgentCount = 4,
     [int]$MaxPhases = 999,
-    [switch]$SetupOnly
+    [switch]$SetupOnly,
+    [int]$AgentStartDelay = 30  # Seconds between agent launches (staggered start)
 )
 
 $ErrorActionPreference = "Stop"
 
 # === DIRECTORY SETUP (must happen first) ===
-$dirs = @(".claude", ".claude/signals", ".claude/heartbeats", ".claude/handoffs", ".claude/prompts", ".claude/attention", ".swarm", ".swarm/bus", "tasks", "logs")
+$dirs = @(".claude", ".claude/signals", ".claude/heartbeats", ".claude/handoffs", ".claude/prompts", ".claude/attention", ".claude/templates", ".swarm", ".swarm/bus", "tasks", "logs")
 foreach ($dir in $dirs) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }
@@ -428,6 +429,18 @@ if (-not (Test-Path "tasks/todo.md")) {
     Write-Host "  OK - Created tasks/todo.md (planning scratchpad)" -ForegroundColor Green
 }
 
+# AGENT_STATUS.md (agent coordination protocol)
+$statusTemplate = ".claude/templates/AGENT_STATUS.template.md"
+if (Test-Path $statusTemplate) {
+    $content = (Get-Content $statusTemplate -Raw)
+    $content = $content -replace '\{PROJECT_NAME\}', $goal
+    $content = $content -replace '\{TIMESTAMP\}', (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+    $content | Out-File -FilePath "AGENT_STATUS.md" -Encoding UTF8
+    Write-Host "  OK - Created AGENT_STATUS.md (agent coordination)" -ForegroundColor Green
+} else {
+    Write-Host "  SKIP - AGENT_STATUS.template.md not found (optional)" -ForegroundColor DarkGray
+}
+
 # progress.txt
 if (-not (Test-Path "progress.txt")) {
     $progressLines = @(
@@ -458,6 +471,8 @@ $iteration = 1
 $handoffFile = ".claude/handoffs/$AgentName.md"
 $heartbeatFile = ".claude/heartbeats/$AgentName.heartbeat"
 $logFile = "logs/$AgentName.log"
+$rateLimitSignal = ".claude/signals/rate-limited.signal"
+$RATE_LIMIT_EXIT_CODE = 75
 
 function Write-Log {
     param([string]$msg)
@@ -471,10 +486,50 @@ function Write-Heartbeat {
     Get-Date -Format "yyyy-MM-dd HH:mm:ss" | Out-File -FilePath $heartbeatFile -Encoding UTF8
 }
 
+function Test-RateLimitActive {
+    if (-not (Test-Path $rateLimitSignal)) { return $false }
+    try {
+        $content = Get-Content $rateLimitSignal -Raw | ConvertFrom-Json
+        $resetTimestamp = $content.reset_timestamp
+        $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        if ($now -ge $resetTimestamp) {
+            Remove-Item $rateLimitSignal -Force -ErrorAction SilentlyContinue
+            return $false
+        }
+        $remaining = $resetTimestamp - $now
+        Write-Log "Rate limit active, $([int]$remaining) seconds remaining"
+        return $true
+    } catch { return $false }
+}
+
+function Get-RateLimitResetTime {
+    if (-not (Test-Path $rateLimitSignal)) { return $null }
+    try {
+        $content = Get-Content $rateLimitSignal -Raw | ConvertFrom-Json
+        return $content.reset_timestamp
+    } catch { return $null }
+}
+
+function Write-RateLimitSignal {
+    param([string]$Message)
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $resetAt = $now + 3600
+    $signalData = @{
+        detected_at = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss")
+        detected_by = $AgentName
+        reset_at = (Get-Date).AddHours(1).ToString("yyyy-MM-ddTHH:mm:ss")
+        reset_timestamp = $resetAt
+        message = $Message.Substring(0, [Math]::Min(500, $Message.Length))
+    }
+    $signalDir = Split-Path $rateLimitSignal -Parent
+    if (-not (Test-Path $signalDir)) { New-Item -ItemType Directory -Force -Path $signalDir | Out-Null }
+    $signalData | ConvertTo-Json | Out-File -FilePath $rateLimitSignal -Encoding UTF8
+    Write-Log "RATE LIMIT: Signal file written"
+}
+
 function Wait-ForSignal {
     param([string]$Signal)
     if ([string]::IsNullOrWhiteSpace($Signal)) { return $true }
-
     $signalFile = ".claude/signals/$Signal.signal"
     if (Test-Path $signalFile) {
         Write-Log "Signal already present: $Signal"
@@ -488,6 +543,9 @@ Write-Host ""
 Write-Host "  ===== $AgentName - $AgentRole =====" -ForegroundColor $Color
 Write-Host ""
 
+# Set AGENT_NAME env var for swarm-msg client
+$env:AGENT_NAME = $AgentName
+
 # Non-blocking: just check signal status, always proceed
 $signalReady = Wait-ForSignal -Signal $WaitForSignal
 if (-not [string]::IsNullOrWhiteSpace($WaitForSignal) -and -not $signalReady) {
@@ -495,6 +553,22 @@ if (-not [string]::IsNullOrWhiteSpace($WaitForSignal) -and -not $signalReady) {
 }
 
 while ($iteration -le $MaxIterations) {
+    # Rate limit check before each iteration
+    if (Test-RateLimitActive) {
+        $resetTime = Get-RateLimitResetTime
+        if ($resetTime) {
+            $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+            $waitSeconds = $resetTime - $now
+            if ($waitSeconds -gt 300) {
+                Write-Log "Rate limit active for $([int]$waitSeconds)s - exiting"
+                exit $RATE_LIMIT_EXIT_CODE
+            } elseif ($waitSeconds -gt 0) {
+                Write-Log "Rate limit active, waiting $([int]$waitSeconds) seconds..."
+                Start-Sleep -Seconds $waitSeconds
+            }
+        }
+    }
+
     Write-Log "Starting iteration $iteration"
     Write-Heartbeat
 
@@ -506,12 +580,30 @@ while ($iteration -le $MaxIterations) {
         Remove-Item $handoffFile -Force
     }
 
+    $claudeOutput = $null
     try {
-        claude --dangerously-skip-permissions $currentPrompt
+        $claudeOutput = claude --dangerously-skip-permissions $currentPrompt 2>&1 | Tee-Object -Variable claudeOutput
         $exitCode = $LASTEXITCODE
     } catch {
         Write-Log "ERROR: Claude crashed - $_"
         $exitCode = 1
+    }
+
+    # Check for rate limit in output
+    $outputText = $claudeOutput -join "`n"
+    $rateLimitPatterns = @("hit your.*limit", "out of extra usage", "rate.?limit", "too many requests", "quota exceeded", "usage limit", "429")
+    $isRateLimited = $false
+    foreach ($pattern in $rateLimitPatterns) {
+        if ($outputText -match $pattern) {
+            $isRateLimited = $true
+            Write-Log "RATE LIMIT DETECTED in output"
+            break
+        }
+    }
+    if ($isRateLimited) {
+        Write-RateLimitSignal -Message $outputText.Substring(0, [Math]::Min(500, $outputText.Length))
+        Write-Log "Exiting due to rate limit (code $RATE_LIMIT_EXIT_CODE)"
+        exit $RATE_LIMIT_EXIT_CODE
     }
 
     Write-Heartbeat
@@ -542,6 +634,24 @@ while ($iteration -le $MaxIterations) {
         break
     }
 
+    if ($exitCode -eq $RATE_LIMIT_EXIT_CODE) {
+        Write-Log "Agent exited due to rate limit - not restarting"
+        break
+    }
+
+    if (Test-RateLimitActive) {
+        Write-Log "Rate limit signal detected - pausing before restart"
+        $resetTime = Get-RateLimitResetTime
+        if ($resetTime) {
+            $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+            $waitSeconds = $resetTime - $now
+            if ($waitSeconds -gt 0) {
+                Write-Log "Waiting $([int]$waitSeconds) seconds for rate limit..."
+                Start-Sleep -Seconds ([Math]::Min($waitSeconds, 300))
+            }
+        }
+    }
+
     Write-Log "Unexpected exit (code: $exitCode), restarting..."
     $iteration++
     Start-Sleep -Seconds 5
@@ -568,6 +678,7 @@ param(
 )
 
 $logFile = "logs/supervisor.log"
+$rateLimitSignal = ".claude/signals/rate-limited.signal"
 
 function Write-Log {
     param([string]$msg, [string]$level = "INFO")
@@ -614,6 +725,31 @@ function Get-TaskProgress {
     }
 }
 
+function Test-RateLimitActive {
+    if (-not (Test-Path $rateLimitSignal)) {
+        return @{ Active = $false; SecondsRemaining = 0 }
+    }
+    try {
+        $content = Get-Content $rateLimitSignal -Raw | ConvertFrom-Json
+        $resetTimestamp = $content.reset_timestamp
+        $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        if ($now -ge $resetTimestamp) {
+            Remove-Item $rateLimitSignal -Force -ErrorAction SilentlyContinue
+            return @{ Active = $false; SecondsRemaining = 0 }
+        }
+        $remaining = $resetTimestamp - $now
+        return @{
+            Active = $true
+            SecondsRemaining = [int]$remaining
+            DetectedBy = $content.detected_by
+            ResetAt = $content.reset_at
+        }
+    } catch {
+        Write-Log "Failed to parse rate limit signal: $_" "WARN"
+        return @{ Active = $false; SecondsRemaining = 0 }
+    }
+}
+
 Write-Host ""
 Write-Host "  ===== SWARM SUPERVISOR - Monitoring Active =====" -ForegroundColor Magenta
 Write-Host ""
@@ -644,6 +780,12 @@ while ($true) {
     $activeSignals = $signalNames | Where-Object { Test-Path ".claude/signals/$_.signal" }
     if ($activeSignals) {
         Write-Log "Signals: $($activeSignals -join ', ')" "OK"
+    }
+
+    # Check rate limit status
+    $rateLimit = Test-RateLimitActive
+    if ($rateLimit.Active) {
+        Write-Log "RATE LIMIT ACTIVE: $($rateLimit.SecondsRemaining)s remaining (detected by $($rateLimit.DetectedBy))" "WARN"
     }
 
     if (Test-Path "tasks/lessons.md") {
@@ -684,6 +826,16 @@ while ($true) {
                         Write-Log "Auto-chain limit reached ($MaxPhases phases). Stopping." "WARN"
                         Write-Host "  Run .\next-swarm.ps1 manually to continue, or re-run with -MaxPhases $($MaxPhases + 3)" -ForegroundColor Yellow
                     } else {
+                        # Check for rate limit before auto-chaining
+                        $rateLimitCheck = Test-RateLimitActive
+                        if ($rateLimitCheck.Active) {
+                            Write-Host ""
+                            Write-Log "Rate limit active - waiting $($rateLimitCheck.SecondsRemaining)s before auto-chain..." "WARN"
+                            $waitTime = [Math]::Min($rateLimitCheck.SecondsRemaining, 3600)
+                            Write-Host "  Auto-chain delayed until $($rateLimitCheck.ResetAt)" -ForegroundColor Yellow
+                            Start-Sleep -Seconds $waitTime
+                        }
+
                         Write-Host ""
                         Write-Log "Auto-chaining to Phase $nextPhase of $MaxPhases..." "OK"
                         Write-Host "  Preparing next swarm in 10 seconds... (Ctrl+C to cancel)" -ForegroundColor Yellow
@@ -768,6 +920,23 @@ while ($true) {
         $icon  = if ($present) { "[x]" } else { "[ ]" }
         $color = if ($present) { "Green" } else { "DarkGray" }
         Write-Host "    $icon $_" -ForegroundColor $color
+    }
+
+    # Rate limit status
+    $rateLimitSignal = ".claude/signals/rate-limited.signal"
+    if (Test-Path $rateLimitSignal) {
+        try {
+            $rlData = Get-Content $rateLimitSignal -Raw | ConvertFrom-Json
+            $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+            if ($now -lt $rlData.reset_timestamp) {
+                $remaining = $rlData.reset_timestamp - $now
+                Write-Host ""
+                Write-Host "  RATE LIMIT:" -ForegroundColor Red
+                Write-Host "    [!] Active - $([int]$remaining)s remaining" -ForegroundColor Red
+                Write-Host "    Detected by: $($rlData.detected_by)" -ForegroundColor Yellow
+                Write-Host "    Resets at: $($rlData.reset_at)" -ForegroundColor Yellow
+            }
+        } catch {}
     }
     Write-Host ""
 
@@ -967,21 +1136,12 @@ $sharedRules = "CRITICAL: You are running FULLY AUTONOMOUSLY. Never wait for use
     "2. Check .claude/directives/all.directive (broadcast directives for all agents)`n" +
     "If a directive file exists: read it, execute the instructions as HIGHEST PRIORITY (override current task), then delete the file when done.`n" +
     "This allows the orchestrator to redirect you at any point without restarting.`n`n" +
-    "MESSAGE BUS PROTOCOL:`n" +
-    "Use swarm-msg for reliable inter-agent communication (replaces file polling):`n`n" +
-    "CHECK MESSAGES (after each task):`n" +
-    "  powershell .swarm/bus/swarm-msg.ps1 inbox`n`n" +
-    "SEND MESSAGE to another agent:`n" +
-    "  powershell .swarm/bus/swarm-msg.ps1 send --to Claude-2 --body ""API endpoints ready""`n`n" +
-    "BROADCAST (urgent, all agents):`n" +
-    "  powershell .swarm/bus/swarm-msg.ps1 send --to all --channel critical --priority high --body ""STOP: circular dependency found""`n`n" +
-    "POST LESSON (shared with all agents):`n" +
-    "  powershell .swarm/bus/swarm-msg.ps1 lesson ""Always run typecheck before committing""`n`n" +
-    "ATTENTION FILES:`n" +
-    "Before each task, check: if (Test-Path .claude/attention/{your-name}.attention) { check inbox immediately }`n" +
-    "This signals a high-priority message requiring immediate attention.`n`n" +
-    "CHANNELS: general (default), critical (urgent), review (code review), handoff (context pass), lessons (learnings)`n" +
-    "PRIORITIES: low, normal, high, critical (high/critical create attention files)"
+    "COORDINATION:`n" +
+    "Read .claude/rules/AGENT_PROTOCOL.md for full rules. Quick ref:`n" +
+    "  .swarm/bus/swarm-msg.ps1 inbox       # Check messages after each task`n" +
+    "  .swarm/bus/swarm-msg.ps1 send --to Claude-2 --body ""done""`n" +
+    "  .swarm/bus/swarm-msg.ps1 send --to all --priority high --body ""STOP""`n" +
+    "Before editing shared files, check AGENT_STATUS.md for LOCKING markers."
 
 $prompt1 = "You are Claude-1 (Backend/Core) working on: $goal`n`n" +
     "FIRST: Read AGENTS.md, tasks/lessons.md, then tasks/TASKS.md.`n`n" +
@@ -1171,12 +1331,47 @@ if ($SetupOnly) {
     exit 0
 }
 
+# === RATE LIMIT CHECK ===
+$rateLimitSignal = ".claude/signals/rate-limited.signal"
+if (Test-Path $rateLimitSignal) {
+    try {
+        $rateLimitData = Get-Content $rateLimitSignal -Raw | ConvertFrom-Json
+        $resetTimestamp = $rateLimitData.reset_timestamp
+        $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+
+        if ($now -lt $resetTimestamp) {
+            $remaining = $resetTimestamp - $now
+            Write-Host ""
+            Write-Host "  WARNING: Rate limit active!" -ForegroundColor Yellow
+            Write-Host "  Detected by: $($rateLimitData.detected_by)" -ForegroundColor Yellow
+            Write-Host "  Resets at: $($rateLimitData.reset_at)" -ForegroundColor Yellow
+            Write-Host "  Time remaining: $([int]$remaining) seconds" -ForegroundColor Yellow
+            Write-Host ""
+
+            $proceed = Read-Host "  Launch anyway? [y/N]"
+            if ($proceed -ne "y" -and $proceed -ne "Y") {
+                Write-Host "  Aborted. Wait for rate limit to reset or remove the signal file manually." -ForegroundColor Red
+                Write-Host "  Signal file: $rateLimitSignal" -ForegroundColor Gray
+                exit 0
+            }
+            Write-Host "  Proceeding with launch (rate limit may still apply)..." -ForegroundColor Yellow
+        } else {
+            # Rate limit expired, remove the signal
+            Remove-Item $rateLimitSignal -Force -ErrorAction SilentlyContinue
+            Write-Host "  OK - Previous rate limit has expired" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "  WARN - Could not parse rate limit signal: $_" -ForegroundColor Yellow
+    }
+}
+
 # === LAUNCH AGENTS ===
 Write-Host ""
-Write-Host "  Launching agents..." -ForegroundColor Yellow
+Write-Host "  Launching agents (staggered start: ${AgentStartDelay}s between agents)..." -ForegroundColor Yellow
 Write-Host ""
 
 $workDir = Get-Location
+$agentIndex = 0
 
 foreach ($agent in $agents) {
     $agentArgs = @(
@@ -1186,7 +1381,14 @@ foreach ($agent in $agents) {
 
     Start-Process powershell -ArgumentList $agentArgs
     Write-Host "  OK - Launched $($agent.Name) ($($agent.Role))" -ForegroundColor $($agent.Color)
-    Start-Sleep -Seconds 2
+
+    $agentIndex++
+    # Stagger agent starts to reduce rate limit pressure
+    # First agent starts immediately, subsequent agents wait AgentStartDelay seconds
+    if ($agentIndex -lt $agents.Count) {
+        Write-Host "  Waiting ${AgentStartDelay}s before next agent (staggered start)..." -ForegroundColor DarkGray
+        Start-Sleep -Seconds $AgentStartDelay
+    }
 }
 
 # Launch supervisor

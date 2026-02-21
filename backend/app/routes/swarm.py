@@ -117,6 +117,25 @@ _CB_DEFAULT_MAX_FAILURES = 3
 _CB_DEFAULT_WINDOW_SECONDS = 300
 _CB_DEFAULT_RECOVERY_SECONDS = 60
 
+# Rate limit detection patterns (Claude API error messages)
+_RATE_LIMIT_PATTERNS = [
+    r"hit your.*limit",
+    r"out of extra usage",
+    r"rate.?limit",
+    r"too many requests",
+    r"quota exceeded",
+    r"usage limit",
+    r"requests? per (minute|hour|day)",
+    r"429",  # HTTP status code
+]
+_RATE_LIMIT_REGEX = re.compile("|".join(_RATE_LIMIT_PATTERNS), re.IGNORECASE)
+
+# Default rate limit cooldown (1 hour if no reset time detected)
+_RATE_LIMIT_DEFAULT_COOLDOWN_SECONDS = 3600
+
+# Track rate limit state per project (cleared on new launch)
+_rate_limit_state: dict[int, dict] = {}  # {project_id: {"detected_at": float, "reset_at": float, "detected_by": str, "message": str}}
+
 
 def _get_circuit_breaker(key: str) -> dict:
     """Get or create circuit breaker state for an agent."""
@@ -195,6 +214,125 @@ def _cb_record_probe_success(key: str):
     cb["failures"] = []
     cb["opened_at"] = None
     cb["probe_started_at"] = None
+
+
+# ---------------------------------------------------------------------------
+# Rate limit detection and signal file management
+# ---------------------------------------------------------------------------
+
+def _detect_rate_limit(text: str) -> bool:
+    """Check if text contains a rate limit error message."""
+    return bool(_RATE_LIMIT_REGEX.search(text))
+
+
+def _get_rate_limit_signal_path(folder: Path) -> Path:
+    """Get the path to the rate limit signal file for a project."""
+    return folder / ".claude" / "signals" / "rate-limited.signal"
+
+
+def _write_rate_limit_signal(
+    project_id: int, folder: Path, agent_name: str, message: str,
+    reset_at: float | None = None,
+):
+    """Write a rate limit signal file to coordinate across agents.
+
+    The signal file contains JSON with:
+    - detected_at: ISO timestamp when rate limit was detected
+    - detected_by: agent name that detected it
+    - reset_at: ISO timestamp when rate limit is expected to reset
+    - message: original rate limit message (truncated)
+    """
+    now = time.time()
+    if reset_at is None:
+        reset_at = now + _RATE_LIMIT_DEFAULT_COOLDOWN_SECONDS
+
+    # Store in memory for this project
+    _rate_limit_state[project_id] = {
+        "detected_at": now,
+        "reset_at": reset_at,
+        "detected_by": agent_name,
+        "message": message[:500] if message else "",
+    }
+
+    # Write signal file
+    signal_path = _get_rate_limit_signal_path(folder)
+    try:
+        signal_path.parent.mkdir(parents=True, exist_ok=True)
+        signal_data = {
+            "detected_at": datetime.fromtimestamp(now).isoformat(),
+            "detected_by": agent_name,
+            "reset_at": datetime.fromtimestamp(reset_at).isoformat(),
+            "reset_timestamp": reset_at,
+            "message": message[:500] if message else "",
+        }
+        signal_path.write_text(json.dumps(signal_data, indent=2), encoding="utf-8")
+        logger.warning(
+            "Rate limit detected for project %d by %s, signal written (reset at %s)",
+            project_id, agent_name, datetime.fromtimestamp(reset_at).isoformat(),
+        )
+    except Exception:
+        logger.error("Failed to write rate limit signal for project %d", project_id, exc_info=True)
+
+
+def _read_rate_limit_signal(folder: Path) -> dict | None:
+    """Read rate limit signal file if it exists and is still active.
+
+    Returns None if no signal or if the reset time has passed.
+    """
+    signal_path = _get_rate_limit_signal_path(folder)
+    if not signal_path.exists():
+        return None
+
+    try:
+        data = json.loads(signal_path.read_text(encoding="utf-8"))
+        reset_timestamp = data.get("reset_timestamp", 0)
+        if time.time() >= reset_timestamp:
+            # Rate limit has expired, remove the signal file
+            try:
+                signal_path.unlink()
+            except OSError:
+                pass
+            return None
+        return data
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _clear_rate_limit_signal(project_id: int, folder: Path):
+    """Clear rate limit state and signal file for a project."""
+    _rate_limit_state.pop(project_id, None)
+    signal_path = _get_rate_limit_signal_path(folder)
+    try:
+        if signal_path.exists():
+            signal_path.unlink()
+    except OSError:
+        pass
+
+
+def _is_rate_limited(project_id: int, folder: Path) -> tuple[bool, float | None]:
+    """Check if project is currently rate limited.
+
+    Returns (is_limited, seconds_remaining) tuple.
+    Checks both in-memory state and signal file.
+    """
+    # Check in-memory state first
+    state = _rate_limit_state.get(project_id)
+    if state:
+        remaining = state["reset_at"] - time.time()
+        if remaining > 0:
+            return True, remaining
+        else:
+            # Expired, clear it
+            _rate_limit_state.pop(project_id, None)
+
+    # Check signal file
+    signal_data = _read_rate_limit_signal(folder)
+    if signal_data:
+        remaining = signal_data.get("reset_timestamp", 0) - time.time()
+        if remaining > 0:
+            return True, remaining
+
+    return False, None
 
 
 def _record_event_sync(
@@ -686,7 +824,7 @@ def _rotate_log_file(log_path: Path, log_fh):
 
 def _drain_agent_stream(
     project_id: int, agent_name: str, stream, label: str,
-    stop_event: threading.Event,
+    stop_event: threading.Event, folder: Path | None = None,
 ):
     """Read lines from an agent subprocess stream in a background thread.
 
@@ -695,10 +833,14 @@ def _drain_agent_stream(
     Output is written both to in-memory buffers and to a persistent log file
     in the project's logs/ directory for crash recovery. Log files are rotated
     when they exceed LU_OUTPUT_LOG_MAX_MB.
+
+    Rate limit detection: if Claude outputs a rate limit error, writes a signal
+    file so other agents and the orchestrator can coordinate backoff.
     """
     key = _agent_key(project_id, agent_name)
     is_stdout = label == "stdout"
     log_path = _agent_log_files.get(key)
+    rate_limit_detected = False  # Track if we've already detected rate limit this session
     log_fh = None
     if log_path:
         try:
@@ -772,6 +914,37 @@ def _drain_agent_stream(
                     "error",
                     {"output_lines": line_count, "last_lines": last_lines, "text": text[:500]},
                 )
+
+            # Rate limit detection — write signal file for cross-agent coordination
+            if not rate_limit_detected and _detect_rate_limit(text):
+                rate_limit_detected = True
+                # Derive folder from log_path if not provided
+                rate_limit_folder = folder
+                if rate_limit_folder is None and log_path:
+                    # log_path is folder/logs/{agent}.log, so go up 2 levels
+                    rate_limit_folder = log_path.parent.parent
+                if rate_limit_folder:
+                    _write_rate_limit_signal(
+                        project_id, rate_limit_folder, agent_name, text,
+                    )
+                _record_event_sync(
+                    project_id, agent_name, "rate_limit_detected",
+                    f"Rate limit detected: {text[:200]}",
+                    _get_current_run_id(project_id),
+                )
+                _record_checkpoint_sync(
+                    project_id, _get_current_run_id(project_id), agent_name,
+                    "rate_limit",
+                    {"message": text[:500], "output_lines": line_count},
+                )
+                with _buffers_lock:
+                    proj_buf = _project_output_buffers.setdefault(
+                        project_id, deque(maxlen=_MAX_OUTPUT_LINES),
+                    )
+                    proj_buf.append(
+                        f"[system] RATE LIMIT DETECTED by {agent_name} — "
+                        f"signal file written, agents should pause"
+                    )
 
             # Persist to log file for crash recovery
             if log_fh:
@@ -1072,6 +1245,23 @@ async def _auto_queue_relaunch_agents(project_id: int) -> bool:
             logger.warning("Auto-queue: folder %s does not exist", folder)
             return False
 
+        # Check for rate limit — if active, delay until reset
+        is_limited, seconds_remaining = _is_rate_limited(project_id, folder)
+        if is_limited and seconds_remaining:
+            logger.warning(
+                "Auto-queue: rate limit active for project %d, %.0f seconds remaining — skipping relaunch",
+                project_id, seconds_remaining,
+            )
+            with _buffers_lock:
+                buf = _project_output_buffers.setdefault(
+                    project_id, deque(maxlen=_MAX_OUTPUT_LINES),
+                )
+                buf.append(
+                    f"[system] Auto-queue paused: rate limit active for {int(seconds_remaining)}s — "
+                    f"will retry after cooldown"
+                )
+            return False
+
         # Find prompt files
         prompts_dir = folder / ".claude" / "prompts"
         if not prompts_dir.exists():
@@ -1090,8 +1280,9 @@ async def _auto_queue_relaunch_agents(project_id: int) -> bool:
             logger.error("Auto-queue: claude CLI not found")
             return False
 
-        # Clean up old processes for this project
-        await cancel_drain_tasks(project_id)
+        # Clean up old processes for this project (use _terminate_project_agents
+        # instead of cancel_drain_tasks to avoid canceling our own supervisor)
+        await asyncio.to_thread(_terminate_project_agents, project_id)
 
         # Spawn agents
         agents_launched = []
@@ -1149,16 +1340,16 @@ async def _auto_queue_relaunch_agents(project_id: int) -> bool:
             log_file = log_dir / f"{agent_name}_{timestamp}.output.log"
             _agent_log_files[key] = log_file
 
-            # Start drain threads
+            # Start drain threads (pass folder for rate limit signal writing)
             stop_event = threading.Event()
             stdout_thread = threading.Thread(
                 target=_drain_agent_stream,
-                args=(project_id, agent_name, process.stdout, "stdout", stop_event),
+                args=(project_id, agent_name, process.stdout, "stdout", stop_event, folder),
                 daemon=True,
             )
             stderr_thread = threading.Thread(
                 target=_drain_agent_stream,
-                args=(project_id, agent_name, process.stderr, "stderr", stop_event),
+                args=(project_id, agent_name, process.stderr, "stderr", stop_event, folder),
                 daemon=True,
             )
             stdout_thread.start()
@@ -1800,6 +1991,9 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
     # Clean stale filesystem artifacts from previous runs
     await asyncio.to_thread(_clean_project_artifacts, folder)
 
+    # Clear any rate limit state from previous runs
+    _clear_rate_limit_signal(req.project_id, folder)
+
     # --- Phase 1: Setup ---
     # Run swarm.ps1 -SetupOnly to generate prompt files and project structure
     try:
@@ -1935,15 +2129,16 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
         _agent_log_files[key] = log_file
 
         # Start drain threads IMMEDIATELY after spawn to avoid losing early output
+        # Pass folder for rate limit signal writing
         stop_event = threading.Event()
         stdout_thread = threading.Thread(
             target=_drain_agent_stream,
-            args=(req.project_id, agent_name, process.stdout, "stdout", stop_event),
+            args=(req.project_id, agent_name, process.stdout, "stdout", stop_event, folder),
             daemon=True,
         )
         stderr_thread = threading.Thread(
             target=_drain_agent_stream,
-            args=(req.project_id, agent_name, process.stderr, "stderr", stop_event),
+            args=(req.project_id, agent_name, process.stderr, "stderr", stop_event, folder),
             daemon=True,
         )
         stdout_thread.start()
@@ -2183,8 +2378,11 @@ async def swarm_status(project_id: int, db: aiosqlite.Connection = Depends(get_d
     # Check if project is supposed to be running but has no live agents
     alive = _any_agent_alive(project_id)
     if project["status"] == "running" and not alive:
+        # Check if supervisor task is actively managing this project (e.g., auto-queue delay)
+        supervisor = _supervisor_tasks.get(project_id)
+        supervisor_active = supervisor is not None and not supervisor.done()
         # Also check the stored PID for legacy processes
-        if not _pid_alive(project.get("swarm_pid")):
+        if not supervisor_active and not _pid_alive(project.get("swarm_pid")):
             logger.warning("No live agents for project %d, auto-correcting to stopped", project_id)
             await db.execute(
                 "UPDATE projects SET status = 'stopped', swarm_pid = NULL, updated_at = datetime('now') WHERE id = ?",
@@ -2466,16 +2664,16 @@ async def restart_agent(project_id: int, agent_name: str, db: aiosqlite.Connecti
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         _agent_log_files[key] = log_dir / f"{agent_name}_{timestamp}.output.log"
 
-        # Start drain threads
+        # Start drain threads (pass folder for rate limit signal writing)
         stop_event = threading.Event()
         stdout_thread = threading.Thread(
             target=_drain_agent_stream,
-            args=(project_id, agent_name, process.stdout, "stdout", stop_event),
+            args=(project_id, agent_name, process.stdout, "stdout", stop_event, folder),
             daemon=True,
         )
         stderr_thread = threading.Thread(
             target=_drain_agent_stream,
-            args=(project_id, agent_name, process.stderr, "stderr", stop_event),
+            args=(project_id, agent_name, process.stderr, "stderr", stop_event, folder),
             daemon=True,
         )
         stdout_thread.start()
@@ -3222,12 +3420,12 @@ async def send_directive(
                  "--dangerously-skip-permissions", "--verbose", prompt_text],
                 **popen_kwargs,
             )
-            # Set up drain threads
+            # Set up drain threads (pass folder for rate limit signal writing)
             stop_event = threading.Event()
             for stream_name, stream_obj in [("stdout", new_proc.stdout), ("stderr", new_proc.stderr)]:
                 t = threading.Thread(
                     target=_drain_agent_stream,
-                    args=(project_id, agent_name, stream_obj, stream_name, stop_event),
+                    args=(project_id, agent_name, stream_obj, stream_name, stop_event, folder),
                     daemon=True,
                 )
                 t.start()

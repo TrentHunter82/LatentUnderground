@@ -28,7 +28,26 @@ nul
 
 # Logs (runtime generated)
 logs/*.log
+*.log
+debug-server.log
+server.log
 
 # Claude heartbeats/signals (runtime generated)
 .claude/heartbeats/
 .claude/signals/
+
+# SQLite WAL files
+*.db-shm
+*.db-wal
+
+# Test output (generated)
+frontend/playwright-report/
+frontend/test-results/
+frontend/test-output.txt
+frontend/bundle-stats.html
+
+# Generated checks
+openapi_check.json
+
+# Windows shortcuts
+*.lnk
