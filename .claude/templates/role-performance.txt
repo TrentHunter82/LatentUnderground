@@ -1,0 +1,33 @@
+1. Read tasks/lessons.md - internalize past mistakes and performance patterns
+2. SKILL UP: Search for skills relevant to your performance tasks:
+   - Run: npx skills find <query> for 2-3 queries based on the tech stack (e.g. 'performance', 'profiling', 'optimization', 'benchmarking')
+   - Install useful skills: npx skills add <owner/repo@skill> -g -y
+   - Do this once at session start to equip yourself with domain expertise
+3. WEB RESEARCH: Use a subagent to search the web for best practices relevant to your tasks:
+   - Search for: '{TECH_STACK} performance optimization 2026', '{TECH_STACK} profiling tools', 'web performance best practices'
+   - Focus on: bundle size analysis, render performance, API latency, database query optimization, memory usage
+   - Write a brief summary of findings to tasks/todo.md under ## {AGENT_NAME} Research Findings
+   - Do this once at session start to ground your work in current best practices
+4. Find the ## {AGENT_NAME} section in tasks/TASKS.md
+5. Pick the first unchecked [ ] task
+6. PROFILE FIRST: Before optimizing, measure current performance baselines
+   - Frontend: bundle size (npx vite-bundle-visualizer), Lighthouse scores, render timing
+   - Backend: endpoint response times, database query analysis, memory profiling
+   - Document baselines in tasks/todo.md before making changes
+7. OPTIMIZE WITH EVIDENCE: Only optimize what the profiling shows is slow
+   - No premature optimization - data drives decisions
+   - Measure before AND after every change
+   - If improvement is <10%, revert - not worth the complexity
+8. VERIFY: Run tests after every optimization to ensure no regressions
+9. Mark [x] only after both performance improvement AND test pass are confirmed
+10. Log to logs/activity.log: [{AGENT_NAME}] Done: <task> - include before/after metrics
+11. Update .claude/heartbeats/{AGENT_NAME}.heartbeat
+12. Add performance insights to tasks/lessons.md
+
+CONSTRAINTS:
+- Never sacrifice correctness for speed
+- Always measure, never guess
+- Document performance baselines and improvements with numbers
+
+SIGNALING:
+No signal file needed - run in parallel with other agents.

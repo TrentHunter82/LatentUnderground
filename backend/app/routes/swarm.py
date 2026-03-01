@@ -1949,28 +1949,63 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
         # Resume mode: preserve existing TASKS.md with agent progress
         logger.info("Resume mode: preserving existing TASKS.md for project %d", req.project_id)
     else:
-        # Fresh launch: create new TASKS.md
-        tasks_file.write_text(
+        # Fresh launch: create new TASKS.md with dynamic agent sections
+        # Role roster matches swarm.ps1 Build-AgentPlan slot assignments
+        _role_slots = [
+            ("Backend/Core", "Analyze project structure and identify tasks",
+             "Implement core functionality", "Add error handling and validation"),
+            ("Frontend/Interface", "Set up UI scaffolding",
+             "Implement main interface components", "Connect to backend APIs"),
+            ("Integration/Testing", "Write unit tests for core modules",
+             "Write integration tests", "Verify all components work together"),
+            ("Polish/Review", "Code review all agent work",
+             "Fix issues found in review",
+             "FINAL: Generate next-swarm.ps1 for next phase"),
+            ("Knowledge Extraction", "Monitor message bus for lessons",
+             "Consolidate lessons learned", "Maintain knowledge base"),
+            ("Performance/Optimization", "Profile application performance",
+             "Identify optimization opportunities", "Implement and verify improvements"),
+            ("Documentation", "Document API endpoints and architecture",
+             "Write setup and usage guides", "Verify all docs match actual behavior"),
+            ("Art Director", "Review frontend visual consistency",
+             "Provide constructive UI/UX feedback",
+             "Polish visual design and interactions"),
+        ]
+        # Merge plans for fewer agents (indices into _role_slots)
+        _merge_plans: dict[int, list[list[int]]] = {
+            1: [[0, 1, 2, 3]],
+            2: [[0, 2], [1, 3]],
+            3: [[0], [1], [2, 3]],
+        }
+        count = req.agent_count
+        if count <= 3:
+            assignments = _merge_plans[count]
+        elif count <= 8:
+            assignments = [[i] for i in range(min(count, len(_role_slots)))]
+        else:
+            # 9+: base 8 roles + round-robin duplicates
+            assignments = [[i] for i in range(len(_role_slots))]
+            chain = [0, 1, 2, 0]
+            for extra in range(count - len(_role_slots)):
+                assignments.append([chain[extra % len(chain)]])
+
+        sections = []
+        for idx, slot_indices in enumerate(assignments):
+            agent_num = idx + 1
+            role_titles = [_role_slots[s][0] for s in slot_indices]
+            title = " + ".join(role_titles)
+            tasks = []
+            for s in slot_indices:
+                tasks.extend(_role_slots[s][1:])
+            task_lines = "".join(f"- [ ] {t}\n" for t in tasks)
+            sections.append(f"## Claude-{agent_num} [{title}]\n{task_lines}")
+
+        tasks_content = (
             f"# {project_name}\n\n"
             f"{project_desc}\n\n"
-            "## Claude-1 [Backend/Core]\n"
-            "- [ ] Analyze project structure and identify tasks\n"
-            "- [ ] Implement core functionality\n"
-            "- [ ] Add error handling and validation\n\n"
-            "## Claude-2 [Frontend/Interface]\n"
-            "- [ ] Set up UI scaffolding\n"
-            "- [ ] Implement main interface components\n"
-            "- [ ] Connect to backend APIs\n\n"
-            "## Claude-3 [Integration/Testing]\n"
-            "- [ ] Write unit tests for core modules\n"
-            "- [ ] Write integration tests\n"
-            "- [ ] Verify all components work together\n\n"
-            "## Claude-4 [Polish/Review]\n"
-            "- [ ] Code review all agent work\n"
-            "- [ ] Fix issues found in review\n"
-            "- [ ] FINAL: Generate next-swarm.ps1 for next phase\n",
-            encoding="utf-8",
+            + "\n".join(sections) + "\n"
         )
+        tasks_file.write_text(tasks_content, encoding="utf-8")
         logger.info("Created fresh TASKS.md for project %d", req.project_id)
 
     # Clear stale cached run_id to prevent reuse from previous launch

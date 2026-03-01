@@ -108,8 +108,9 @@ while ($true) {
         }
     }
 
-    $signalNames = @("backend-ready", "frontend-ready", "tests-passing", "phase-complete")
-    $activeSignals = $signalNames | Where-Object { Test-Path ".claude/signals/$_.signal" }
+    # Dynamically discover signals from the signals directory
+    $signalFiles = Get-ChildItem ".claude/signals/*.signal" -ErrorAction SilentlyContinue
+    $activeSignals = $signalFiles | ForEach-Object { $_.BaseName }
     if ($activeSignals) {
         Write-Log "Signals: $($activeSignals -join ', ')" "OK"
     }

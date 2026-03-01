@@ -63,14 +63,16 @@ if (Test-Path "tasks/lessons.md") {
     Write-Host "  Lessons captured so far: $lessonCount" -ForegroundColor Green
 }
 
-# Show signals status
+# Show signals status (dynamically discovered)
 Write-Host ""
 Write-Host "  Previous Phase Signals:" -ForegroundColor Yellow
-@("backend-ready", "frontend-ready", "tests-passing", "phase-complete") | ForEach-Object {
-    $present = Test-Path ".claude/signals/$_.signal"
-    $icon = if ($present) { "[x]" } else { "[ ]" }
-    $color = if ($present) { "Green" } else { "DarkGray" }
-    Write-Host "    $icon $_" -ForegroundColor $color
+$signalFiles = Get-ChildItem ".claude/signals/*.signal" -ErrorAction SilentlyContinue
+if ($signalFiles) {
+    foreach ($sf in $signalFiles) {
+        Write-Host "    [x] $($sf.BaseName)" -ForegroundColor Green
+    }
+} else {
+    Write-Host "    (no signals)" -ForegroundColor DarkGray
 }
 Write-Host ""
 
@@ -116,6 +118,10 @@ Write-Host ""
 Write-Host "  Launching swarm for Phase $currentPhase..." -ForegroundColor Cyan
 Write-Host ""
 
+# Read agent count from config to preserve across phases
+$agentCount = 4
+if ($config.AgentCount) { $agentCount = [int]$config.AgentCount }
+
 # Call swarm.ps1 with Resume to use existing config
 # NoConfirm since we already confirmed above
-& .\swarm.ps1 -Resume -NoConfirm -MaxPhases $maxPhases
+& .\swarm.ps1 -Resume -NoConfirm -MaxPhases $maxPhases -AgentCount $agentCount

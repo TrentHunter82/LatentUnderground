@@ -217,7 +217,11 @@ if (-not $Resume) {
     $techStack = $config.TechStack
     $complexityName = $config.Complexity
     $requirements = $config.Requirements
-    Write-Host "  Resuming: $goal" -ForegroundColor Green
+    # Restore agent count from config (unless explicitly overridden on command line)
+    if ($config.AgentCount -and $AgentCount -eq 4) {
+        $AgentCount = [int]$config.AgentCount
+    }
+    Write-Host "  Resuming: $goal (AgentCount: $AgentCount)" -ForegroundColor Green
     Write-Host ""
 }
 
@@ -225,6 +229,22 @@ if (-not $Resume) {
 if (-not (Test-Path "tasks/TASKS.md")) {
     Write-Host "  ---- GENERATING TASK BOARD WITH CLAUDE ----" -ForegroundColor Yellow
     Write-Host ""
+
+    # Build dynamic agent sections for the planner prompt
+    $agentSections = @()
+    $lastChainAgent = $null
+    foreach ($agent in $agentPlan) {
+        # Track which agent has the polish role (last in chain, owns next-swarm.ps1)
+        foreach ($key in $agent.RoleKeys) {
+            if ($key -eq "polish") { $lastChainAgent = $agent.Name }
+        }
+        $agentSections += "## $($agent.Name) [$($agent.Role)]"
+        $agentSections += "- [ ] specific task 1"
+        $agentSections += "- [ ] specific task 2"
+        $agentSections += "(3-8 tasks depending on complexity and role scope)"
+        $agentSections += ""
+    }
+    $agentSectionsStr = $agentSections -join "`n"
 
     $plannerLines = @(
         "You are a project planner. Generate a tasks/TASKS.md file for this project:",
@@ -235,35 +255,15 @@ if (-not (Test-Path "tasks/TASKS.md")) {
         "COMPLEXITY: $complexityName",
         "REQUIREMENTS: $requirements",
         "",
-        "Create a task board with SPECIFIC checkbox tasks broken into 4 agent sections:",
+        "Create a task board with SPECIFIC checkbox tasks broken into $($agentPlan.Count) agent sections:",
         "",
-        "## Claude-1 [Backend/Core] - Core logic and data",
-        "- [ ] specific task 1",
-        "- [ ] specific task 2",
-        "(3-8 tasks depending on complexity)",
-        "",
-        "## Claude-2 [Frontend/Interface] - UI and user interaction",
-        "- [ ] specific task 1",
-        "- [ ] specific task 2",
-        "(3-8 tasks depending on complexity)",
-        "",
-        "## Claude-3 [Integration/Testing] - Connect pieces and verify",
-        "- [ ] specific task 1",
-        "- [ ] specific task 2",
-        "(3-6 tasks depending on complexity)",
-        "",
-        "## Claude-4 [Polish/Review] - Quality and refinement",
-        "- [ ] specific task 1",
-        "- [ ] specific task 2",
-        "(3-5 tasks for review/polish)",
-        "- [ ] FINAL: Generate next-swarm.ps1 script for the next development phase",
-        "",
+        "$agentSectionsStr",
         "RULES:",
         "- Tasks must be SPECIFIC and ACTIONABLE",
         "- Each task completable in one iteration",
         "- Adapt agent roles to project type (CLI might not need Frontend)",
         "- Include setup tasks (init, dependencies) in Claude-1",
-        "- Claude-4 LAST task must always be generating next-swarm.ps1",
+        "- $lastChainAgent LAST task must always be generating next-swarm.ps1",
         "- End with validation section",
         "",
         "Output ONLY the markdown content, no explanations."
@@ -364,11 +364,18 @@ $agentsLines = @(
     "6. Document Results: Add review notes to tasks/todo.md",
     "7. Capture Lessons: Update tasks/lessons.md after corrections or discoveries",
     "",
-    "## Signal Protocol",
-    "- backend-ready.signal - Claude-1 creates when core APIs/logic work",
-    "- frontend-ready.signal - Claude-2 creates when UI connects to backend",
-    "- tests-passing.signal - Claude-3 creates when all tests pass",
-    "- phase-complete.signal - Claude-4 creates when all agents report done",
+    "## Signal Protocol"
+)
+# Dynamically generate signal protocol from agent plan
+foreach ($agent in $agentPlan) {
+    foreach ($key in $agent.RoleKeys) {
+        $slotMatch = $roleSlots | Where-Object { $_.RoleKey -eq $key -and $_.Signal -ne "" }
+        if ($slotMatch) {
+            $agentsLines += "- $($slotMatch.Signal).signal - $($agent.Name) creates when $($slotMatch.RoleTitle) work is verified"
+        }
+    }
+}
+$agentsLines += @(
     "",
     "## Heartbeat Protocol",
     "Update .claude/heartbeats/{your-name}.heartbeat regularly so the supervisor knows you are alive.",
@@ -1038,16 +1045,32 @@ function Build-PromptFromTemplate {
         [string]$RoleTitle,
         [string]$Goal,
         [string]$TechStack,
-        [string]$RoleKey,      # backend, frontend, integration, polish, distiller
+        [string[]]$RoleKeys,   # Array of role keys (e.g. @("backend") or @("backend", "integration"))
         [string[]]$RuleFiles   # Array of rule file contents
     )
 
     # Read template files
     $baseTemplate = Read-TemplateFile "base-prompt.txt"
     $sharedRulesTemplate = Read-TemplateFile "shared-rules.txt"
-    $roleWorkflow = Read-TemplateFile "role-$RoleKey.txt"
     $handoffProtocol = Read-TemplateFile "handoff-protocol.txt"
-    $signaling = Read-TemplateFile "signaling-$RoleKey.txt"
+
+    # Build combined role workflow and signaling from all assigned role keys
+    $workflowParts = @()
+    $signalingParts = @()
+    foreach ($key in $RoleKeys) {
+        $wf = Read-TemplateFile "role-$key.txt"
+        if ($wf) {
+            if ($RoleKeys.Count -gt 1) {
+                $workflowParts += "### $($key.Substring(0,1).ToUpper() + $key.Substring(1)) Role Workflow:`n$wf"
+            } else {
+                $workflowParts += $wf
+            }
+        }
+        $sig = Read-TemplateFile "signaling-$key.txt"
+        if ($sig) { $signalingParts += $sig }
+    }
+    $roleWorkflow = $workflowParts -join "`n`n"
+    $signaling = $signalingParts -join "`n"
 
     # Combine role rules
     $combinedRules = ($RuleFiles | Where-Object { $_ -ne "" }) -join "`n`n"
@@ -1073,36 +1096,144 @@ function Build-PromptFromTemplate {
     return $prompt
 }
 
-# Role configurations for template-based generation
-$roleConfigs = @{
-    "Claude-1" = @{
-        RoleTitle = "Backend/Core"
-        RoleKey = "backend"
-        RuleFiles = @($backendRules, $windowsRules, $securityRules)
+# === DYNAMIC AGENT PLAN ===
+# Role slot definitions: ordered from most critical to auxiliary
+# Slots 0-3 form the signal chain; slots 4-7 run signal-free (parallel)
+$roleSlots = @(
+    @{ RoleKey = "backend";       RoleTitle = "Backend/Core";            Signal = "backend-ready";  Color = "Cyan";        RuleFiles = @($backendRules, $windowsRules, $securityRules) },
+    @{ RoleKey = "frontend";      RoleTitle = "Frontend/Interface";      Signal = "frontend-ready"; Color = "Magenta";     RuleFiles = @($frontendRules, $securityRules) },
+    @{ RoleKey = "integration";   RoleTitle = "Integration/Testing";     Signal = "tests-passing";  Color = "Green";       RuleFiles = @($testingRules, $backendRules, $frontendRules) },
+    @{ RoleKey = "polish";        RoleTitle = "Polish/Review";           Signal = "phase-complete"; Color = "Yellow";      RuleFiles = @($backendRules, $frontendRules, $testingRules, $windowsRules, $securityRules) },
+    @{ RoleKey = "distiller";     RoleTitle = "Knowledge Extraction";    Signal = "";               Color = "DarkCyan";    RuleFiles = @() },
+    @{ RoleKey = "performance";   RoleTitle = "Performance/Optimization"; Signal = "";              Color = "White";       RuleFiles = @($backendRules, $frontendRules, $testingRules) },
+    @{ RoleKey = "documentation"; RoleTitle = "Documentation";           Signal = "";               Color = "DarkGreen";   RuleFiles = @($backendRules, $frontendRules) },
+    @{ RoleKey = "artdirector";   RoleTitle = "Art Director";            Signal = "";               Color = "DarkMagenta"; RuleFiles = @($frontendRules) }
+)
+
+function Build-AgentPlan {
+    param([int]$Count)
+
+    $effectiveCount = [Math]::Min([Math]::Max($Count, 1), 16)
+
+    # Build slot assignments using ArrayList.Add() to avoid PowerShell array flattening
+    $slotAssignments = [System.Collections.ArrayList]::new()
+
+    switch ($effectiveCount) {
+        1 {
+            $null = $slotAssignments.Add(@(0,1,2,3))
+        }
+        2 {
+            $null = $slotAssignments.Add(@(0,2))
+            $null = $slotAssignments.Add(@(1,3))
+        }
+        3 {
+            $null = $slotAssignments.Add(@(0))
+            $null = $slotAssignments.Add(@(1))
+            $null = $slotAssignments.Add(@(2,3))
+        }
+        default {
+            # 4+ agents: each chain role gets its own agent
+            $null = $slotAssignments.Add(@(0))
+            $null = $slotAssignments.Add(@(1))
+            $null = $slotAssignments.Add(@(2))
+            $null = $slotAssignments.Add(@(3))
+
+            # Add specialized roles in order (slots 4-7: distiller, performance, documentation, artdirector)
+            $specializedSlots = @(4, 5, 6, 7)
+            $added = 0
+            for ($i = 0; $i -lt $specializedSlots.Count -and ($added + 4) -lt $effectiveCount; $i++) {
+                $null = $slotAssignments.Add(@($specializedSlots[$i]))
+                $added++
+            }
+
+            # Beyond 8 agents: duplicate chain roles round-robin
+            $chainSlots = @(0, 1, 2, 0)
+            $dupIdx = 0
+            while ($slotAssignments.Count -lt $effectiveCount) {
+                $null = $slotAssignments.Add(@($chainSlots[$dupIdx % $chainSlots.Count]))
+                $dupIdx++
+            }
+        }
     }
-    "Claude-2" = @{
-        RoleTitle = "Frontend/Interface"
-        RoleKey = "frontend"
-        RuleFiles = @($frontendRules, $securityRules)
+
+    # Available colors for agents beyond slot defaults
+    $extraColors = @("DarkYellow", "Blue", "DarkBlue", "Red", "DarkRed", "DarkGray", "Gray")
+
+    # Build agent definitions from slot assignments
+    $agents = @()
+    # Track which chain signals have been assigned
+    $chainSignals = @("", "backend-ready", "frontend-ready", "tests-passing")  # indexed by chain position
+    $chainPosition = 0
+
+    for ($i = 0; $i -lt $slotAssignments.Count; $i++) {
+        $slots = $slotAssignments[$i]
+        $agentNum = $i + 1
+        $name = "Claude-$agentNum"
+
+        # Determine if this agent is in the signal chain (has any chain slot 0-3)
+        $hasChainSlot = $false
+        foreach ($s in $slots) {
+            if ($s -le 3) { $hasChainSlot = $true; break }
+        }
+
+        # Build combined role title
+        $roleTitles = @()
+        $roleKeys = @()
+        $allRuleFiles = @()
+        foreach ($s in $slots) {
+            $slot = $roleSlots[$s]
+            $roleTitles += $slot.RoleTitle
+            $roleKeys += $slot.RoleKey
+            $allRuleFiles += $slot.RuleFiles
+        }
+        $roleTitle = $roleTitles -join " + "
+        # De-duplicate rule files
+        $uniqueRules = $allRuleFiles | Select-Object -Unique
+
+        # Determine color: use first slot's color, or extra color for duplicates
+        $firstSlotIdx = [int]$slots[0]
+        $primarySlot = $roleSlots[$firstSlotIdx]
+        if ($i -lt $roleSlots.Count) {
+            $color = $primarySlot.Color
+        } else {
+            $color = $extraColors[($i - $roleSlots.Count) % $extraColors.Count]
+        }
+
+        # Determine WaitFor signal
+        # Chain agents (first 4 with chain slots) form a sequential dependency
+        # Duplicate chain workers (9+) use their primary role's wait signal
+        # Specialized agents (distiller, performance, etc.) run immediately (no wait)
+        $waitFor = ""
+        if ($hasChainSlot -and $chainPosition -lt $chainSignals.Count) {
+            # Primary chain agent
+            if ($chainPosition -gt 0) {
+                $waitFor = $chainSignals[$chainPosition]
+            }
+            $chainPosition++
+        } elseif ($hasChainSlot) {
+            # Duplicate chain worker (beyond position 3): use the primary role's wait signal
+            $waitFor = $chainSignals[[Math]::Min($firstSlotIdx, $chainSignals.Count - 1)]
+        }
+
+        $agents += @{
+            Name      = $name
+            Role      = $roleTitle
+            RoleKeys  = $roleKeys
+            Color     = $color
+            WaitFor   = $waitFor
+            RuleFiles = $uniqueRules
+        }
     }
-    "Claude-3" = @{
-        RoleTitle = "Integration/Testing"
-        RoleKey = "integration"
-        RuleFiles = @($testingRules, $backendRules, $frontendRules)
-    }
-    "Claude-4" = @{
-        RoleTitle = "Polish/Review"
-        RoleKey = "polish"
-        RuleFiles = @($backendRules, $frontendRules, $testingRules, $windowsRules, $securityRules)
-    }
-    "Knowledge-Distiller" = @{
-        RoleTitle = "Knowledge Extraction"
-        RoleKey = "distiller"
-        RuleFiles = @()
-    }
+
+    return $agents
 }
 
 # === DEFINE AGENT PROMPTS ===
+# Build the dynamic agent plan based on AgentCount
+$agentPlan = Build-AgentPlan -Count $AgentCount
+$agentRoleList = ($agentPlan | ForEach-Object { $_.Role }) -join ", "
+Write-Host "  Agent plan: $($agentPlan.Count) agents ($agentRoleList)" -ForegroundColor Gray
+
 $sharedRules = "CRITICAL: You are running FULLY AUTONOMOUSLY. Never wait for user input. Never use EnterPlanMode or AskUserQuestion. Plan internally and execute immediately. You are unattended - act decisively.`n`n" +
     "ORCHESTRATION RULES (non-negotiable):`n" +
     "1. PLAN THEN EXECUTE: For non-trivial tasks (3+ steps), write your plan to tasks/todo.md, then IMMEDIATELY execute it. Do NOT use EnterPlanMode - it blocks waiting for user approval which will never come. Plan internally, execute autonomously.`n" +
@@ -1143,6 +1274,8 @@ $sharedRules = "CRITICAL: You are running FULLY AUTONOMOUSLY. Never wait for use
     "  .swarm/bus/swarm-msg.ps1 send --to all --priority high --body ""STOP""`n" +
     "Before editing shared files, check AGENT_STATUS.md for LOCKING markers."
 
+# Legacy prompts: only used as fallback when templates are missing AND AgentCount is exactly 4
+if ($AgentCount -eq 4) {
 $prompt1 = "You are Claude-1 (Backend/Core) working on: $goal`n`n" +
     "FIRST: Read AGENTS.md, tasks/lessons.md, then tasks/TASKS.md.`n`n" +
     "$sharedRules`n`n" +
@@ -1285,39 +1418,44 @@ $prompt4 = "You are Claude-4 (Polish/Review) working on: $goal`n`n" +
     "HANDOFF:`n" +
     "If context filling up: write state to .claude/handoffs/Claude-4.md. Exit cleanly.`n`n" +
     "You are the final quality gate and the bridge to the next swarm iteration."
+} # end legacy prompt guard (AgentCount -eq 4)
 
-$agents = @(
-    @{ Name = "Claude-1"; Role = "Backend/Core";    Color = "Cyan";    WaitFor = "";               Prompt = $prompt1 },
-    @{ Name = "Claude-2"; Role = "Frontend/Interface"; Color = "Magenta"; WaitFor = "backend-ready";  Prompt = $prompt2 },
-    @{ Name = "Claude-3"; Role = "Integration/Testing"; Color = "Green";   WaitFor = "frontend-ready"; Prompt = $prompt3 },
-    @{ Name = "Claude-4"; Role = "Polish/Review";    Color = "Yellow";  WaitFor = "tests-passing";  Prompt = $prompt4 }
-)
+# Build agents array from the dynamic plan
+$legacyPrompts = @{
+    "Claude-1" = if ($AgentCount -eq 4) { $prompt1 } else { $null }
+    "Claude-2" = if ($AgentCount -eq 4) { $prompt2 } else { $null }
+    "Claude-3" = if ($AgentCount -eq 4) { $prompt3 } else { $null }
+    "Claude-4" = if ($AgentCount -eq 4) { $prompt4 } else { $null }
+}
+
+$agents = $agentPlan
 
 # === WRITE PROMPT FILES ===
+# Clean out old prompt files so the backend only sees prompts for current agent count
+Get-ChildItem ".claude/prompts/Claude-*.txt" -ErrorAction SilentlyContinue | Remove-Item -Force
+
 foreach ($agent in $agents) {
     $promptFile = ".claude/prompts/$($agent.Name).txt"
 
     # Try template-based generation first
-    $config = $roleConfigs[$agent.Name]
-    $templatePrompt = $null
+    $templatePrompt = Build-PromptFromTemplate `
+        -AgentName $agent.Name `
+        -RoleTitle $agent.Role `
+        -Goal $goal `
+        -TechStack $techStack `
+        -RoleKeys $agent.RoleKeys `
+        -RuleFiles $agent.RuleFiles
 
-    if ($config) {
-        $templatePrompt = Build-PromptFromTemplate `
-            -AgentName $agent.Name `
-            -RoleTitle $config.RoleTitle `
-            -Goal $goal `
-            -TechStack $techStack `
-            -RoleKey $config.RoleKey `
-            -RuleFiles $config.RuleFiles
-    }
-
-    # Use template if available, otherwise fall back to legacy prompt
+    # Use template if available, otherwise fall back to legacy prompt (only for 4-agent default)
     if ($templatePrompt) {
         $templatePrompt | Out-File -FilePath $promptFile -Encoding UTF8
         Write-Host "  OK - Wrote $promptFile (template)" -ForegroundColor Gray
-    } else {
-        $agent.Prompt | Out-File -FilePath $promptFile -Encoding UTF8
+    } elseif ($legacyPrompts[$agent.Name]) {
+        $legacyPrompts[$agent.Name] | Out-File -FilePath $promptFile -Encoding UTF8
         Write-Host "  OK - Wrote $promptFile (legacy)" -ForegroundColor Gray
+    } else {
+        Write-Host "  ERROR - No template found for $($agent.Name) ($($agent.Role)). Templates required for AgentCount != 4." -ForegroundColor Red
+        exit 1
     }
 }
 

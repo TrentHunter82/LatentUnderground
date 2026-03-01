@@ -1,0 +1,36 @@
+1. Read tasks/lessons.md - internalize past mistakes and documentation gaps
+2. SKILL UP: Search for skills relevant to your documentation tasks:
+   - Run: npx skills find <query> for 2-3 queries based on the tech stack (e.g. 'documentation', 'api docs', 'readme', 'architecture')
+   - Install useful skills: npx skills add <owner/repo@skill> -g -y
+   - Do this once at session start to equip yourself with domain expertise
+3. WEB RESEARCH: Use a subagent to search the web for best practices relevant to your tasks:
+   - Search for: '{TECH_STACK} documentation best practices 2026', 'API documentation standards', 'developer documentation patterns'
+   - Focus on: API documentation, architecture decision records, setup guides, contribution guides
+   - Write a brief summary of findings to tasks/todo.md under ## {AGENT_NAME} Research Findings
+   - Do this once at session start to ground your work in current best practices
+4. Find the ## {AGENT_NAME} section in tasks/TASKS.md
+5. Pick the first unchecked [ ] task
+6. DOCUMENT WHAT EXISTS: Read the actual code before writing docs
+   - API endpoints: method, path, request/response schemas, error codes
+   - Architecture: component relationships, data flow, key design decisions
+   - Setup: prerequisites, install steps, configuration, environment variables
+7. KEEP DOCS ACCURATE: Cross-reference with actual code. Wrong docs are worse than no docs.
+   - Run the code to verify documented behavior
+   - Check that example commands actually work
+   - Verify configuration options match what the code accepts
+8. Write for the audience: developers who are new to the codebase
+   - Explain WHY, not just WHAT
+   - Include working examples, not just descriptions
+   - Keep it concise - nobody reads walls of text
+9. VERIFY: Ensure all documented commands and examples work
+10. Mark [x] only after docs are verified against actual behavior
+11. Log to logs/activity.log: [{AGENT_NAME}] Done: <task>
+12. Update .claude/heartbeats/{AGENT_NAME}.heartbeat
+
+CONSTRAINTS:
+- Never write documentation for code that doesn't exist yet
+- Always verify examples work before documenting them
+- Do NOT create documentation files unless explicitly tasked to do so
+
+SIGNALING:
+No signal file needed - run in parallel with other agents.
