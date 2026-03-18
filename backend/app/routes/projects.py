@@ -104,13 +104,24 @@ async def create_project(project: ProjectCreate, db: aiosqlite.Connection = Depe
     # Sanitize user-provided string fields to prevent stored XSS
     name = sanitize_string(project.name)
     goal = sanitize_string(project.goal)
+    project_type = sanitize_string(project.project_type)
+    tech_stack = sanitize_string(project.tech_stack)
+    complexity = sanitize_string(project.complexity)
     requirements = sanitize_string(project.requirements)
 
+    # Build initial config from agent_count / max_phases if provided
+    initial_config = {}
+    if project.agent_count is not None:
+        initial_config["agent_count"] = project.agent_count
+    if project.max_phases is not None:
+        initial_config["max_phases"] = project.max_phases
+    config_json = json.dumps(initial_config) if initial_config else "{}"
+
     cursor = await db.execute(
-        """INSERT INTO projects (name, goal, project_type, tech_stack, complexity, requirements, folder_path)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (name, goal, project.project_type, project.tech_stack,
-         project.complexity, requirements, project.folder_path),
+        """INSERT INTO projects (name, goal, project_type, tech_stack, complexity, requirements, folder_path, config)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (name, goal, project_type, tech_stack,
+         complexity, requirements, project.folder_path, config_json),
     )
     await db.commit()
     project_id = cursor.lastrowid
@@ -447,13 +458,13 @@ async def project_health(project_id: int, db: aiosqlite.Connection = Depends(get
     error_density = total_error_count / max(total_output_lines, 1)
     avg_dur = int(sum(durations) / len(durations)) if durations else None
 
-    # Compute trend
+    # Compute trend (runs are reverse-chronological: index 0 = most recent)
     trend = "stable"
     if len(per_run_crash_rates) >= 2:
         half = len(per_run_crash_rates) // 2
-        first = sum(per_run_crash_rates[:half]) / max(half, 1)
-        second = sum(per_run_crash_rates[half:]) / max(len(per_run_crash_rates) - half, 1)
-        diff = second - first
+        recent = sum(per_run_crash_rates[:half]) / max(half, 1)
+        older = sum(per_run_crash_rates[half:]) / max(len(per_run_crash_rates) - half, 1)
+        diff = recent - older
         if diff < -0.05:
             trend = "improving"
         elif diff > 0.05:

@@ -53,22 +53,17 @@ function Get-TaskProgress {
 }
 
 function Test-RateLimitActive {
-    # Check if rate limit signal exists and is still active
     if (-not (Test-Path $rateLimitSignal)) {
         return @{ Active = $false; SecondsRemaining = 0 }
     }
-
     try {
         $content = Get-Content $rateLimitSignal -Raw | ConvertFrom-Json
         $resetTimestamp = $content.reset_timestamp
         $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-
         if ($now -ge $resetTimestamp) {
-            # Rate limit expired, remove the signal file
             Remove-Item $rateLimitSignal -Force -ErrorAction SilentlyContinue
             return @{ Active = $false; SecondsRemaining = 0 }
         }
-
         $remaining = $resetTimestamp - $now
         return @{
             Active = $true
@@ -108,9 +103,8 @@ while ($true) {
         }
     }
 
-    # Dynamically discover signals from the signals directory
-    $signalFiles = Get-ChildItem ".claude/signals/*.signal" -ErrorAction SilentlyContinue
-    $activeSignals = $signalFiles | ForEach-Object { $_.BaseName }
+    $signalNames = @("backend-ready", "frontend-ready", "tests-passing", "phase-complete")
+    $activeSignals = $signalNames | Where-Object { Test-Path ".claude/signals/$_.signal" }
     if ($activeSignals) {
         Write-Log "Signals: $($activeSignals -join ', ')" "OK"
     }
@@ -164,7 +158,7 @@ while ($true) {
                         if ($rateLimitCheck.Active) {
                             Write-Host ""
                             Write-Log "Rate limit active - waiting $($rateLimitCheck.SecondsRemaining)s before auto-chain..." "WARN"
-                            $waitTime = [Math]::Min($rateLimitCheck.SecondsRemaining, 3600)  # Cap at 1 hour
+                            $waitTime = [Math]::Min($rateLimitCheck.SecondsRemaining, 3600)
                             Write-Host "  Auto-chain delayed until $($rateLimitCheck.ResetAt)" -ForegroundColor Yellow
                             Start-Sleep -Seconds $waitTime
                         }

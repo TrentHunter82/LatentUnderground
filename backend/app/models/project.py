@@ -14,6 +14,8 @@ class ProjectCreate(BaseModel):
     complexity: str = Field(default="Medium", max_length=50, examples=["Medium"])
     requirements: str = Field(default="", max_length=5000, examples=["Must include authentication and real-time updates"])
     folder_path: str = Field(min_length=1, max_length=500, examples=["F:/Projects/MyWebApp"])
+    agent_count: Optional[int] = Field(None, ge=1, le=16, examples=[4])
+    max_phases: Optional[int] = Field(None, ge=1, le=999, examples=[24])
 
 
 class ProjectUpdate(BaseModel):

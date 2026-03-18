@@ -18,13 +18,14 @@ const defaultForm = {
   complexity: 'Medium',
   requirements: '',
   folder_path: '',
+  agent_count: 4,
+  max_phases: 999,
 }
 
 export default function NewProject({ onProjectChange }) {
   const navigate = useNavigate()
   const [error, setError] = useState(null)
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
-  const [templateConfig, setTemplateConfig] = useState(null)
   const [form, setForm] = useState({ ...defaultForm })
   const [showBrowser, setShowBrowser] = useState(false)
   const [showManager, setShowManager] = useState(false)
@@ -62,7 +63,6 @@ export default function NewProject({ onProjectChange }) {
 
     if (!id) {
       setForm({ ...defaultForm })
-      setTemplateConfig(null)
       return
     }
 
@@ -70,7 +70,6 @@ export default function NewProject({ onProjectChange }) {
     if (!tmpl) return
 
     const cfg = tmpl.config || {}
-    setTemplateConfig(cfg)
 
     // Populate form fields from template config where applicable
     setForm((f) => ({
@@ -79,6 +78,8 @@ export default function NewProject({ onProjectChange }) {
       tech_stack: cfg.tech_stack || f.tech_stack,
       complexity: cfg.complexity || f.complexity,
       requirements: cfg.requirements || f.requirements,
+      agent_count: cfg.agent_count ?? f.agent_count,
+      max_phases: cfg.max_phases ?? f.max_phases,
     }))
   }
 
@@ -109,8 +110,8 @@ export default function NewProject({ onProjectChange }) {
         project_id: project.id,
         resume: false,
         no_confirm: true,
-        agent_count: templateConfig?.agent_count ?? 4,
-        max_phases: templateConfig?.max_phases ?? 999,
+        agent_count: form.agent_count,
+        max_phases: form.max_phases,
       })
       onProjectChange?.()
       navigate(`/projects/${project.id}`)
@@ -167,13 +168,6 @@ export default function NewProject({ onProjectChange }) {
                     </option>
                   ))}
                 </select>
-                {templateConfig && (
-                  <p className="text-xs text-zinc-600 mt-1 font-mono">
-                    {templateConfig.agent_count && `${templateConfig.agent_count} agents`}
-                    {templateConfig.agent_count && templateConfig.max_phases && ' · '}
-                    {templateConfig.max_phases && `${templateConfig.max_phases} phases`}
-                  </p>
-                )}
               </>
             )}
             {templates.length === 0 && !showManager && (
@@ -262,6 +256,39 @@ export default function NewProject({ onProjectChange }) {
                   {opt}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="agent-count" className={labelClass}>Agent Count</label>
+              <div className="flex items-center gap-3">
+                <input
+                  id="agent-count"
+                  type="range"
+                  min={1}
+                  max={16}
+                  value={form.agent_count}
+                  onChange={(e) => setForm((f) => ({ ...f, agent_count: Number(e.target.value) }))}
+                  className="flex-1 accent-crt-green"
+                />
+                <span className="text-sm font-mono neon-green min-w-[2ch] text-right tabular-nums">{form.agent_count}</span>
+              </div>
+              <p className="text-[10px] text-zinc-600 mt-1 font-mono">
+                {form.agent_count <= 3 ? 'Merged roles' : form.agent_count <= 8 ? 'One role per agent' : 'Scaled roles'}
+              </p>
+            </div>
+            <div>
+              <label htmlFor="max-phases" className={labelClass}>Max Phases</label>
+              <input
+                id="max-phases"
+                type="number"
+                min={1}
+                max={999}
+                value={form.max_phases}
+                onChange={(e) => setForm((f) => ({ ...f, max_phases: Math.max(1, Math.min(999, Number(e.target.value) || 1)) }))}
+                className={inputClass}
+              />
             </div>
           </div>
 

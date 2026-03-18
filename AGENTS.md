@@ -73,10 +73,6 @@
 7. Capture Lessons: Update tasks/lessons.md after corrections or discoveries
 
 ## Signal Protocol
-- backend-ready.signal - Claude-1 creates when core APIs/logic work
-- frontend-ready.signal - Claude-2 creates when UI connects to backend
-- tests-passing.signal - Claude-3 creates when all tests pass
-- phase-complete.signal - Claude-4 creates when all agents report done
 
 ## Heartbeat Protocol
 Update .claude/heartbeats/{your-name}.heartbeat regularly so the supervisor knows you are alive.

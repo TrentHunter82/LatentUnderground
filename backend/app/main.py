@@ -382,8 +382,9 @@ def _monitor_pid(project_id: int, pid: int, name: str, stop_event: threading.Eve
                 pid, project_id, name,
             )
             try:
-                conn = sqlite3.connect(str(database.DB_PATH))
+                conn = sqlite3.connect(str(database.DB_PATH), timeout=5)
                 try:
+                    conn.execute("PRAGMA busy_timeout = 5000")
                     conn.execute(
                         "UPDATE projects SET status = 'stopped', swarm_pid = NULL, "
                         "updated_at = datetime('now') WHERE id = ?",
@@ -527,8 +528,9 @@ async def _auto_vacuum_loop():
         try:
             import sqlite3 as _sqlite3
             def _do_vacuum():
-                conn = _sqlite3.connect(str(database.DB_PATH))
+                conn = _sqlite3.connect(str(database.DB_PATH), timeout=5)
                 try:
+                    conn.execute("PRAGMA busy_timeout = 5000")
                     conn.execute("VACUUM")
                 finally:
                     conn.close()
