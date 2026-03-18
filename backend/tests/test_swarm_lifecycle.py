@@ -149,6 +149,8 @@ class TestPerAgentInputTargeting:
 
     async def test_targets_specific_agent(self, client, created_project):
         from app.routes.swarm import _agent_processes, _agent_key, _project_output_buffers
+        from app import database
+        import aiosqlite
         pid = created_project["id"]
         k1 = _agent_key(pid, "Claude-1")
         k2 = _agent_key(pid, "Claude-2")
@@ -161,14 +163,22 @@ class TestPerAgentInputTargeting:
             "project_id": pid, "text": "hello", "agent": "Claude-1",
         })
         assert resp.status_code == 200
-        p1.stdin.write.assert_called()
-        p2.stdin.write.assert_not_called()
+        # Verify bus message targets Claude-1
+        async with aiosqlite.connect(database.DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            row = await (await db.execute(
+                "SELECT to_agent FROM bus_messages WHERE project_id = ? ORDER BY created_at DESC LIMIT 1",
+                (pid,),
+            )).fetchone()
+            assert row["to_agent"] == "Claude-1"
         _agent_processes.pop(k1, None)
         _agent_processes.pop(k2, None)
         _project_output_buffers.pop(pid, None)
 
     async def test_broadcasts_to_all(self, client, created_project):
         from app.routes.swarm import _agent_processes, _agent_key, _project_output_buffers
+        from app import database
+        import aiosqlite
         pid = created_project["id"]
         procs = {}
         for i in range(1, 4):
@@ -177,9 +187,16 @@ class TestPerAgentInputTargeting:
             _agent_processes[key] = procs[key]
         _project_output_buffers[pid] = []
         await client.patch(f"/api/projects/{pid}", json={"status": "running"})
-        await client.post("/api/swarm/input", json={"project_id": pid, "text": "msg"})
-        for proc in procs.values():
-            proc.stdin.write.assert_called()
+        resp = await client.post("/api/swarm/input", json={"project_id": pid, "text": "msg"})
+        assert resp.status_code == 200
+        # Verify bus message targets all
+        async with aiosqlite.connect(database.DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            row = await (await db.execute(
+                "SELECT to_agent FROM bus_messages WHERE project_id = ? ORDER BY created_at DESC LIMIT 1",
+                (pid,),
+            )).fetchone()
+            assert row["to_agent"] == "all"
         for key in procs:
             _agent_processes.pop(key, None)
         _project_output_buffers.pop(pid, None)

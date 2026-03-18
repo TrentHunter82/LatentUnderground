@@ -155,7 +155,7 @@ class TestQuotaRestartEnforcement:
 
         resp = await client.post(f"/api/swarm/agents/{pid}/Claude-1/restart")
         assert resp.status_code == 429
-        assert "Restart quota exceeded" in resp.json()["detail"]
+        assert "restart quota exceeded" in resp.json()["detail"]
         assert "limit: 1" in resp.json()["detail"]
 
     @pytest.mark.asyncio
@@ -901,8 +901,8 @@ class TestCheckpointsMigration:
             assert applied is False  # already up to date
 
     @pytest.mark.asyncio
-    async def test_schema_version_is_5(self, tmp_path):
-        """After all migrations, schema version is 5."""
+    async def test_schema_version_current(self, tmp_path):
+        """After all migrations, schema version matches SCHEMA_VERSION."""
         db_path = tmp_path / "version.db"
         async with aiosqlite.connect(db_path) as db:
             db.row_factory = aiosqlite.Row
@@ -911,13 +911,11 @@ class TestCheckpointsMigration:
 
             version = await database._get_schema_version(db)
             assert version == database.SCHEMA_VERSION
-            assert version == 6
 
     @pytest.mark.asyncio
     async def test_migration_count_matches_version(self):
         """Number of migrations equals SCHEMA_VERSION."""
         assert len(database._MIGRATIONS) == database.SCHEMA_VERSION
-        assert len(database._MIGRATIONS) == 6
 
     @pytest.mark.asyncio
     async def test_checkpoint_data_preserved_across_migration(self, tmp_path):

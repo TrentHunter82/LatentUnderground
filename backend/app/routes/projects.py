@@ -681,12 +681,22 @@ async def delete_project(project_id: int, db: aiosqlite.Connection = Depends(get
     from .swarm import (
         cancel_drain_tasks, _project_locks, _project_resource_usage,
         _known_directives, _last_output_at,
+        _rate_limit_state, _circuit_breakers, _current_run_ids,
+        _checkpoint_cooldowns,
     )
     await cancel_drain_tasks(project_id)
     _project_locks.pop(project_id, None)
     _project_resource_usage.pop(project_id, None)
     _known_directives.pop(project_id, None)
     _last_output_at.pop(project_id, None)
+    _rate_limit_state.pop(project_id, None)
+    _current_run_ids.pop(project_id, None)
+
+    # Clean composite-key dicts (keyed by "project_id:agent_name")
+    prefix = f"{project_id}:"
+    for d in (_circuit_breakers, _checkpoint_cooldowns):
+        for key in [k for k in d if k.startswith(prefix)]:
+            d.pop(key, None)
 
     await db.execute("DELETE FROM projects WHERE id = ?", (project_id,))
     await db.commit()

@@ -35,6 +35,7 @@ class ConnectionPool:
         await db.execute("PRAGMA synchronous = NORMAL")
         await db.execute("PRAGMA temp_store = MEMORY")
         await db.execute("PRAGMA cache_size = -16000")
+        await db.execute("PRAGMA mmap_size = 268435456")
         return db
 
     async def initialize(self):

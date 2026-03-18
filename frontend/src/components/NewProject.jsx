@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DEFAULT_TEMPLATE_PRESETS } from '../lib/constants'
 import { useToast } from './Toast'
 import FolderBrowser from './FolderBrowser'
 import TemplateManager from './TemplateManager'
+import ImageReferenceUpload from './ImageReferenceUpload'
 import { useTemplates, templateKeys } from '../hooks/useProjectQuery'
 import { useCreateProject, useLaunchSwarm, useCreateTemplate } from '../hooks/useMutations'
+import { uploadImageReferences } from '../lib/api'
 import { useQueryClient } from '@tanstack/react-query'
 
 const complexityOptions = ['Simple', 'Medium', 'Complex']
@@ -27,6 +29,7 @@ export default function NewProject({ onProjectChange }) {
   const [error, setError] = useState(null)
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [form, setForm] = useState({ ...defaultForm })
+  const [images, setImages] = useState([])
   const [showBrowser, setShowBrowser] = useState(false)
   const [showManager, setShowManager] = useState(false)
 
@@ -42,6 +45,10 @@ export default function NewProject({ onProjectChange }) {
   const createTemplateMutation = useCreateTemplate()
 
   const loading = createProjectMutation.isPending || launchSwarmMutation.isPending
+
+  const handleImagesChange = useCallback((newImages) => {
+    setImages(newImages)
+  }, [])
 
   const loadDefaultPresets = async () => {
     try {
@@ -85,10 +92,20 @@ export default function NewProject({ onProjectChange }) {
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
+  const uploadImages = async (projectId) => {
+    if (images.length === 0) return
+    try {
+      await uploadImageReferences(projectId, images)
+    } catch {
+      toast('Images could not be uploaded — you can add them later in Settings.', 'warning', 5000)
+    }
+  }
+
   const doSubmit = async () => {
     setError(null)
     try {
       const project = await createProjectMutation.mutateAsync(form)
+      await uploadImages(project.id)
       onProjectChange?.()
       navigate(`/projects/${project.id}`)
     } catch (err) {
@@ -106,6 +123,7 @@ export default function NewProject({ onProjectChange }) {
     setError(null)
     try {
       const project = await createProjectMutation.mutateAsync(form)
+      await uploadImages(project.id)
       await launchSwarmMutation.mutateAsync({
         project_id: project.id,
         resume: false,
@@ -303,6 +321,8 @@ export default function NewProject({ onProjectChange }) {
               rows={3}
             />
           </div>
+
+          <ImageReferenceUpload images={images} onChange={handleImagesChange} />
 
           <div>
             <label htmlFor="folder-path" className={labelClass}>Project Folder Path</label>

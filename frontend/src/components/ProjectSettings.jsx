@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useProjectQuota } from '../hooks/useProjectQuery'
+import { useProjectQuota, useImageReferences } from '../hooks/useProjectQuery'
+import { useUploadImageReferences, useDeleteImageReference } from '../hooks/useMutations'
+import ImageReferenceUpload from './ImageReferenceUpload'
 
 const RULE_TYPES = [
   { value: 'regex_match', label: 'Require Pattern', needsPattern: true },
@@ -152,8 +154,15 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
   // Guardrail rules
   const [guardrailRules, setGuardrailRules] = useState([])
 
+  // Image references
+  const [images, setImages] = useState([])
+  const { data: existingImages } = useImageReferences(projectId, { enabled: !!projectId })
+  const uploadImagesMutation = useUploadImageReferences()
+  const deleteImageMutation = useDeleteImageReference()
+
   // Track the "saved" state for dirty detection
   const savedConfig = useRef({ agent_count: 4, max_phases: 999, custom_prompts: '', max_agents_concurrent: null, max_duration_hours: null, max_restarts_per_agent: null, circuit_breaker_max_failures: 3, circuit_breaker_window_seconds: 300, circuit_breaker_recovery_seconds: 60, auto_queue: false, auto_queue_delay_seconds: 30, guardrails: [] })
+  const savedTimerRef = useRef(null)
 
   useEffect(() => {
     if (initialConfig) {
@@ -179,6 +188,35 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
       savedConfig.current = { agent_count: ac, max_phases: mp, custom_prompts: cp, max_agents_concurrent: mac, max_duration_hours: mdh, max_restarts_per_agent: mra, circuit_breaker_max_failures: initialConfig.circuit_breaker_max_failures ?? 3, circuit_breaker_window_seconds: initialConfig.circuit_breaker_window_seconds ?? 300, circuit_breaker_recovery_seconds: initialConfig.circuit_breaker_recovery_seconds ?? 60, auto_queue: initialConfig.auto_queue ?? false, auto_queue_delay_seconds: initialConfig.auto_queue_delay_seconds ?? 30, guardrails: gr }
     }
   }, [initialConfig])
+
+  // Sync fetched images into local state
+  useEffect(() => {
+    if (existingImages && Array.isArray(existingImages)) {
+      setImages(existingImages.map((img) => ({
+        id: img.id,
+        filename: img.filename,
+        caption: img.caption || '',
+        targetRoles: img.targetRoles || ['designer', 'frontend'],
+        preview: img.url || '',
+      })))
+    }
+  }, [existingImages])
+
+  const handleImagesChange = useCallback((newImages) => {
+    // Find newly added images (ones with a File object)
+    const added = newImages.filter((img) => img.file)
+    if (added.length > 0) {
+      uploadImagesMutation.mutate({ projectId, images: added })
+    }
+    // Find removed images
+    const removedIds = images
+      .filter((img) => !newImages.find((n) => n.id === img.id))
+      .map((img) => img.id)
+    for (const id of removedIds) {
+      deleteImageMutation.mutate({ projectId, imageId: id })
+    }
+    setImages(newImages)
+  }, [images, projectId, uploadImagesMutation, deleteImageMutation])
 
   // Fetch quota usage via TanStack Query
   const { data: quotaData } = useProjectQuota(projectId, { enabled: !!projectId })
@@ -493,6 +531,15 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
           )}
           <p className="text-[10px] text-zinc-600 font-mono m-0 mt-2">
             Rules run when all agents exit. Halt stops the swarm; Warn logs and continues. Max {MAX_GUARDRAIL_RULES} rules, patterns up to {PATTERN_MAX_LENGTH} chars.
+          </p>
+        </div>
+
+        {/* Image References */}
+        <div className="pt-3 border-t border-retro-border">
+          <h4 className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-mono mb-3 m-0">Image References</h4>
+          <ImageReferenceUpload images={images} onChange={handleImagesChange} />
+          <p className="text-[10px] text-zinc-600 font-mono m-0 mt-2">
+            Attach screenshots, mockups, or UI inspiration for Designer and Frontend agents.
           </p>
         </div>
 

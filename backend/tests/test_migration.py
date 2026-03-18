@@ -68,12 +68,7 @@ async def test_fresh_database_migration(tmp_path):
             "SELECT version FROM schema_version ORDER BY version"
         )).fetchall()
         assert len(rows) == SCHEMA_VERSION
-        assert rows[0]["version"] == 1
-        assert rows[1]["version"] == 2
-        assert rows[2]["version"] == 3
-        assert rows[3]["version"] == 4
-        assert rows[4]["version"] == 5
-        assert rows[5]["version"] == 6
+        assert [r["version"] for r in rows] == list(range(1, SCHEMA_VERSION + 1))
 
         # Verify projects table exists with all columns
         cursor = await db.execute("PRAGMA table_info(projects)")
@@ -215,12 +210,7 @@ async def test_incremental_migration_v1_to_v2(tmp_path):
             "SELECT version FROM schema_version ORDER BY version"
         )).fetchall()
         assert len(rows) == SCHEMA_VERSION
-        assert rows[0]["version"] == 1
-        assert rows[1]["version"] == 2
-        assert rows[2]["version"] == 3
-        assert rows[3]["version"] == 4
-        assert rows[4]["version"] == 5
-        assert rows[5]["version"] == 6
+        assert [r["version"] for r in rows] == list(range(1, SCHEMA_VERSION + 1))
 
         # Verify label, notes, and summary were added
         cursor = await db.execute("PRAGMA table_info(swarm_runs)")
@@ -749,12 +739,7 @@ async def test_migration_ordering(tmp_path):
             "SELECT version, applied_at FROM schema_version ORDER BY version"
         )).fetchall()
         assert len(rows) == SCHEMA_VERSION
-        assert rows[0]["version"] == 1
-        assert rows[1]["version"] == 2
-        assert rows[2]["version"] == 3
-        assert rows[3]["version"] == 4
-        assert rows[4]["version"] == 5
-        assert rows[5]["version"] == 6
+        assert [r["version"] for r in rows] == list(range(1, SCHEMA_VERSION + 1))
 
         # Verify applied_at timestamps are valid ISO8601
         for row in rows:
@@ -810,17 +795,12 @@ async def test_migration_skip_already_applied(tmp_path):
         assert "label" in columns
         assert "notes" in columns
 
-        # Verify 6 migration records (1 + 2 + 3 + 4 + 5 + 6, not re-applied 1)
+        # Verify all migration records present (not re-applied)
         rows = await (await db.execute(
             "SELECT version FROM schema_version ORDER BY version"
         )).fetchall()
         assert len(rows) == SCHEMA_VERSION
-        assert rows[0]["version"] == 1
-        assert rows[1]["version"] == 2
-        assert rows[2]["version"] == 3
-        assert rows[3]["version"] == 4
-        assert rows[4]["version"] == 5
-        assert rows[5]["version"] == 6
+        assert [r["version"] for r in rows] == list(range(1, SCHEMA_VERSION + 1))
 
 
 # ---------------------------------------------------------------------------

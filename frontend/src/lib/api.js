@@ -238,3 +238,46 @@ export const getBusMessages = (projectId, { since, channel, priority, limit = 10
   if (priority) params.set('priority', priority)
   return request(`/bus/${projectId}/messages?${params}`, opts)
 }
+
+// Image References
+export async function uploadImageReferences(projectId, images) {
+  const formData = new FormData()
+  for (const img of images) {
+    formData.append('files', img.file, img.filename)
+  }
+  // Send metadata as JSON alongside the files
+  const metadata = images.map((img) => ({
+    id: img.id,
+    filename: img.filename,
+    caption: img.caption,
+    targetRoles: img.targetRoles,
+  }))
+  formData.append('metadata', JSON.stringify(metadata))
+
+  const headers = {}
+  const apiKey = localStorage.getItem('lu_api_key')
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`
+  }
+  // Do NOT set Content-Type — browser sets multipart boundary automatically
+  const res = await fetch(`${BASE}/projects/${projectId}/images`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+  if (res.status === 401) {
+    window.dispatchEvent(new CustomEvent('auth-required'))
+    throw new Error('Authentication required')
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw new Error(`${res.status}: ${text}`)
+  }
+  return res.json()
+}
+
+export const getImageReferences = (projectId, opts) =>
+  request(`/projects/${projectId}/images`, opts)
+
+export const deleteImageReference = (projectId, imageId) =>
+  request(`/projects/${projectId}/images/${imageId}`, { method: 'DELETE' })

@@ -15,6 +15,8 @@ import {
   sendSwarmInput,
   createTemplate,
   sendBusMessage,
+  uploadImageReferences,
+  deleteImageReference,
 } from '../lib/api'
 import { projectKeys, templateKeys } from './useProjectQuery'
 import { swarmKeys, busKeys } from './useSwarmQuery'
@@ -170,6 +172,28 @@ export function useCreateTemplate(options = {}) {
     mutationFn: createTemplate,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: templateKeys.list() })
+    },
+    ...options,
+  })
+}
+
+export function useUploadImageReferences(options = {}) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ projectId, images }) => uploadImageReferences(projectId, images),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.images(projectId) })
+    },
+    ...options,
+  })
+}
+
+export function useDeleteImageReference(options = {}) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ projectId, imageId }) => deleteImageReference(projectId, imageId),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.images(projectId) })
     },
     ...options,
   })

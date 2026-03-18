@@ -42,7 +42,7 @@
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet("send", "inbox", "ack", "lesson", "channel", "help")]
+    [ValidateSet("send", "inbox", "ack", "lesson", "channel", "sync-lessons", "help")]
     [string]$Command = "help",
 
     [string]$To,
@@ -322,16 +322,113 @@ function Get-ChannelMessages {
     }
 }
 
+function Sync-LessonsToFile {
+    <#
+    .SYNOPSIS
+        Sync lessons from message bus to tasks/lessons.md
+    #>
+    $lessonsFile = "tasks/lessons.md"
+    $phaseFile = ".claude/swarm-phase.json"
+
+    # Read last sync timestamp
+    $since = ""
+    if (Test-Path $phaseFile) {
+        try {
+            $phaseData = Get-Content $phaseFile -Raw | ConvertFrom-Json
+            if ($phaseData.last_lesson_sync) {
+                $since = "?since=$($phaseData.last_lesson_sync)"
+            }
+        }
+        catch { }
+    }
+
+    # Query lessons from bus
+    $result = Invoke-BusApi -Method "GET" -Endpoint "/channels/lessons/messages$since"
+
+    if (-not $result.messages -or $result.messages.Count -eq 0) {
+        Write-Host "[SYNC] No new lessons to sync" -ForegroundColor Cyan
+        return
+    }
+
+    # Ensure lessons file exists
+    if (-not (Test-Path $lessonsFile)) {
+        @"
+# Lessons Learned
+
+ALL AGENTS: Read this file at session start before writing any code.
+After ANY correction, failed attempt, or discovery, add a lesson here.
+
+## Format
+### [Agent] Short description
+- What happened: ...
+- Root cause: ...
+- Rule: ...
+
+## Lessons
+"@ | Out-File -FilePath $lessonsFile -Encoding UTF8
+    }
+
+    # Read existing for dedup
+    $existingContent = Get-Content $lessonsFile -Raw
+    $syncCount = 0
+    $latestTimestamp = ""
+
+    foreach ($msg in $result.messages) {
+        $bodyTrimmed = $msg.body.Trim()
+
+        if ($existingContent -and $existingContent.Contains($bodyTrimmed)) {
+            if ($msg.created_at -gt $latestTimestamp) { $latestTimestamp = $msg.created_at }
+            continue
+        }
+
+        $title = $bodyTrimmed
+        if ($title.Length -gt 60) { $title = $title.Substring(0, 57) + "..." }
+
+        $agentName = $msg.from_agent
+        if (-not $agentName) { $agentName = "Unknown" }
+
+        $entry = @"
+
+### [$agentName] $title
+- What happened: $bodyTrimmed
+- Source: bus message $($msg.id) at $($msg.created_at)
+"@
+
+        Add-Content -Path $lessonsFile -Value $entry -Encoding UTF8
+        $syncCount++
+        if ($msg.created_at -gt $latestTimestamp) { $latestTimestamp = $msg.created_at }
+        $existingContent += $entry
+    }
+
+    # Update sync timestamp
+    if ($latestTimestamp) {
+        try {
+            $phaseData = @{}
+            if (Test-Path $phaseFile) {
+                $phaseData = Get-Content $phaseFile -Raw | ConvertFrom-Json -AsHashtable
+            }
+            $phaseData["last_lesson_sync"] = $latestTimestamp
+            $phaseData | ConvertTo-Json | Out-File -FilePath $phaseFile -Encoding UTF8
+        }
+        catch {
+            Write-Host "[WARN] Failed to update sync timestamp: $_" -ForegroundColor Yellow
+        }
+    }
+
+    Write-Host "[SYNC] Synced $syncCount new lesson(s) to $lessonsFile" -ForegroundColor Green
+}
+
 function Show-Help {
     Write-Host ""
     Write-Host "swarm-msg - Message bus CLI for Claude agents" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Commands:" -ForegroundColor Yellow
-    Write-Host "  send     Send a message to an agent or channel"
-    Write-Host "  inbox    Check your inbox for pending messages"
-    Write-Host "  ack      Acknowledge a message"
-    Write-Host "  lesson   Post a lesson to the #lessons channel"
-    Write-Host "  channel  Read messages from a channel"
+    Write-Host "  send          Send a message to an agent or channel"
+    Write-Host "  inbox         Check your inbox for pending messages"
+    Write-Host "  ack           Acknowledge a message"
+    Write-Host "  lesson        Post a lesson to the #lessons channel"
+    Write-Host "  channel       Read messages from a channel"
+    Write-Host "  sync-lessons  Sync lessons from bus to tasks/lessons.md"
     Write-Host ""
     Write-Host "Usage:" -ForegroundColor Yellow
     Write-Host "  swarm-msg send --to <agent|all> --body <text> [--channel <ch>] [--priority <p>]"
@@ -371,6 +468,9 @@ switch ($Command) {
     }
     "lesson" {
         Post-Lesson -Body $Body
+    }
+    "sync-lessons" {
+        Sync-LessonsToFile
     }
     "channel" {
         Get-ChannelMessages -Channel $Channel -Since $Since

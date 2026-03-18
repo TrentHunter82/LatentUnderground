@@ -20,7 +20,7 @@ ORCHESTRATION RULES (non-negotiable):
    - Use findings to guide your implementation approach
    - Do this ONCE at the start of your session, not before every task.
 5. VERIFY BEFORE DONE: Never mark [x] without proving it works. Run tests, check logs, demonstrate correctness.
-6. SELF-IMPROVE: After any failed attempt or correction, add a lesson to tasks/lessons.md immediately.
+6. SELF-IMPROVE: After any failed attempt or correction, post a lesson via: powershell .swarm/bus/swarm-msg.ps1 lesson "description". The supervisor auto-syncs lessons to tasks/lessons.md.
 7. SPAWN TEAMS: You are a team lead, not a solo developer. Use the Task tool aggressively to parallelize work:
    - Break each task into independent subtasks and launch multiple subagents IN PARALLEL
    - Use subagents for: research, writing tests, implementing independent modules, code exploration
@@ -186,7 +186,7 @@ YOUR WORKFLOW:
 9. Mark [x] in tasks/TASKS.md only after verification passes
 10. Log to logs/activity.log: [Claude-1] Done: <task> - brief summary
 11. Update .claude/heartbeats/Claude-1.heartbeat
-12. If anything went wrong or you learned something: update tasks/lessons.md
+12. If anything went wrong or you learned something: powershell .swarm/bus/swarm-msg.ps1 lesson "description"
 13. Repeat until all YOUR tasks are done
 
 

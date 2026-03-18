@@ -220,8 +220,8 @@ class TestAgentFilteredOutput:
 class TestAgentTargetedInput:
     """Tests for POST /api/swarm/input with agent targeting."""
 
-    async def test_input_to_specific_agent_with_stdin(self, client, created_project):
-        """Sending input with agent field should target only that agent."""
+    async def test_input_to_specific_agent_via_bus(self, client, created_project):
+        """Sending input with agent field should create a bus message targeting that agent."""
         from app.routes.swarm import _agent_processes, _agent_key, _project_output_buffers
         import aiosqlite
         from app import database
@@ -237,10 +237,8 @@ class TestAgentTargetedInput:
         key2 = _agent_key(pid, "Claude-2")
         mock1 = MagicMock()
         mock1.poll.return_value = None
-        mock1.stdin = MagicMock()
         mock2 = MagicMock()
         mock2.poll.return_value = None
-        mock2.stdin = MagicMock()
         _agent_processes[key1] = mock1
         _agent_processes[key2] = mock2
         _project_output_buffers[pid] = []
@@ -251,16 +249,25 @@ class TestAgentTargetedInput:
             "agent": "Claude-1",
         })
         assert resp.status_code == 200
+        assert resp.json()["status"] == "sent"
 
-        # Only Claude-1 should have received input
-        mock1.stdin.write.assert_called_once()
-        mock2.stdin.write.assert_not_called()
+        # Verify bus message was created for Claude-1
+        async with aiosqlite.connect(database.DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            row = await (await db.execute(
+                "SELECT * FROM bus_messages WHERE project_id = ? AND to_agent = 'Claude-1' "
+                "ORDER BY created_at DESC LIMIT 1",
+                (pid,),
+            )).fetchone()
+            assert row is not None
+            assert row["body"] == "hello"
+            assert row["channel"] == "critical"
 
         _agent_processes.pop(key1, None)
         _agent_processes.pop(key2, None)
 
-    async def test_input_rejected_for_print_mode_agents(self, client, created_project):
-        """Agents in --print mode (stdin=DEVNULL) should reject input with 400."""
+    async def test_input_broadcast_creates_bus_messages(self, client, created_project):
+        """Broadcasting input (no agent field) should create bus message for all agents."""
         from app.routes.swarm import _agent_processes, _agent_key
         import aiosqlite
         from app import database
@@ -275,10 +282,8 @@ class TestAgentTargetedInput:
         key2 = _agent_key(pid, "Claude-2")
         mock1 = MagicMock()
         mock1.poll.return_value = None
-        mock1.stdin = None  # --print mode
         mock2 = MagicMock()
         mock2.poll.return_value = None
-        mock2.stdin = None  # --print mode
         _agent_processes[key1] = mock1
         _agent_processes[key2] = mock2
 
@@ -286,8 +291,19 @@ class TestAgentTargetedInput:
             "project_id": pid,
             "text": "hello all",
         })
-        assert resp.status_code == 400
-        assert "print mode" in resp.json()["detail"].lower()
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "sent"
+
+        # Verify bus message was created with to_agent="all"
+        async with aiosqlite.connect(database.DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            row = await (await db.execute(
+                "SELECT * FROM bus_messages WHERE project_id = ? AND to_agent = 'all' "
+                "ORDER BY created_at DESC LIMIT 1",
+                (pid,),
+            )).fetchone()
+            assert row is not None
+            assert row["body"] == "hello all"
 
         _agent_processes.pop(key1, None)
         _agent_processes.pop(key2, None)
@@ -318,8 +334,8 @@ class TestAgentTargetedInput:
 
         _agent_processes.pop(key, None)
 
-    async def test_input_echo_includes_agent_label(self, client, created_project):
-        """Targeted input should echo with agent label in project buffer."""
+    async def test_input_echo_includes_bus_label(self, client, created_project):
+        """Targeted input should echo with bus label in project buffer."""
         from app.routes.swarm import _agent_processes, _agent_key, _project_output_buffers
         import aiosqlite
         from app import database
@@ -333,7 +349,6 @@ class TestAgentTargetedInput:
         key = _agent_key(pid, "Claude-1")
         mock = MagicMock()
         mock.poll.return_value = None
-        mock.stdin = MagicMock()  # has stdin for this test
         _agent_processes[key] = mock
         _project_output_buffers[pid] = []
 
@@ -344,7 +359,7 @@ class TestAgentTargetedInput:
         })
 
         buf = _project_output_buffers.get(pid, [])
-        assert any("[stdin:Claude-1]" in line for line in buf)
+        assert any("[bus:human->Claude-1]" in line for line in buf)
 
         _agent_processes.pop(key, None)
 

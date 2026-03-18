@@ -312,6 +312,7 @@ class ETagMiddleware(BaseHTTPMiddleware):
 
     # Skip streaming/SSE endpoints and health checks (fast enough to always send)
     _SKIP_PATHS = {"/api/health", "/api/system"}
+    _MAX_ETAG_BODY = 5 * 1024 * 1024  # 5MB — skip ETag for larger responses
 
     async def dispatch(self, request: Request, call_next):
         # Only compute ETags for GET requests on API endpoints
@@ -331,6 +332,16 @@ class ETagMiddleware(BaseHTTPMiddleware):
         body = b""
         async for chunk in response.body_iterator:
             body += chunk
+
+        # Skip ETag for oversized responses to prevent CPU spikes
+        if len(body) > self._MAX_ETAG_BODY:
+            from starlette.responses import Response as StarletteResponse
+            return StarletteResponse(
+                content=body,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                media_type=response.media_type,
+            )
 
         # Compute weak ETag from content hash
         etag = f'W/"{hashlib.blake2b(body, digest_size=16).hexdigest()}"'

@@ -92,6 +92,12 @@ class ProjectConfig(BaseModel):
         description="Output guardrail rules validated when all agents exit (None = disabled)",
         max_length=20,
     )
+    # Claude CLI max-turns: how many agentic turns per agent session
+    max_turns: Optional[int] = Field(
+        None, ge=10, le=1000,
+        description="Max agentic turns per agent session (10-1000, default 200). "
+                    "Higher values let agents complete more work before exiting.",
+    )
     # Auto-queue: automatically resume swarm when all agents exit
     auto_queue: Optional[bool] = Field(
         None,

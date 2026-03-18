@@ -8,6 +8,7 @@ import {
   getProjectQuota,
   getProjectGuardrails,
   getTemplates,
+  getImageReferences,
 } from '../lib/api'
 
 // Query key factories for consistent cache management
@@ -21,6 +22,7 @@ export const projectKeys = {
   health: (id) => [...projectKeys.detail(id), 'health'],
   quota: (id) => [...projectKeys.detail(id), 'quota'],
   guardrails: (id) => [...projectKeys.detail(id), 'guardrails'],
+  images: (id) => [...projectKeys.detail(id), 'images'],
 }
 
 export function useProjects({ showArchived = false } = {}) {
@@ -77,6 +79,17 @@ export function useProjectGuardrails(projectId, options = {}) {
     queryFn: () => getProjectGuardrails(projectId),
     enabled: !!projectId,
     staleTime: 30_000,
+    ...options,
+  })
+}
+
+export function useImageReferences(projectId, options = {}) {
+  return useQuery({
+    queryKey: projectKeys.images(projectId),
+    queryFn: () => getImageReferences(projectId),
+    enabled: !!projectId,
+    staleTime: 30_000,
+    retry: false,
     ...options,
   })
 }

@@ -133,7 +133,7 @@ class TestDatabaseMigrations:
                     "SELECT version FROM schema_version ORDER BY version"
                 )).fetchall()
                 versions = [r["version"] for r in rows]
-                assert versions == [1, 2, 3, 4, 5, 6]
+                assert versions == list(range(1, database.SCHEMA_VERSION + 1))
         finally:
             database.DB_PATH = original
 

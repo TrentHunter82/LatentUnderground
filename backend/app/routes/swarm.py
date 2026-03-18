@@ -60,6 +60,8 @@ logger = logging.getLogger("latent.swarm")
 _MAX_OUTPUT_LINES = int(os.environ.get("LU_OUTPUT_BUFFER_LINES", "5000"))
 # Truncate individual lines longer than this to prevent memory abuse
 _MAX_LINE_LENGTH = 4000
+# Per-agent session IDs for resuming sessions on auto-queue restart
+_agent_session_ids: dict[str, str] = {}  # key -> Claude Code session_id
 
 
 def _pid_alive(pid: int | None) -> bool:
@@ -126,7 +128,7 @@ _RATE_LIMIT_PATTERNS = [
     r"quota exceeded",
     r"usage limit",
     r"requests? per (minute|hour|day)",
-    r"429",  # HTTP status code
+    r"(?:status|code|http)\s*[=:_\s]\s*429",  # HTTP 429 status (anchored to avoid false positives)
 ]
 _RATE_LIMIT_REGEX = re.compile("|".join(_RATE_LIMIT_PATTERNS), re.IGNORECASE)
 
@@ -620,6 +622,10 @@ def _cleanup_project_agents(project_id: int):
     _known_directives.pop(project_id, None)
     _project_resource_usage.pop(project_id, None)
     _current_run_ids.pop(project_id, None)
+    # Clear session IDs (no longer resumable after full cleanup)
+    sid_keys = [k for k in _agent_session_ids if k.startswith(f"{project_id}:")]
+    for k in sid_keys:
+        _agent_session_ids.pop(k, None)
     # Clear circuit breakers for this project's agents
     cb_keys = [k for k in _circuit_breakers if k.startswith(f"{project_id}:")]
     for k in cb_keys:
@@ -850,6 +856,7 @@ def _drain_agent_stream(
 
     max_log_bytes = config.OUTPUT_LOG_MAX_MB * 1024 * 1024
     lines_since_check = 0
+    session_captured = False  # One-time flag for session_id capture
     try:
         for line in iter(stream.readline, b""):
             if stop_event.is_set():
@@ -857,6 +864,18 @@ def _drain_agent_stream(
             raw = line.decode("utf-8", errors="replace").rstrip()
             if not raw:
                 continue
+
+            # Capture session_id from the init event (first line of stream-json)
+            if is_stdout and not session_captured:
+                try:
+                    init_obj = json.loads(raw)
+                    if init_obj.get("type") == "system" and init_obj.get("subtype") == "init":
+                        sid = init_obj.get("session_id")
+                        if sid:
+                            _agent_session_ids[key] = sid
+                            session_captured = True
+                except (json.JSONDecodeError, ValueError):
+                    pass
 
             if is_stdout:
                 text = _parse_stream_json_line(raw)
@@ -1018,6 +1037,7 @@ async def _get_project_auto_queue(project_id: int) -> tuple[bool, int]:
     except Exception:
         pass
     return (False, 30)
+
 
 
 _GUARDRAIL_MAX_PATTERN_LEN = 200  # Match output search limit
@@ -1284,7 +1304,7 @@ async def _auto_queue_relaunch_agents(project_id: int) -> bool:
         # instead of cancel_drain_tasks to avoid canceling our own supervisor)
         await asyncio.to_thread(_terminate_project_agents, project_id)
 
-        # Spawn agents
+        # Spawn agents (resume previous sessions when possible)
         agents_launched = []
         first_pid = None
 
@@ -1301,6 +1321,31 @@ async def _auto_queue_relaunch_agents(project_id: int) -> bool:
 
             key = _agent_key(project_id, agent_name)
 
+            # Build CLI args — resume previous session if available
+            prev_session = _agent_session_ids.get(key)
+            if prev_session:
+                cli_args = [
+                    *claude_cmd,
+                    "--print",
+                    "--output-format", "stream-json",
+                    "--resume", prev_session,
+                    "--dangerously-skip-permissions",
+                    "--verbose",
+                    f"Continue working on the project. Read tasks/TASKS.md for your "
+                    f"section (## {agent_name}) and work on the first unchecked [ ] task. "
+                    f"Do NOT re-explore files already read — start implementing immediately.",
+                ]
+                logger.info("Auto-queue: resuming session %s for %s", prev_session[:8], agent_name)
+            else:
+                cli_args = [
+                    *claude_cmd,
+                    "--print",
+                    "--output-format", "stream-json",
+                    "--dangerously-skip-permissions",
+                    "--verbose",
+                    prompt_text,
+                ]
+
             try:
                 spawn_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
                 spawn_env["AGENT_NAME"] = agent_name
@@ -1313,17 +1358,7 @@ async def _auto_queue_relaunch_agents(project_id: int) -> bool:
                 )
                 if os.name == "nt":
                     popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-                process = subprocess.Popen(
-                    [
-                        *claude_cmd,
-                        "--print",
-                        "--output-format", "stream-json",
-                        "--dangerously-skip-permissions",
-                        "--verbose",
-                        prompt_text,
-                    ],
-                    **popen_kwargs,
-                )
+                process = subprocess.Popen(cli_args, **popen_kwargs)
             except Exception as e:
                 logger.error("Auto-queue: failed to spawn %s: %s", agent_name, e)
                 with _buffers_lock:
@@ -1410,8 +1445,8 @@ async def _auto_queue_relaunch_agents(project_id: int) -> bool:
         logger.info("Auto-queue: successfully relaunched %d agents for project %d", len(agents_launched), project_id)
         return True
 
-    except Exception:
-        logger.error("Auto-queue: relaunch failed for project %d", project_id, exc_info=True)
+    except Exception as exc:
+        logger.error("Auto-queue: relaunch failed for project %d: %s", project_id, exc, exc_info=True)
         return False
 
 
@@ -1783,7 +1818,8 @@ async def _supervisor_loop(project_id: int):
                     try:
                         async with aiosqlite.connect(database.DB_PATH) as db:
                             await db.execute(
-                                "UPDATE projects SET status = 'stopped' WHERE id = ?",
+                                "UPDATE projects SET status = 'stopped', swarm_pid = NULL, "
+                                "updated_at = datetime('now') WHERE id = ?",
                                 (project_id,),
                             )
                             await db.commit()
@@ -1811,7 +1847,8 @@ async def _supervisor_loop(project_id: int):
         try:
             async with aiosqlite.connect(database.DB_PATH) as db:
                 await db.execute(
-                    "UPDATE projects SET status = 'stopped', swarm_pid = NULL WHERE id = ?",
+                    "UPDATE projects SET status = 'stopped', swarm_pid = NULL, "
+                    "updated_at = datetime('now') WHERE id = ?",
                     (project_id,),
                 )
                 await db.commit()
@@ -1861,6 +1898,7 @@ class SwarmInputRequest(BaseModel):
     text: str = Field(max_length=1000, examples=["y"])
     agent: Optional[str] = Field(
         default=None,
+        max_length=50,
         description="Target specific agent (e.g. 'Claude-1'). Omit to send to all.",
     )
 
@@ -2292,9 +2330,14 @@ async def stop_swarm(req: SwarmStopRequest, db: aiosqlite.Connection = Depends(g
 async def swarm_input(req: SwarmInputRequest, db: aiosqlite.Connection = Depends(get_db)):
     """Send a message to agent(s) via the message bus.
 
-    Routes human messages through the bus instead of broken stdin injection.
-    Messages are delivered with critical channel and high priority for
-    immediate agent pickup.
+    Creates a bus_messages row with channel='critical' and priority='high',
+    then writes an attention file (.claude/attention/{agent}.attention) so
+    agents pick up the message on their next pre-tool check.  Also broadcasts
+    via WebSocket for real-time UI visibility.
+
+    Note: Agent processes use stdin=DEVNULL so stdin-based input is not
+    possible.  This endpoint is the supported mechanism for human-to-agent
+    communication during a swarm run.
     """
     import uuid
 
@@ -2480,6 +2523,21 @@ async def swarm_status(project_id: int, db: aiosqlite.Connection = Depends(get_d
         except Exception:
             logger.debug("Failed to read phase file %s", phase_file, exc_info=True)
 
+    # Rate limit status
+    rate_limit_info = {"active": False}
+    rl_state = _rate_limit_state.get(project_id)
+    if rl_state:
+        now = time.time()
+        if rl_state["reset_at"] > now:
+            rate_limit_info = {
+                "active": True,
+                "reset_at": datetime.fromtimestamp(rl_state["reset_at"]).isoformat(),
+                "detected_by": rl_state.get("detected_by", ""),
+                "seconds_remaining": int(rl_state["reset_at"] - now),
+            }
+        else:
+            _rate_limit_state.pop(project_id, None)
+
     return {
         "project_id": project_id,
         "status": project["status"],
@@ -2489,6 +2547,7 @@ async def swarm_status(project_id: int, db: aiosqlite.Connection = Depends(get_d
         "signals": signals,
         "tasks": task_progress,
         "phase": phase_info,
+        "rate_limit": rate_limit_info,
     }
 
 
@@ -2589,8 +2648,133 @@ async def stop_agent(project_id: int, agent_name: str, db: aiosqlite.Connection 
 
 
 # ---------------------------------------------------------------------------
-# POST /agents/{project_id}/{agent_name}/restart — restart a stopped agent
+# Helper functions for agent restart (must be above the decorator)
 # ---------------------------------------------------------------------------
+
+def _spawn_and_register_agent(
+    project_id: int,
+    agent_name: str,
+    folder: Path,
+    claude_cmd: list[str],
+    popen_kwargs: dict,
+) -> subprocess.Popen:
+    """Spawn a new agent process, set up drain threads, and register in tracking dicts.
+
+    Caller must hold the project lock.  Raises on spawn failure.
+    """
+    key = _agent_key(project_id, agent_name)
+
+    # Clean up old process state
+    old_evt = _agent_drain_events.pop(key, None)
+    if old_evt:
+        old_evt.set()
+    old_threads = _agent_drain_threads.pop(key, None)
+    if old_threads:
+        for t in old_threads:
+            t.join(timeout=2)
+    _agent_processes.pop(key, None)
+
+    # Read prompt file
+    prompt_file = folder / ".claude" / "prompts" / f"{agent_name}.txt"
+    if not prompt_file.exists():
+        raise FileNotFoundError(f"Prompt file not found for {agent_name}")
+    prompt_text = prompt_file.read_text(encoding="utf-8-sig").strip()
+    if not prompt_text:
+        raise ValueError(f"Empty prompt file for {agent_name}")
+
+    # Spawn
+    process = subprocess.Popen(
+        [*claude_cmd, "--print", "--output-format", "stream-json",
+         "--dangerously-skip-permissions", "--verbose", prompt_text],
+        **popen_kwargs,
+    )
+
+    # Log file
+    log_dir = folder / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    _agent_log_files[key] = log_dir / f"{agent_name}_{timestamp}.output.log"
+
+    # Drain threads
+    stop_event = threading.Event()
+    stdout_thread = threading.Thread(
+        target=_drain_agent_stream,
+        args=(project_id, agent_name, process.stdout, "stdout", stop_event, folder),
+        daemon=True,
+    )
+    stderr_thread = threading.Thread(
+        target=_drain_agent_stream,
+        args=(project_id, agent_name, process.stderr, "stderr", stop_event, folder),
+        daemon=True,
+    )
+    stdout_thread.start()
+    stderr_thread.start()
+
+    # Register in tracking dicts
+    _agent_processes[key] = process
+    _agent_drain_events[key] = stop_event
+    _agent_drain_threads[key] = [stdout_thread, stderr_thread]
+    _agent_started_at[key] = datetime.now().isoformat()
+    _agent_line_counts[key] = 0
+
+    with _buffers_lock:
+        _agent_output_buffers.setdefault(key, deque(maxlen=_MAX_OUTPUT_LINES))
+        buf = _project_output_buffers.setdefault(
+            project_id, deque(maxlen=_MAX_OUTPUT_LINES),
+        )
+        buf.append(f"[{agent_name}] --- Agent restarted (pid={process.pid}) ---")
+
+    # Track restart count
+    usage = _project_resource_usage.setdefault(
+        project_id, {"agent_count": 0, "restart_counts": {}, "started_at": time.time()},
+    )
+    usage["restart_counts"][agent_name] = usage["restart_counts"].get(agent_name, 0) + 1
+
+    _record_event_sync(project_id, agent_name, "agent_restarted", f"pid={process.pid}")
+    return process
+
+
+def _check_restart_quota(project_id: int, agent_name: str, quota: dict) -> str | None:
+    """Return an error reason string if restart is blocked by quota/circuit-breaker, else None."""
+    key = _agent_key(project_id, agent_name)
+
+    # Quota enforcement
+    max_restarts = quota.get("max_restarts_per_agent")
+    if max_restarts is not None:
+        usage = _project_resource_usage.get(project_id, {})
+        current = usage.get("restart_counts", {}).get(agent_name, 0)
+        if current >= max_restarts:
+            return f"restart quota exceeded (limit: {max_restarts}, used: {current})"
+
+    # Circuit breaker
+    cb_max = quota.get("circuit_breaker_max_failures")
+    if cb_max is not None:
+        cb_window = quota.get("circuit_breaker_window_seconds") or _CB_DEFAULT_WINDOW_SECONDS
+        cb_recovery = quota.get("circuit_breaker_recovery_seconds") or _CB_DEFAULT_RECOVERY_SECONDS
+        allowed, reason = _cb_check_restart_allowed(key, cb_max, cb_window, cb_recovery)
+        if not allowed:
+            return reason
+        cb = _get_circuit_breaker(key)
+        if cb["state"] == "half-open":
+            _cb_record_probe_start(key)
+
+    return None
+
+
+def _build_spawn_kwargs(folder: Path) -> dict:
+    """Build popen_kwargs for agent spawning."""
+    spawn_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    popen_kwargs = dict(
+        cwd=str(folder),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=spawn_env,
+    )
+    if os.name == "nt":
+        popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    return popen_kwargs
+
 
 @router.post("/agents/{project_id}/{agent_name}/restart", response_model=AgentStopOut,
              summary="Restart individual agent", responses={**_404, **_400})
@@ -2609,133 +2793,100 @@ async def restart_agent(project_id: int, agent_name: str, db: aiosqlite.Connecti
 
     lock = _get_project_lock(project_id)
     async with lock:
-        project = dict(row)
-        folder = Path(project["folder_path"])
+        folder = Path(dict(row)["folder_path"])
         key = _agent_key(project_id, agent_name)
 
-        # Check if agent is currently alive — can't restart a running agent
+        # Can't restart a running agent
         proc = _agent_processes.get(key)
         if proc and proc.poll() is None:
             raise HTTPException(status_code=400, detail=f"Agent {agent_name} is still running")
 
-        # --- Quota enforcement: max_restarts_per_agent ---
         quota = await _get_project_quota(project_id)
-        max_restarts = quota.get("max_restarts_per_agent")
-        usage = _project_resource_usage.get(project_id, {})
-        restart_counts = usage.get("restart_counts", {})
-        current_restarts = restart_counts.get(agent_name, 0)
-        if max_restarts is not None and current_restarts >= max_restarts:
-            raise HTTPException(
-                status_code=429,
-                detail=f"Restart quota exceeded for {agent_name} (limit: {max_restarts}, used: {current_restarts})",
-            )
+        block_reason = _check_restart_quota(project_id, agent_name, quota)
+        if block_reason:
+            raise HTTPException(status_code=429, detail=block_reason)
 
-        # --- Circuit breaker check ---
-        cb_max = quota.get("circuit_breaker_max_failures")
-        if cb_max is not None:
-            cb_window = quota.get("circuit_breaker_window_seconds") or _CB_DEFAULT_WINDOW_SECONDS
-            cb_recovery = quota.get("circuit_breaker_recovery_seconds") or _CB_DEFAULT_RECOVERY_SECONDS
-            allowed, reason = _cb_check_restart_allowed(key, cb_max, cb_window, cb_recovery)
-            if not allowed:
-                raise HTTPException(status_code=429, detail=reason)
-            cb = _get_circuit_breaker(key)
-            if cb["state"] == "half-open":
-                _cb_record_probe_start(key)
-
-        # Read the agent's prompt file
-        prompt_file = folder / ".claude" / "prompts" / f"{agent_name}.txt"
-        if not prompt_file.exists():
-            raise HTTPException(
-                status_code=400,
-                detail=f"Prompt file not found for {agent_name} — agent may not have been launched previously",
-            )
-        try:
-            prompt_text = prompt_file.read_text(encoding="utf-8-sig").strip()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to read prompt file: {e}")
-        if not prompt_text:
-            raise HTTPException(status_code=400, detail=f"Empty prompt file for {agent_name}")
-
-        # Find claude CLI
         try:
             claude_cmd = _find_claude_cmd()
         except FileNotFoundError:
             raise HTTPException(status_code=400, detail="claude CLI not found")
 
-        # Clean up old process state for this agent
-        old_evt = _agent_drain_events.pop(key, None)
-        if old_evt:
-            old_evt.set()
-        old_threads = _agent_drain_threads.pop(key, None)
-        if old_threads:
-            for t in old_threads:
-                t.join(timeout=2)
-        _agent_processes.pop(key, None)
-
-        # Spawn new process — strip CLAUDECODE env var to avoid nested session error
-        spawn_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
-        popen_kwargs = dict(
-            cwd=str(folder),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=spawn_env,
-        )
-        if os.name == "nt":
-            popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        popen_kwargs = _build_spawn_kwargs(folder)
 
         try:
-            process = subprocess.Popen(
-                [*claude_cmd, "--print", "--output-format", "stream-json",
-                 "--dangerously-skip-permissions", "--verbose", prompt_text],
-                **popen_kwargs,
+            process = _spawn_and_register_agent(
+                project_id, agent_name, folder, claude_cmd, popen_kwargs,
             )
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to spawn {agent_name}: {e}")
 
-        # Set up log file
-        log_dir = folder / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        _agent_log_files[key] = log_dir / f"{agent_name}_{timestamp}.output.log"
-
-        # Start drain threads (pass folder for rate limit signal writing)
-        stop_event = threading.Event()
-        stdout_thread = threading.Thread(
-            target=_drain_agent_stream,
-            args=(project_id, agent_name, process.stdout, "stdout", stop_event, folder),
-            daemon=True,
-        )
-        stderr_thread = threading.Thread(
-            target=_drain_agent_stream,
-            args=(project_id, agent_name, process.stderr, "stderr", stop_event, folder),
-            daemon=True,
-        )
-        stdout_thread.start()
-        stderr_thread.start()
-
-        # Register in tracking dicts
-        _agent_processes[key] = process
-        _agent_drain_events[key] = stop_event
-        _agent_drain_threads[key] = [stdout_thread, stderr_thread]
-        _agent_started_at[key] = datetime.now().isoformat()
-        _agent_line_counts[key] = 0  # Reset line count for milestone tracking
-
-        with _buffers_lock:
-            _agent_output_buffers.setdefault(key, deque(maxlen=_MAX_OUTPUT_LINES))
-            buf = _project_output_buffers.setdefault(
-                project_id, deque(maxlen=_MAX_OUTPUT_LINES),
-            )
-            buf.append(f"[{agent_name}] --- Agent restarted (pid={process.pid}) ---")
-
-        # Track restart count for quota enforcement
-        usage = _project_resource_usage.setdefault(project_id, {"agent_count": 0, "restart_counts": {}, "started_at": time.time()})
-        usage["restart_counts"][agent_name] = usage["restart_counts"].get(agent_name, 0) + 1
-
-        _record_event_sync(project_id, agent_name, "agent_restarted", f"pid={process.pid}")
-
         logger.info("Restarted agent %s (pid=%d) for project %d", agent_name, process.pid, project_id)
         return {"agent": agent_name, "project_id": project_id, "status": "restarted"}
+
+
+# ---------------------------------------------------------------------------
+# POST /agents/{project_id}/restart-all — bulk restart dead agents
+# ---------------------------------------------------------------------------
+
+@router.post("/agents/{project_id}/restart-all",
+             summary="Restart all stopped agents", responses={**_404, **_400})
+async def restart_all_agents(project_id: int, db: aiosqlite.Connection = Depends(get_db)):
+    """Restart all stopped/dead agents for a project in one call.
+
+    Applies the same quota and circuit breaker checks as individual restart.
+    Agents that fail checks are skipped with a reason.
+    """
+    row = await (await db.execute("SELECT * FROM projects WHERE id = ?", (project_id,))).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    lock = _get_project_lock(project_id)
+    async with lock:
+        folder = Path(dict(row)["folder_path"])
+        quota = await _get_project_quota(project_id)
+
+        # Find dead agents
+        keys = _project_agent_keys(project_id)
+        dead_agents = []
+        for key in keys:
+            proc = _agent_processes.get(key)
+            if not proc or proc.poll() is not None:
+                dead_agents.append(key.split(":")[1])
+
+        if not dead_agents:
+            return {"project_id": project_id, "restarted": [], "skipped": [], "message": "No dead agents to restart"}
+
+        try:
+            claude_cmd = _find_claude_cmd()
+        except FileNotFoundError:
+            raise HTTPException(status_code=400, detail="claude CLI not found")
+
+        popen_kwargs = _build_spawn_kwargs(folder)
+        restarted = []
+        skipped = []
+
+        for agent_name in dead_agents:
+            block_reason = _check_restart_quota(project_id, agent_name, quota)
+            if block_reason:
+                skipped.append({"agent": agent_name, "reason": block_reason})
+                continue
+
+            try:
+                process = _spawn_and_register_agent(
+                    project_id, agent_name, folder, claude_cmd, popen_kwargs,
+                )
+                restarted.append(agent_name)
+            except (FileNotFoundError, ValueError) as e:
+                skipped.append({"agent": agent_name, "reason": str(e)})
+            except Exception as e:
+                skipped.append({"agent": agent_name, "reason": f"spawn failed: {e}"})
+
+        logger.info("Restart-all for project %d: restarted=%s, skipped=%d", project_id, restarted, len(skipped))
+        return {"project_id": project_id, "restarted": restarted, "skipped": skipped}
 
 
 # ---------------------------------------------------------------------------

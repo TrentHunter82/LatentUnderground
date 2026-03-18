@@ -4,15 +4,15 @@ Latent Underground Add Featutures
 
 ## Claude-1 [Backend/Core]
 - [x] Analyze project structure and identify specific tasks
-- [ ] Fix sqlite3.connect() missing timeout in _monitor_pid (deadlock risk)
-- [ ] Add mmap_size PRAGMA to ConnectionPool for consistency with init_db
-- [ ] Fix project deletion cleanup - clean ALL swarm tracking dicts
-- [ ] Add ETag middleware size limit to prevent OOM on large responses
-- [ ] Fix auto-queue failure to properly log and update project status
-- [ ] Add rate limit status info to /status endpoint response
-- [ ] Add POST /agents/{project_id}/restart-all bulk restart endpoint
-- [ ] Fix/document broken /input endpoint (stdin=DEVNULL makes it non-functional)
-- [ ] Run backend tests to verify all changes pass
+- [x] Fix sqlite3.connect() missing timeout in _monitor_pid (deadlock risk)
+- [x] Add mmap_size PRAGMA to ConnectionPool for consistency with init_db
+- [x] Fix project deletion cleanup - clean ALL swarm tracking dicts
+- [x] Add ETag middleware size limit to prevent OOM on large responses
+- [x] Fix auto-queue failure to properly log and update project status
+- [x] Add rate limit status info to /status endpoint response
+- [x] Add POST /agents/{project_id}/restart-all bulk restart endpoint
+- [x] Fix/document broken /input endpoint (stdin=DEVNULL makes it non-functional)
+- [x] Run backend tests to verify all changes pass
 
 ## Claude-2 [Frontend/Interface]
 - [ ] Set up UI scaffolding

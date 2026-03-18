@@ -152,12 +152,11 @@ class TestMigration004:
             database.DB_PATH = original
 
     @pytest.mark.asyncio
-    async def test_schema_version_is_4(self):
+    async def test_schema_version_matches_migrations(self):
         """SCHEMA_VERSION constant matches migration count."""
         from app.database import SCHEMA_VERSION, _MIGRATIONS
-        assert SCHEMA_VERSION == 6
-        assert len(_MIGRATIONS) == 6
-        assert _MIGRATIONS[-1][0] == 6
+        assert SCHEMA_VERSION == len(_MIGRATIONS)
+        assert _MIGRATIONS[-1][0] == SCHEMA_VERSION
 
 
 # ---------------------------------------------------------------------------

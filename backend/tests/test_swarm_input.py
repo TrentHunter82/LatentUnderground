@@ -74,7 +74,7 @@ class TestSwarmInput:
             _agent_processes.pop(key, None)
 
     async def test_input_success(self, client, created_project):
-        """Successful stdin write returns 200 with status=sent."""
+        """Successful bus message returns 200 with status=sent."""
         pid = created_project["id"]
         from app import database
         from app.routes.swarm import _agent_processes, _agent_key
@@ -88,7 +88,6 @@ class TestSwarmInput:
 
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None  # Still running
-        mock_proc.stdin = MagicMock()
         mock_proc.pid = 12345
         key = _agent_key(pid, "Claude-1")
         _agent_processes[key] = mock_proc
@@ -102,9 +101,16 @@ class TestSwarmInput:
             assert data["status"] == "sent"
             assert data["project_id"] == pid
 
-            # Verify stdin was written correctly
-            mock_proc.stdin.write.assert_called_once_with(b"test command\n")
-            mock_proc.stdin.flush.assert_called_once()
+            # Verify bus message was created
+            async with aiosqlite.connect(database.DB_PATH) as db:
+                db.row_factory = aiosqlite.Row
+                row = await (await db.execute(
+                    "SELECT * FROM bus_messages WHERE project_id = ? ORDER BY created_at DESC LIMIT 1",
+                    (pid,),
+                )).fetchone()
+                assert row is not None
+                assert row["body"] == "test command"
+                assert row["to_agent"] == "all"
         finally:
             _agent_processes.pop(key, None)
 
@@ -123,7 +129,6 @@ class TestSwarmInput:
 
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None
-        mock_proc.stdin = MagicMock()
         mock_proc.pid = 12345
         key = _agent_key(pid, "Claude-1")
         _agent_processes[key] = mock_proc
@@ -135,12 +140,12 @@ class TestSwarmInput:
 
             # Check the project output buffer has the echoed input
             assert pid in _project_output_buffers
-            assert any("[stdin:" in line and "my input" in line for line in _project_output_buffers[pid])
+            assert any("[bus:human->" in line and "my input" in line for line in _project_output_buffers[pid])
         finally:
             _agent_processes.pop(key, None)
 
-    async def test_input_broken_pipe(self, client, created_project):
-        """Returns 500 when stdin write raises BrokenPipeError."""
+    async def test_input_bus_message_has_critical_priority(self, client, created_project):
+        """Bus messages from /input are created with critical channel and high priority."""
         pid = created_project["id"]
         from app import database
         from app.routes.swarm import _agent_processes, _agent_key
@@ -154,18 +159,25 @@ class TestSwarmInput:
 
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None
-        mock_proc.stdin = MagicMock()
-        mock_proc.stdin.write.side_effect = BrokenPipeError("Broken pipe")
         mock_proc.pid = 12345
         key = _agent_key(pid, "Claude-1")
         _agent_processes[key] = mock_proc
         try:
             resp = await client.post("/api/swarm/input", json={
                 "project_id": pid,
-                "text": "hello",
+                "text": "urgent message",
             })
-            assert resp.status_code == 500
-            assert "stdin" in resp.json()["detail"].lower()
+            assert resp.status_code == 200
+
+            async with aiosqlite.connect(database.DB_PATH) as db:
+                db.row_factory = aiosqlite.Row
+                row = await (await db.execute(
+                    "SELECT * FROM bus_messages WHERE project_id = ? ORDER BY created_at DESC LIMIT 1",
+                    (pid,),
+                )).fetchone()
+                assert row["channel"] == "critical"
+                assert row["priority"] == "high"
+                assert row["from_agent"] == "human"
         finally:
             _agent_processes.pop(key, None)
 
@@ -179,7 +191,7 @@ class TestSwarmInput:
         assert resp.status_code == 422
 
     async def test_input_to_specific_agent(self, client, created_project):
-        """Sending input to a specific agent only writes to that agent."""
+        """Sending input to a specific agent creates bus message targeting that agent."""
         pid = created_project["id"]
         from app import database
         from app.routes.swarm import _agent_processes, _agent_key
@@ -193,12 +205,10 @@ class TestSwarmInput:
 
         mock_proc1 = MagicMock()
         mock_proc1.poll.return_value = None
-        mock_proc1.stdin = MagicMock()
         mock_proc1.pid = 111
 
         mock_proc2 = MagicMock()
         mock_proc2.poll.return_value = None
-        mock_proc2.stdin = MagicMock()
         mock_proc2.pid = 222
 
         key1 = _agent_key(pid, "Claude-1")
@@ -212,8 +222,16 @@ class TestSwarmInput:
                 "agent": "Claude-1",
             })
             assert resp.status_code == 200
-            mock_proc1.stdin.write.assert_called_once()
-            mock_proc2.stdin.write.assert_not_called()
+
+            async with aiosqlite.connect(database.DB_PATH) as db:
+                db.row_factory = aiosqlite.Row
+                row = await (await db.execute(
+                    "SELECT * FROM bus_messages WHERE project_id = ? AND to_agent = 'Claude-1' "
+                    "ORDER BY created_at DESC LIMIT 1",
+                    (pid,),
+                )).fetchone()
+                assert row is not None
+                assert row["body"] == "targeted input"
         finally:
             _agent_processes.pop(key1, None)
             _agent_processes.pop(key2, None)

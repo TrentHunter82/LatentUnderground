@@ -52,6 +52,142 @@ function Get-TaskProgress {
     }
 }
 
+function Sync-Lessons {
+    <#
+    .SYNOPSIS
+        Sync lessons from message bus database to tasks/lessons.md
+    #>
+    $lessonsFile = "tasks/lessons.md"
+    $phaseFile = ".claude/swarm-phase.json"
+    $busConfig = Join-Path (Join-Path (Get-Location) ".swarm") "bus.json"
+
+    # Need bus config to call the API
+    if (-not (Test-Path $busConfig)) { return }
+
+    try {
+        $config = Get-Content $busConfig -Raw | ConvertFrom-Json
+    }
+    catch { return }
+
+    $baseUrl = "http://127.0.0.1:$($config.port)/api/bus/$($config.project_id)"
+
+    # Read last sync timestamp from phase file
+    $since = ""
+    if (Test-Path $phaseFile) {
+        try {
+            $phaseData = Get-Content $phaseFile -Raw | ConvertFrom-Json
+            if ($phaseData.last_lesson_sync) {
+                $since = "?since=$($phaseData.last_lesson_sync)"
+            }
+        }
+        catch { }
+    }
+
+    # Query bus API for lesson messages
+    $url = "$baseUrl/channels/lessons/messages$since"
+    $params = @{
+        Uri         = $url
+        Method      = "GET"
+        ContentType = "application/json"
+        TimeoutSec  = 5
+    }
+    if ($config.api_key) {
+        $params["Headers"] = @{ "Authorization" = "Bearer $($config.api_key)" }
+    }
+
+    try {
+        $result = Invoke-RestMethod @params
+    }
+    catch {
+        # API unreachable (swarm not running) - skip silently
+        return
+    }
+
+    if (-not $result.messages -or $result.messages.Count -eq 0) { return }
+
+    # Ensure lessons file exists with header
+    if (-not (Test-Path $lessonsFile)) {
+        @"
+# Lessons Learned
+
+ALL AGENTS: Read this file at session start before writing any code.
+After ANY correction, failed attempt, or discovery, add a lesson here.
+
+## Format
+### [Agent] Short description
+- What happened: ...
+- Root cause: ...
+- Rule: ...
+
+## Lessons
+"@ | Out-File -FilePath $lessonsFile -Encoding UTF8
+    }
+
+    # Read existing file content for dedup
+    $existingContent = Get-Content $lessonsFile -Raw
+
+    $syncCount = 0
+    $latestTimestamp = ""
+
+    foreach ($msg in $result.messages) {
+        $bodyTrimmed = $msg.body.Trim()
+
+        # Dedup: skip if body text already exists in file
+        if ($existingContent -and $existingContent.Contains($bodyTrimmed)) {
+            # Still track timestamp for sync state
+            if ($msg.created_at -gt $latestTimestamp) {
+                $latestTimestamp = $msg.created_at
+            }
+            continue
+        }
+
+        # Build lesson entry - use first 60 chars of body as title
+        $title = $bodyTrimmed
+        if ($title.Length -gt 60) {
+            $title = $title.Substring(0, 57) + "..."
+        }
+
+        $agentName = $msg.from_agent
+        if (-not $agentName) { $agentName = "Unknown" }
+
+        $entry = @"
+
+### [$agentName] $title
+- What happened: $bodyTrimmed
+- Source: bus message $($msg.id) at $($msg.created_at)
+"@
+
+        Add-Content -Path $lessonsFile -Value $entry -Encoding UTF8
+        $syncCount++
+
+        if ($msg.created_at -gt $latestTimestamp) {
+            $latestTimestamp = $msg.created_at
+        }
+
+        # Update existing content for dedup within same batch
+        $existingContent += $entry
+    }
+
+    # Update sync timestamp in phase file
+    if ($latestTimestamp) {
+        try {
+            $phaseData = @{}
+            if (Test-Path $phaseFile) {
+                $phaseData = Get-Content $phaseFile -Raw | ConvertFrom-Json -AsHashtable
+            }
+            $phaseData["last_lesson_sync"] = $latestTimestamp
+            $phaseData | ConvertTo-Json | Out-File -FilePath $phaseFile -Encoding UTF8
+        }
+        catch {
+            Write-Log "Failed to update lesson sync timestamp: $_" "WARN"
+        }
+    }
+
+    if ($syncCount -gt 0) {
+        Write-Log "Synced $syncCount new lesson(s) from message bus" "OK"
+    }
+}
+
 function Test-RateLimitActive {
     if (-not (Test-Path $rateLimitSignal)) {
         return @{ Active = $false; SecondsRemaining = 0 }
@@ -114,6 +250,9 @@ while ($true) {
     if ($rateLimit.Active) {
         Write-Log "RATE LIMIT ACTIVE: $($rateLimit.SecondsRemaining)s remaining (detected by $($rateLimit.DetectedBy))" "WARN"
     }
+
+    # Sync lessons from message bus to file, then report count
+    Sync-Lessons
 
     if (Test-Path "tasks/lessons.md") {
         $lessonCount = ((Get-Content "tasks/lessons.md" -Raw) | Select-String -Pattern "^### " -AllMatches).Matches.Count
