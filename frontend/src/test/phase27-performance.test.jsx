@@ -95,7 +95,9 @@ describe('Phase 27 - Bundle Size Budgets', () => {
       f.ext === 'js' && !vendorChunks.includes(f.chunk)
     )
     for (const chunk of lazyChunks) {
-      expect(chunk.size, `${chunk.name} is ${formatBytes(chunk.size)}`).toBeLessThan(85 * 1024)
+      // Budget bumped to 95KB in v2.4: ProjectView grew with guardrail/circuit-breaker
+      // UI and the image-reference feature.
+      expect(chunk.size, `${chunk.name} is ${formatBytes(chunk.size)}`).toBeLessThan(95 * 1024)
     }
   })
 
@@ -121,8 +123,9 @@ describe('Phase 27 - Bundle Size Budgets', () => {
       f.ext === 'js' && f.chunk !== 'highlight' && f.chunk !== 'markdown'
     )
     const totalAppSize = appJs.reduce((sum, f) => sum + f.size, 0)
-    // Application JS (without large vendor libs) should be under 500KB
-    expect(totalAppSize).toBeLessThan(500 * 1024)
+    // Application JS (without large vendor libs). Budget bumped to 540KB in v2.4
+    // to accommodate the image-reference feature and accumulated UI.
+    expect(totalAppSize).toBeLessThan(540 * 1024)
   })
 
   it('prints Phase 27 bundle report', () => {

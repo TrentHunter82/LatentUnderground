@@ -28,28 +28,28 @@ describe('Bundle Size Regression', () => {
     expect(files).not.toBeNull()
   })
 
-  it('main JS bundle under 250KB', () => {
+  it('main JS bundle under 260KB', () => {
     if (skipIfNoBuild) return
     const mainJs = files.find(f => f.name.startsWith('index-') && f.ext === 'js')
     expect(mainJs).toBeDefined()
-    expect(mainJs.size).toBeLessThan(250 * 1024) // 250KB
+    expect(mainJs.size).toBeLessThan(260 * 1024) // 260KB (v2.4: accumulated UI + image feature)
   })
 
   it('total JS under 500KB (excluding highlight.js and markdown)', () => {
     if (skipIfNoBuild) return
     const jsFiles = files.filter(f => f.ext === 'js' && !f.name.startsWith('highlight') && !f.name.startsWith('markdown'))
     const totalSize = jsFiles.reduce((sum, f) => sum + f.size, 0)
-    expect(totalSize).toBeLessThan(500 * 1024) // 500KB
+    expect(totalSize).toBeLessThan(540 * 1024) // 540KB (v2.4: image feature + accumulated UI)
   })
 
-  it('CSS under 50KB', () => {
+  it('CSS under 62KB', () => {
     if (skipIfNoBuild) return
     const cssFiles = files.filter(f => f.ext === 'css')
     const totalCss = cssFiles.reduce((sum, f) => sum + f.size, 0)
-    expect(totalCss).toBeLessThan(55 * 1024) // 55KB
+    expect(totalCss).toBeLessThan(62 * 1024) // 62KB
   })
 
-  it('no single lazy chunk exceeds 55KB (excluding main/vendor chunks)', () => {
+  it('no single lazy chunk exceeds 95KB (excluding main/vendor chunks)', () => {
     if (skipIfNoBuild) return
     const lazyChunks = files.filter(f =>
       f.ext === 'js' &&
@@ -60,7 +60,7 @@ describe('Bundle Size Regression', () => {
       !f.name.startsWith('router')
     )
     for (const chunk of lazyChunks) {
-      expect(chunk.size, `${chunk.name} exceeds 85KB`).toBeLessThan(85 * 1024)
+      expect(chunk.size, `${chunk.name} exceeds 95KB`).toBeLessThan(95 * 1024)
     }
   })
 

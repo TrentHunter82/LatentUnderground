@@ -122,6 +122,19 @@ async def tmp_db(tmp_path):
                 FOREIGN KEY (run_id) REFERENCES swarm_runs(id) ON DELETE CASCADE
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS project_images (
+                id TEXT PRIMARY KEY,
+                project_id INTEGER NOT NULL,
+                filename TEXT NOT NULL,
+                original_filename TEXT NOT NULL,
+                caption TEXT NOT NULL DEFAULT '',
+                target_roles TEXT NOT NULL DEFAULT 'designer,frontend',
+                path TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+            )
+        """)
         await db.commit()
     return db_path
 

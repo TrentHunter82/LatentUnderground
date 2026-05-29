@@ -140,7 +140,6 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
   const [maxAgentsConcurrent, setMaxAgentsConcurrent] = useState(null)
   const [maxDurationHours, setMaxDurationHours] = useState(null)
   const [maxRestartsPerAgent, setMaxRestartsPerAgent] = useState(null)
-  const [quotaUsage, setQuotaUsage] = useState(null)
 
   // Circuit breaker config
   const [cbMaxFailures, setCbMaxFailures] = useState(3)
@@ -218,11 +217,9 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
     setImages(newImages)
   }, [images, projectId, uploadImagesMutation, deleteImageMutation])
 
-  // Fetch quota usage via TanStack Query
+  // Fetch quota usage via TanStack Query. Use the query data directly rather
+  // than mirroring into local state (the mirror caused re-render churn).
   const { data: quotaData } = useProjectQuota(projectId, { enabled: !!projectId })
-  useEffect(() => {
-    if (quotaData) setQuotaUsage(quotaData)
-  }, [quotaData])
 
   const isDirty = useCallback(() => {
     const savedGr = savedConfig.current.guardrails || []
@@ -392,7 +389,7 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
               onChange={setMaxAgentsConcurrent}
               min={1}
               max={20}
-              usage={quotaUsage?.agent_count}
+              usage={quotaData?.agent_count}
               usageMax={maxAgentsConcurrent}
             />
             <QuotaSlider
@@ -404,7 +401,7 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
               max={48}
               step={0.5}
               unit="h"
-              usage={quotaUsage?.elapsed_hours}
+              usage={quotaData?.elapsed_hours}
               usageMax={maxDurationHours}
             />
             <QuotaSlider
@@ -414,7 +411,7 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
               onChange={setMaxRestartsPerAgent}
               min={0}
               max={10}
-              usage={quotaUsage?.max_restart_count}
+              usage={quotaData?.max_restart_count}
               usageMax={maxRestartsPerAgent}
             />
             <p className="text-[10px] text-zinc-600 font-mono m-0">

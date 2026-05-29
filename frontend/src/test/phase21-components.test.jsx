@@ -10,6 +10,9 @@ vi.mock('react-router-dom', () => ({
 
 const { createApiMock, createSwarmQueryMock, createMutationsMock } = await vi.hoisted(() => import('./test-utils'))
 
+// Assertable spy for the directive mutation used by SwarmControls broadcast.
+const { mockDirective } = vi.hoisted(() => ({ mockDirective: vi.fn(() => Promise.resolve({ status: 'queued' })) }))
+
 // Mock api module with ALL exports
 vi.mock('../lib/api', () => createApiMock({
   createAbortable: vi.fn(() => ({ signal: undefined, abort: vi.fn() })),
@@ -63,7 +66,9 @@ vi.mock('../lib/api', () => createApiMock({
 }))
 
 vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock())
-vi.mock('../hooks/useMutations', () => createMutationsMock())
+vi.mock('../hooks/useMutations', () => createMutationsMock({
+  useSendDirective: () => ({ mutate: mockDirective, mutateAsync: mockDirective, isPending: false }),
+}))
 
 import { getAgentEvents, sendDirective, getDirectiveStatus, updateAgentPrompt, restartAgent, getSwarmHistory, compareRuns, stopSwarm, launchSwarm, sendSwarmInput, getSwarmAgents } from '../lib/api'
 import { ToastProvider } from '../components/Toast'
@@ -367,6 +372,8 @@ describe('SwarmHistory with comparison', () => {
 describe('SwarmControls broadcast directive', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockDirective.mockReset()
+    mockDirective.mockImplementation(() => Promise.resolve({ status: 'queued' }))
   })
 
   it('shows Direct All button when running with alive agents', () => {
@@ -390,7 +397,6 @@ describe('SwarmControls broadcast directive', () => {
   })
 
   it('sends broadcast to all alive agents', async () => {
-    sendDirective.mockResolvedValue({})
     const agents = [
       { name: 'Claude-1', alive: true },
       { name: 'Claude-2', alive: true },
@@ -403,10 +409,11 @@ describe('SwarmControls broadcast directive', () => {
     fireEvent.change(textarea, { target: { value: 'Focus on tests' } })
     fireEvent.click(screen.getByText('Send to All'))
 
+    // SwarmControls broadcasts via the useSendDirective() mutation, once per alive agent.
     await waitFor(() => {
-      expect(sendDirective).toHaveBeenCalledTimes(2) // Only alive agents
-      expect(sendDirective).toHaveBeenCalledWith(1, 'Claude-1', 'Focus on tests', 'normal')
-      expect(sendDirective).toHaveBeenCalledWith(1, 'Claude-2', 'Focus on tests', 'normal')
+      expect(mockDirective).toHaveBeenCalledTimes(2) // Only alive agents
+      expect(mockDirective).toHaveBeenCalledWith({ projectId: 1, agentName: 'Claude-1', text: 'Focus on tests', priority: 'normal' })
+      expect(mockDirective).toHaveBeenCalledWith({ projectId: 1, agentName: 'Claude-2', text: 'Focus on tests', priority: 'normal' })
     })
   })
 })

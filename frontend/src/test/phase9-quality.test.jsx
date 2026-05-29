@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { axe } from 'vitest-axe'
 import * as matchers from 'vitest-axe/matchers'
-import { createApiMock, createSwarmQueryMock, createMutationsMock } from './test-utils'
+import { createApiMock, createSwarmQueryMock, createMutationsMock, TestQueryWrapper } from './test-utils'
 
 expect.extend(matchers)
 
@@ -258,9 +258,11 @@ describe('Accessibility audit', () => {
     let container
     await act(async () => {
       const result = render(
-        <ToastProvider>
-          <NewProject onProjectChange={vi.fn()} />
-        </ToastProvider>
+        <TestQueryWrapper>
+          <ToastProvider>
+            <NewProject onProjectChange={vi.fn()} />
+          </ToastProvider>
+        </TestQueryWrapper>
       )
       container = result.container
     })

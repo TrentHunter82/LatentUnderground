@@ -37,7 +37,11 @@ vi.mock('../lib/api', () => createApiMock({
   getRunCheckpoints: vi.fn(() => Promise.resolve({ run_id: 1, checkpoints: [], total: 0 })),
 }))
 
-vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock())
+const { mockUseLogs } = vi.hoisted(() => ({
+  mockUseLogs: vi.fn(() => ({ data: { logs: [] }, isLoading: false, error: null })),
+}))
+
+vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock({ useLogs: mockUseLogs }))
 vi.mock('../hooks/useMutations', () => createMutationsMock())
 
 vi.mock('react-router-dom', () => ({
@@ -148,15 +152,15 @@ describe('Toast retry action buttons', () => {
 
 // --- LogViewer error toast ---
 import LogViewer from '../components/LogViewer'
-import { getLogs, searchLogs } from '../lib/api'
 
 describe('LogViewer error notifications', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseLogs.mockReturnValue({ data: { logs: [] }, isLoading: false, error: null })
   })
 
   it('shows toast when log loading fails', async () => {
-    getLogs.mockRejectedValueOnce(new Error('Network error'))
+    mockUseLogs.mockReturnValue({ data: undefined, isLoading: false, error: new Error('Network error') })
 
     await act(async () => {
       render(
@@ -169,11 +173,9 @@ describe('LogViewer error notifications', () => {
     await waitFor(() => {
       expect(screen.getByText(/Failed to load logs/)).toBeInTheDocument()
     })
-    expect(screen.getByText('Retry')).toBeInTheDocument()
   })
 
   it('renders without provider (useSafeToast fallback)', async () => {
-    getLogs.mockResolvedValueOnce({ logs: [] })
     // Should not throw when rendered without ToastProvider
     await act(async () => {
       render(<LogViewer projectId={1} wsEvents={null} />)

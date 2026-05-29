@@ -701,6 +701,15 @@ async def delete_project(project_id: int, db: aiosqlite.Connection = Depends(get
     await db.execute("DELETE FROM projects WHERE id = ?", (project_id,))
     await db.commit()
 
+    # Clean up image reference files on disk (DB rows cascade-delete with the
+    # project). Only the references/ directory we manage is removed.
+    try:
+        references_dir = Path(dict(row)["folder_path"]) / "references"
+        if references_dir.exists():
+            shutil.rmtree(references_dir, ignore_errors=True)
+    except Exception as e:
+        logger.warning("Failed to clean references dir for project %d: %s", project_id, e)
+
 
 @router.post("/{project_id}/archive", response_model=ProjectOut,
              summary="Archive project", responses={**_404, **_400})

@@ -93,6 +93,7 @@ async def test_indexes_idempotent(tmp_path):
             rows = await (await db.execute(
                 "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
             )).fetchall()
-            assert len(rows) == 17
+            # 17 base indexes + idx_project_images_project (migration 008)
+            assert len(rows) == 18
     finally:
         database.DB_PATH = original

@@ -145,8 +145,14 @@ describe('NewProject template selector', () => {
     const select = screen.getByDisplayValue('Custom (no template)')
     await act(async () => { fireEvent.change(select, { target: { value: '1' } }) })
 
-    expect(screen.getByText(/6 agents/)).toBeInTheDocument()
-    expect(screen.getByText(/10 phases/)).toBeInTheDocument()
+    // The template config is reflected in the form: the agent-count slider and its
+    // numeric readout show 6, and the max-phases number input shows 10.
+    const agentSlider = screen.getByLabelText('Agent Count')
+    expect(agentSlider.value).toBe('6')
+    expect(screen.getByText('6')).toBeInTheDocument()
+
+    const maxPhases = screen.getByLabelText('Max Phases')
+    expect(maxPhases.value).toBe('10')
   })
 
   it('resets form when deselecting template', async () => {

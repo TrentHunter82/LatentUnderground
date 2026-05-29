@@ -81,6 +81,7 @@ export const mockProjectKeys = {
   health: (id) => ['projects', 'detail', id, 'health'],
   quota: (id) => ['projects', 'detail', id, 'quota'],
   guardrails: (id) => ['projects', 'detail', id, 'guardrails'],
+  images: (id) => ['projects', 'detail', id, 'images'],
 }
 
 /** templateKeys factory (matches useProjectQuery.js) */
@@ -110,6 +111,7 @@ export const mockProjectQueryDefaults = {
   useProjectQuotaResult: { data: { project_id: 1, quota: {}, usage: {} }, isLoading: false, error: null },
   useProjectGuardrailsResult: { data: null, isLoading: false, error: null },
   useTemplatesResult: { data: [], isLoading: false, error: null },
+  useImageReferencesResult: { data: [], isLoading: false, error: null },
 }
 
 /** Default useSwarmQuery mock return values (stable references) */
@@ -121,6 +123,17 @@ export const mockSwarmQueryDefaults = {
   useAgentEventsResult: { data: { events: [] }, isLoading: false, error: null },
   useLogsResult: { data: { logs: [] }, isLoading: false, error: null },
   useLogSearchResult: { data: { results: [] }, isLoading: false, error: null },
+  useBusMessagesResult: { data: { messages: [], total: 0 }, isLoading: false, error: null },
+  useBusInboxResult: { data: { messages: [], total: 0 }, isLoading: false, error: null },
+  useBusChannelResult: { data: { messages: [], total: 0 }, isLoading: false, error: null },
+}
+
+/** busKeys factory (matches useSwarmQuery.js) */
+export const mockBusKeys = {
+  all: (projectId) => ['bus', projectId],
+  messages: (projectId, filters) => [...mockBusKeys.all(projectId), 'messages', filters],
+  inbox: (projectId, agent) => [...mockBusKeys.all(projectId), 'inbox', agent],
+  channel: (projectId, channel) => [...mockBusKeys.all(projectId), 'channel', channel],
 }
 
 /**
@@ -138,6 +151,7 @@ export function createProjectQueryMock(overrides = {}) {
     useProjectQuota: () => d.useProjectQuotaResult,
     useProjectGuardrails: () => d.useProjectGuardrailsResult,
     useTemplates: () => d.useTemplatesResult,
+    useImageReferences: () => d.useImageReferencesResult,
     projectKeys: mockProjectKeys,
     templateKeys: mockTemplateKeys,
     ...overrides,
@@ -159,7 +173,11 @@ export function createSwarmQueryMock(overrides = {}) {
     useAgentEvents: () => d.useAgentEventsResult,
     useLogs: () => d.useLogsResult,
     useLogSearch: () => d.useLogSearchResult,
+    useBusMessages: () => d.useBusMessagesResult,
+    useBusInbox: () => d.useBusInboxResult,
+    useBusChannel: () => d.useBusChannelResult,
     swarmKeys: mockSwarmKeys,
+    busKeys: mockBusKeys,
     ...overrides,
   }
 }
@@ -196,6 +214,9 @@ export function createMutationsMock(overrides = {}) {
     useRestartAgent: () => _defaultMutationResult,
     useSendSwarmInput: () => _defaultMutationResult,
     useCreateTemplate: () => _defaultMutationResult,
+    useUploadImageReferences: () => _defaultMutationResult,
+    useDeleteImageReference: () => _defaultMutationResult,
+    useSendBusMessage: () => _defaultMutationResult,
     ...overrides,
   }
 }
@@ -307,6 +328,11 @@ export function createApiMock(overrides = {}) {
     // Watch
     startWatch: vi.fn().mockResolvedValue({}),
     stopWatch: vi.fn().mockResolvedValue({}),
+
+    // Image references
+    uploadImageReferences: vi.fn().mockResolvedValue({ uploaded: 0 }),
+    getImageReferences: vi.fn().mockResolvedValue([]),
+    deleteImageReference: vi.fn().mockResolvedValue({}),
 
     ...overrides,
   }

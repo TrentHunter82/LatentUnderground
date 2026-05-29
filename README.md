@@ -181,6 +181,17 @@ REST API at `/api/` (also at `/api/v1/`). Interactive docs at `/docs` (Swagger) 
 | `POST` | `/api/swarm/agents/{id}/{name}/stop` | Stop individual agent |
 | `PATCH` | `/api/swarm/runs/{run_id}` | Annotate run (label, notes) |
 
+### Image References
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/projects/{id}/images` | Upload reference images (multipart `files` + `metadata` JSON) |
+| `GET` | `/api/projects/{id}/images` | List a project's image references |
+| `GET` | `/api/projects/{id}/images/{image_id}/raw` | Serve raw image bytes (thumbnail src) |
+| `DELETE` | `/api/projects/{id}/images/{image_id}` | Delete an image reference (file + record) |
+
+Images persist to `<project_folder>/references/images/`. On swarm launch, a `references/image_manifest.json` is generated and a "Visual References" section is injected into the prompts of Designer/Frontend agents (or all agents, per each image's target roles).
+
 ### Templates, Plugins, Webhooks
 
 | Method | Endpoint | Description |

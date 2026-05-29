@@ -38,6 +38,7 @@ server.log
 .claude/handoffs/
 .claude/archive/
 .claude/archives/
+.claude/attention/
 
 # SQLite WAL files
 *.db-shm

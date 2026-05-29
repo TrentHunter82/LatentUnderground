@@ -395,8 +395,8 @@ describe('Constants', () => {
     expect(KEYBOARD_SHORTCUTS.length).toBeGreaterThanOrEqual(5)
   })
 
-  it('DEFAULT_TEMPLATE_PRESETS has 4 presets', () => {
-    expect(DEFAULT_TEMPLATE_PRESETS.length).toBe(4)
+  it('DEFAULT_TEMPLATE_PRESETS has 5 presets', () => {
+    expect(DEFAULT_TEMPLATE_PRESETS.length).toBe(5)
   })
 
   it('each preset has name, description, and config', () => {

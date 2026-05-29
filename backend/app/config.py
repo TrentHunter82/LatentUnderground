@@ -73,7 +73,7 @@ BACKUP_INTERVAL_HOURS: int = int(os.environ.get("LU_BACKUP_INTERVAL_HOURS", "0")
 BACKUP_KEEP: int = int(os.environ.get("LU_BACKUP_KEEP", "5"))
 
 # Application version (single source of truth)
-APP_VERSION: str = "2.3.0"
+APP_VERSION: str = "2.4.0"
 
 # Request logging: log all HTTP requests with method, path, status, duration (default disabled)
 REQUEST_LOG: bool = os.environ.get("LU_REQUEST_LOG", "").lower() in ("1", "true", "yes")

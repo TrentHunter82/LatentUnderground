@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
-import { createApiMock, createSwarmQueryMock, createMutationsMock } from './test-utils'
+import { createApiMock, createSwarmQueryMock, createMutationsMock, createProjectQueryMock } from './test-utils'
 
 // Mock react-markdown and remark/rehype plugins before any imports
 vi.mock('react-markdown', () => ({
@@ -26,6 +26,7 @@ vi.mock('../lib/api', () => createApiMock({
 
 vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock())
 vi.mock('../hooks/useMutations', () => createMutationsMock())
+vi.mock('../hooks/useProjectQuery', () => createProjectQueryMock())
 
 import { getFile, putFile } from '../lib/api'
 import { ToastProvider } from '../components/Toast'
@@ -664,17 +665,17 @@ describe('ProjectSettings - input clamping', () => {
     expect(input.value).toBe('1')
   })
 
-  it('clamps max phases to maximum of 24', async () => {
+  it('clamps max phases to maximum of 999', async () => {
     await act(async () => {
       render(<ProjectSettings projectId={1} onSave={vi.fn()} />)
     })
 
     const input = screen.getByLabelText(/Max Phases/i)
     await act(async () => {
-      fireEvent.change(input, { target: { value: '100' } })
+      fireEvent.change(input, { target: { value: '1000' } })
     })
 
-    expect(input.value).toBe('24')
+    expect(input.value).toBe('999')
   })
 
   it('clamps max phases to minimum of 1', async () => {

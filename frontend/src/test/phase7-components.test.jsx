@@ -55,11 +55,23 @@ vi.mock('../hooks/useNotifications', () => ({
   useNotifications: () => ({ notify: vi.fn(), permission: 'granted', requestPermission: vi.fn() }),
 }))
 
-vi.mock('../hooks/useProjectQuery', () => createProjectQueryMock())
-vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock())
-vi.mock('../hooks/useMutations', () => createMutationsMock())
+// Configurable mutable spies (hoisted above vi.mock so they're available inside it)
+const { mockUseSwarmAgents, mockSendInput, mockUseLogSearch } = vi.hoisted(() => ({
+  mockUseSwarmAgents: vi.fn(() => ({ data: { agents: [] }, isSuccess: true, error: null })),
+  mockSendInput: vi.fn(() => Promise.resolve({ status: 'sent' })),
+  mockUseLogSearch: vi.fn(() => ({ data: { results: [] }, isFetching: false, error: null })),
+}))
 
-import { sendSwarmInput, getLogs, searchLogs, setApiKey, clearApiKey, getStoredApiKey, getSwarmAgents, stopSwarmAgent } from '../lib/api'
+vi.mock('../hooks/useProjectQuery', () => createProjectQueryMock())
+vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock({
+  useSwarmAgents: mockUseSwarmAgents,
+  useLogSearch: mockUseLogSearch,
+}))
+vi.mock('../hooks/useMutations', () => createMutationsMock({
+  useSendSwarmInput: () => ({ mutate: mockSendInput, mutateAsync: mockSendInput, isPending: false }),
+}))
+
+import { getLogs, setApiKey, clearApiKey, getStoredApiKey } from '../lib/api'
 import { ToastProvider } from '../components/Toast'
 
 // ============================================================
@@ -81,15 +93,24 @@ function renderTerminal(props = {}) {
 }
 
 async function renderTerminalWithAgents(props = {}) {
-  getSwarmAgents.mockResolvedValue({ agents: [{ name: 'Claude-1', alive: true, pid: 1001, exit_code: null }] })
+  // Input is enabled via the useSwarmAgents hook returning an alive agent
+  mockUseSwarmAgents.mockReturnValue({
+    data: { agents: [{ name: 'Claude-1', alive: true, pid: 1001, exit_code: null }] },
+    isSuccess: true,
+    error: null,
+  })
   const result = renderTerminal({ isRunning: true, ...props })
-  // Wait for agent polling to resolve
   await act(async () => { await new Promise(r => setTimeout(r, 50)) })
   return result
 }
 
 describe('TerminalOutput Input Bar', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // Restore hoisted-spy defaults (cleared by clearAllMocks above)
+    mockUseSwarmAgents.mockReturnValue({ data: { agents: [] }, isSuccess: true, error: null })
+    mockSendInput.mockResolvedValue({ status: 'sent' })
+  })
 
   it('renders input field and send button', () => {
     renderTerminal()
@@ -105,10 +126,13 @@ describe('TerminalOutput Input Bar', () => {
   })
 
   it('input is enabled when agents are alive', async () => {
-    const { getSwarmAgents } = await import('../lib/api')
-    getSwarmAgents.mockResolvedValue({ agents: [{ name: 'Claude-1', alive: true, pid: 1001 }] })
+    // Input is enabled via the useSwarmAgents hook, not the getSwarmAgents API fn
+    mockUseSwarmAgents.mockReturnValue({
+      data: { agents: [{ name: 'Claude-1', alive: true, pid: 1001 }] },
+      isSuccess: true,
+      error: null,
+    })
     renderTerminal({ isRunning: true })
-    // Wait for agent polling to resolve
     await act(async () => { await new Promise(r => setTimeout(r, 50)) })
     const input = screen.getByLabelText('Terminal input')
     expect(input).not.toBeDisabled()
@@ -121,7 +145,7 @@ describe('TerminalOutput Input Bar', () => {
   })
 
   it('calls sendSwarmInput on Enter key', async () => {
-    sendSwarmInput.mockResolvedValue({ status: 'sent' })
+    mockSendInput.mockResolvedValue({ status: 'sent' })
     await renderTerminalWithAgents()
 
     const input = screen.getByLabelText('Terminal input')
@@ -130,11 +154,12 @@ describe('TerminalOutput Input Bar', () => {
       fireEvent.keyDown(input, { key: 'Enter' })
     })
 
-    expect(sendSwarmInput).toHaveBeenCalledWith(1, 'hello world', null)
+    // Component sends via the useSendSwarmInput mutation, not the api fn directly
+    expect(mockSendInput).toHaveBeenCalledWith({ projectId: 1, text: 'hello world', agent: null })
   })
 
   it('echoes input locally with > prefix', async () => {
-    sendSwarmInput.mockResolvedValue({ status: 'sent' })
+    mockSendInput.mockResolvedValue({ status: 'sent' })
     await renderTerminalWithAgents()
 
     const input = screen.getByLabelText('Terminal input')
@@ -147,7 +172,7 @@ describe('TerminalOutput Input Bar', () => {
   })
 
   it('shows error message on failed send', async () => {
-    sendSwarmInput.mockRejectedValue(new Error('Pipe broken'))
+    mockSendInput.mockRejectedValue(new Error('Pipe broken'))
     await renderTerminalWithAgents()
 
     const input = screen.getByLabelText('Terminal input')
@@ -160,7 +185,7 @@ describe('TerminalOutput Input Bar', () => {
   })
 
   it('clears input after successful send', async () => {
-    sendSwarmInput.mockResolvedValue({ status: 'sent' })
+    mockSendInput.mockResolvedValue({ status: 'sent' })
     await renderTerminalWithAgents()
 
     const input = screen.getByLabelText('Terminal input')
@@ -258,7 +283,11 @@ describe('AuthModal', () => {
 import LogViewer from '../components/LogViewer'
 
 describe('LogViewer Date Range', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUseSwarmAgents.mockReturnValue({ data: { agents: [] }, isSuccess: true, error: null })
+    mockUseLogSearch.mockReturnValue({ data: { results: [] }, isFetching: false, error: null })
+  })
 
   it('renders from and to date inputs', async () => {
     await act(async () => {
@@ -285,25 +314,24 @@ describe('LogViewer Date Range', () => {
   })
 
   it('calls searchLogs when date filter is set', async () => {
-    searchLogs.mockResolvedValue({ results: [], total: 0 })
-    getLogs.mockResolvedValue({ logs: [] })
-
     let result
     await act(async () => {
       result = render(<LogViewer projectId={1} wsEvents={null} />)
     })
-    // Wait for initial loadLogs to resolve and skeleton to clear
+    // Wait for initial render to settle
     await act(async () => { await new Promise(r => setTimeout(r, 50)) })
 
     await act(async () => {
       fireEvent.change(screen.getByLabelText('From date'), { target: { value: '2026-01-15' } })
     })
-    // Wait for runSearch effect to fire
+    // Wait for the search params effect to re-render
     await act(async () => { await new Promise(r => setTimeout(r, 50)) })
 
-    expect(searchLogs).toHaveBeenCalledWith(
+    // Component searches via the useLogSearch hook (driven by state), not the api fn
+    expect(mockUseLogSearch).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ from_date: '2026-01-15' })
+      expect.objectContaining({ from_date: '2026-01-15' }),
+      expect.anything()
     )
   })
 })

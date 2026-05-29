@@ -149,7 +149,7 @@ async def get_db():
 # ---------------------------------------------------------------------------
 
 # Current schema version — increment when adding new migrations
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 async def _get_schema_version(db: aiosqlite.Connection) -> int:
@@ -401,6 +401,34 @@ async def _migration_007(db: aiosqlite.Connection):
     )
 
 
+async def _migration_008(db: aiosqlite.Connection):
+    """Add project_images table for image reference attachments.
+
+    Stores design reference images (screenshots, mockups, mood boards) attached
+    to a project. Files live on disk under <project_folder>/references/images/;
+    this table tracks metadata and which agent roles should receive each image
+    as visual context at swarm launch.
+    """
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS project_images (
+            id TEXT PRIMARY KEY,
+            project_id INTEGER NOT NULL,
+            filename TEXT NOT NULL,
+            original_filename TEXT NOT NULL,
+            caption TEXT NOT NULL DEFAULT '',
+            target_roles TEXT NOT NULL DEFAULT 'designer,frontend',
+            path TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        )
+    """)
+    # Index for listing a project's images newest-first with a deterministic tiebreaker
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_project_images_project "
+        "ON project_images(project_id, created_at DESC, id DESC)"
+    )
+
+
 # Ordered list of all migrations
 _MIGRATIONS = [
     (1, _migration_001),
@@ -410,6 +438,7 @@ _MIGRATIONS = [
     (5, _migration_005),
     (6, _migration_006),
     (7, _migration_007),
+    (8, _migration_008),
 ]
 
 

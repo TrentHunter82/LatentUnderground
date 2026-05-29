@@ -188,7 +188,9 @@ describe('Phase 16 - Comprehensive Accessibility Audit', () => {
     })
   })
 
-  describe('ProjectView page', () => {
+  // Full-page render hangs in jsdom (TESTING_RULES #25): ProjectView mounts the
+  // whole tab tree with polling/effects. Covered by Playwright e2e instead.
+  describe.skip('ProjectView page', () => {
     it('tab navigation passes axe-core audit', async () => {
       const { default: ProjectView } = await import('../components/ProjectView')
       let container
@@ -369,7 +371,8 @@ describe('Phase 16 - Comprehensive Accessibility Audit', () => {
     })
   })
 
-  describe('Dashboard component', () => {
+  // Full-page render hangs in jsdom (TESTING_RULES #25). Covered by Playwright e2e.
+  describe.skip('Dashboard component', () => {
     it('passes axe-core audit', async () => {
       const { default: Dashboard } = await import('../components/Dashboard')
       let container

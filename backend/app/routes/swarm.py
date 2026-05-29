@@ -2139,6 +2139,14 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
             shutil.copy2(src, dest)
             logger.debug("Copied %s to %s", src, dest)
 
+    # Inject image references: write the manifest and append a Visual References
+    # section to matching agents' prompt files (must run before prompts are read).
+    try:
+        from .images import build_manifest_and_inject
+        await build_manifest_and_inject(db, req.project_id, folder)
+    except Exception as e:
+        logger.warning("Image manifest/injection failed for project %d: %s", req.project_id, e)
+
     # --- Phase 3: Spawn agents ---
     agents_launched = []
     agents_failed = []

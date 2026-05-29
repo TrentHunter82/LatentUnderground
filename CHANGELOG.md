@@ -3,6 +3,30 @@
 All notable changes to the Latent Underground project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.0] - Image Reference System
+
+Design-aware agents: attach reference images to a project so Designer and Frontend
+agents receive them as visual context when generating UI.
+
+### Added
+- **Image reference uploads**: Drag-and-drop / file-picker UI (PNG, JPG, WebP — max 5MB each, up to 10 per project) with per-image captions and role targeting (Designer+Frontend by default, or All Agents). Available in both the New Project form and Project Settings. Thumbnails render from the backend raw-image endpoint.
+- **Backend image API** (`routes/images.py`): `POST /api/projects/{id}/images` (multipart upload + JSON metadata), `GET /api/projects/{id}/images` (list), `DELETE /api/projects/{id}/images/{image_id}`, and `GET /api/projects/{id}/images/{image_id}/raw` (serve bytes). Files persist to `<project_folder>/references/images/` so projects stay portable; metadata lives in the new `project_images` table.
+- **Migration 008**: `project_images` table (`id`, `project_id`, `filename`, `original_filename`, `caption`, `target_roles`, `path`, `created_at`) with `idx_project_images_project` index. `SCHEMA_VERSION` → 8.
+- **Swarm visual-context injection**: On launch, `build_manifest_and_inject` writes `references/image_manifest.json` and appends a "Visual References" section to the prompt files of agents whose role matches each image's target roles. Agents are instructed to read the manifest and study the images before writing UI code.
+- **Cleanup**: A project's `references/` directory is removed from disk when the project is deleted.
+
+### Fixed
+- **Shared test mock completeness** (`createSwarmQueryMock`): added the missing message-bus hooks (`useBusMessages`, `useBusInbox`, `useBusChannel`) and `busKeys`. Their absence made every test rendering a tree containing `MessageBusPanel` throw `No "useBusMessages" export is defined on the mock`.
+- **Upload memory safety**: reject oversized uploads by their declared multipart size before reading into memory (defense-in-depth alongside the post-read 5MB check).
+
+### Changed
+- **Dependency**: added `python-multipart` (required by FastAPI for multipart uploads).
+- **Repo hygiene**: removed stray runtime artifacts (`server.log`, `debug-server.log`, `openapi_check.json`, reserved-name `nul`, empty test DB); gitignored `.claude/attention/`; set aside the `new feature/` swarm workspace outside the repo.
+
+### Tests
+- Backend: 20 new image tests (`test_images.py`) — upload/list/delete, raw serving, validation (bad extension, oversize, max-count), traversal-safe ids, manifest generation, role-targeted injection, and project-delete cleanup. Full backend suite green.
+- Frontend: shared mock fix keeps the suite green.
+
 ## [2.3.0] - Phase 27: Test Infrastructure & Review
 
 ### Added

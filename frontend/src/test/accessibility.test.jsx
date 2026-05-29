@@ -202,7 +202,14 @@ vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock({
   useSwarmStatus: () => ({ data: { status: 'created', agents: [], signals: {}, tasks: { total: 0, done: 0, percent: 0 }, phase: null }, isLoading: false, error: null }),
 }))
 
-vi.mock('../hooks/useMutations', () => createMutationsMock())
+// Configurable createProject mutation result so the NewProject loading test can drive isPending.
+// Defaults to isPending:false so all other tests behave normally.
+const { mockCreateProjectResult } = vi.hoisted(() => ({
+  mockCreateProjectResult: vi.fn(() => ({ isPending: false, mutate: vi.fn(), mutateAsync: vi.fn() })),
+}))
+vi.mock('../hooks/useMutations', () => createMutationsMock({
+  useCreateProject: () => mockCreateProjectResult(),
+}))
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal()
@@ -426,23 +433,19 @@ describe('NewProject Form Accessibility', () => {
   })
 
   it('buttons are disabled during loading', async () => {
-    // Mock createProject to hang
-    const { createProject } = await import('../lib/api')
-    createProject.mockImplementation(() => new Promise(() => {}))
+    // NewProject derives `loading` from createProjectMutation.isPending.
+    // Drive the configurable mock to report a pending mutation for this test only.
+    mockCreateProjectResult.mockReturnValue({ isPending: true, mutate: vi.fn(), mutateAsync: vi.fn() })
+    try {
+      render(<TestQueryWrapper><ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider></TestQueryWrapper>)
 
-    render(<TestQueryWrapper><ToastProvider><NewProject onProjectChange={vi.fn()} /></ToastProvider></TestQueryWrapper>)
-
-    // Fill required fields
-    fireEvent.change(screen.getByPlaceholderText('My Awesome App'), { target: { value: 'Test' } })
-    fireEvent.change(screen.getByPlaceholderText('What should this project accomplish?'), { target: { value: 'Goal' } })
-    fireEvent.change(screen.getByPlaceholderText('C:/Projects/my-app'), { target: { value: 'C:/test' } })
-
-    // Submit form
-    fireEvent.submit(screen.getByText('Create Project').closest('form'))
-
-    await waitFor(() => {
-      expect(screen.getByText('Creating...')).toBeDisabled()
-    })
+      // While pending, the submit button shows "Creating..." and is disabled.
+      const btn = screen.getByText('Creating...')
+      expect(btn).toBeDisabled()
+    } finally {
+      // Reset so other tests see the default non-pending state.
+      mockCreateProjectResult.mockReturnValue({ isPending: false, mutate: vi.fn(), mutateAsync: vi.fn() })
+    }
   })
 })
 
