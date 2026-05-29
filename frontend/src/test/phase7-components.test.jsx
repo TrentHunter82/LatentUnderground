@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import { createApiMock, createProjectQueryMock, createSwarmQueryMock, createMutationsMock } from './test-utils'
 
@@ -314,9 +314,8 @@ describe('LogViewer Date Range', () => {
   })
 
   it('calls searchLogs when date filter is set', async () => {
-    let result
     await act(async () => {
-      result = render(<LogViewer projectId={1} wsEvents={null} />)
+      render(<LogViewer projectId={1} wsEvents={null} />)
     })
     // Wait for initial render to settle
     await act(async () => { await new Promise(r => setTimeout(r, 50)) })

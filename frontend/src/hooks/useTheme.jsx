@@ -9,7 +9,7 @@ function getSystemTheme() {
     if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
       return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
     }
-  } catch {}
+  } catch { /* ignore */ }
   return 'dark'
 }
 
@@ -45,7 +45,7 @@ export function ThemeProvider({ children }) {
     }
     try {
       localStorage.setItem(STORAGE_KEY, mode)
-    } catch {}
+    } catch { /* ignore */ }
   }, [mode])
 
   // Listen for system preference changes when mode is 'system'
@@ -90,6 +90,7 @@ export function ThemeProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme() {
   const ctx = useContext(ThemeContext)
   if (!ctx) throw new Error('useTheme must be used within ThemeProvider')

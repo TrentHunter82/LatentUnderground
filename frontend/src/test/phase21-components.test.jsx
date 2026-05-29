@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 // Mock react-router-dom
 vi.mock('react-router-dom', () => ({
@@ -70,7 +70,7 @@ vi.mock('../hooks/useMutations', () => createMutationsMock({
   useSendDirective: () => ({ mutate: mockDirective, mutateAsync: mockDirective, isPending: false }),
 }))
 
-import { getAgentEvents, sendDirective, getDirectiveStatus, updateAgentPrompt, restartAgent, getSwarmHistory, compareRuns, stopSwarm, launchSwarm, sendSwarmInput, getSwarmAgents } from '../lib/api'
+import { getAgentEvents, sendDirective, getDirectiveStatus, updateAgentPrompt, restartAgent, compareRuns } from '../lib/api'
 import { ToastProvider } from '../components/Toast'
 import AgentEventLog from '../components/AgentEventLog'
 import RunSummary from '../components/RunSummary'

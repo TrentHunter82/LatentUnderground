@@ -147,7 +147,7 @@ vi.mock('../hooks/useDebounce', () => ({
 
 import { ToastProvider } from '../components/Toast'
 import Dashboard from '../components/Dashboard'
-import { getProject, getSwarmStatus, getSwarmHistory, getProjectStats, startWatch } from '../lib/api'
+import { startWatch } from '../lib/api'
 
 function renderDashboard(props = {}) {
   return render(

@@ -21,11 +21,13 @@ const ANSI_COLORS = {
 }
 
 function stripAnsi(text) {
+  // eslint-disable-next-line no-control-regex
   return text.replace(/\x1b\[[0-9;]*m/g, '')
 }
 
 function parseAnsiLine(text) {
   const parts = []
+  // eslint-disable-next-line no-control-regex
   const regex = /\x1b\[([0-9;]*)m/g
   let lastIndex = 0
   let currentClass = 'text-zinc-300'
@@ -638,4 +640,5 @@ export default function TerminalOutput({ projectId, fetchOutput, isRunning }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export { stripAnsi, parseAnsiLine }

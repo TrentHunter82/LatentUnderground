@@ -96,7 +96,7 @@ test.describe('Routing & Navigation', () => {
 });
 
 test.describe('Responsive Design', () => {
-  test('adapts to mobile viewport', async ({ page, browserName }) => {
+  test('adapts to mobile viewport', async ({ page }) => {
     // Set mobile viewport
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/');
@@ -146,13 +146,6 @@ test.describe('Theme System', () => {
     // Should start in dark mode
     await expect(html).toHaveClass(/dark/);
 
-    // Find theme toggle (sun/moon icon button in the header area)
-    const themeToggle = page.locator('button').filter({ has: page.locator('svg') }).filter({
-      hasText: /^$/  // Icon-only buttons
-    });
-
-    // Try to find the toggle by looking for buttons with sun/moon related content
-    const headerButtons = page.locator('header button, [class*="header"] button, .flex button').all();
     let toggled = false;
 
     // Alternative: look for any button that changes the html class on click

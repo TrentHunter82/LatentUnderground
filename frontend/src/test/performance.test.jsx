@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 import { createApiMock, createProjectQueryMock, createSwarmQueryMock, createMutationsMock } from './test-utils'
 
@@ -22,8 +22,6 @@ vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock({
   useLogs: (...args) => mockUseLogs(...args),
 }))
 vi.mock('../hooks/useMutations', () => createMutationsMock())
-
-import { getLogs } from '../lib/api'
 
 describe('LogViewer Performance', () => {
   beforeEach(() => { vi.clearAllMocks() })

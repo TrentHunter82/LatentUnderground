@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, memo, lazy, Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { getSwarmHistory, deleteProject, archiveProject, unarchiveProject, startWatch, createAbortable } from '../lib/api'
+import { getSwarmHistory, deleteProject, archiveProject, unarchiveProject, startWatch } from '../lib/api'
 import { useProject, useProjectStats, useProjectGuardrails, projectKeys } from '../hooks/useProjectQuery'
 import { useSwarmStatus, useSwarmHistory, useSwarmAgents, swarmKeys } from '../hooks/useSwarmQuery'
 import SwarmControls from './SwarmControls'

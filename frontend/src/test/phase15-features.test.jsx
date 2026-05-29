@@ -120,7 +120,7 @@ describe('FileEditor - 404 handling', () => {
   it('recovers from 404 when file becomes available', async () => {
     // First load: 404
     getFile.mockRejectedValue(new Error('404 Not Found'))
-    const { rerender } = await act(async () => renderEditor())
+    await act(async () => renderEditor())
 
     expect(screen.queryByText(/404/)).not.toBeInTheDocument()
     const preview = screen.getByTestId('markdown-preview')

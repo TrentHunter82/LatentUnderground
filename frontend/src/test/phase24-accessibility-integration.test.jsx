@@ -264,10 +264,8 @@ describe('Phase 24 - Accessibility Integration Tests', () => {
       const agents = [{ name: 'Claude-1', last_heartbeat: null }]
       const processAgents = [{ name: 'Claude-1', pid: 1234, alive: true, exit_code: null, output_lines: 10 }]
 
-      let container
       await act(async () => {
-        const result = renderWithProviders(<AgentGrid agents={agents} processAgents={processAgents} projectId={1} />)
-        container = result.container
+        renderWithProviders(<AgentGrid agents={agents} processAgents={processAgents} projectId={1} />)
       })
 
       const editBtn = screen.getByRole('button', { name: /edit prompt/i })
@@ -606,12 +604,10 @@ describe('Phase 24 - Accessibility Integration Tests', () => {
       const { default: Sidebar } = await import('../components/Sidebar')
       const projects = [{ id: 1, name: 'Test', status: 'running', goal: 'Test' }]
 
-      let container
       await act(async () => {
-        const result = renderWithProviders(
+        renderWithProviders(
           <Sidebar projects={projects} onRefresh={vi.fn()} collapsed={false} onToggle={vi.fn()} showArchived={false} onShowArchivedChange={vi.fn()} />
         )
-        container = result.container
       })
 
       // Archive and Delete buttons should have min-w-[32px] min-h-[32px]

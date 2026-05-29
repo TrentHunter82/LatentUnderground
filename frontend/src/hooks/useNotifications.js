@@ -19,7 +19,7 @@ export function useNotifications() {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, String(enabled))
-    } catch {}
+    } catch { /* ignore */ }
   }, [enabled])
 
   const requestPermission = useCallback(async () => {
@@ -46,7 +46,7 @@ export function useNotifications() {
     if (document.hasFocus()) return
     try {
       new Notification(title, options)
-    } catch {}
+    } catch { /* ignore */ }
   }, [enabled])
 
   return { permission, enabled, setEnabled, requestPermission, notify }

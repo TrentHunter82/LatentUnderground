@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getSystemInfo, getSystemHealth, getMetrics } from '../lib/api'
+import { getSystemInfo, getSystemHealth } from '../lib/api'
 
 function GaugeBar({ label, value, max = 100, unit = '%', warningAt = 80, criticalAt = 90 }) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0

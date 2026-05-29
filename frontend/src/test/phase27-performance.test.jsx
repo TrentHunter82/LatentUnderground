@@ -8,8 +8,8 @@
  * 4. Render performance for large datasets
  * 5. Memoization prevents unnecessary re-renders
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, act, waitFor, cleanup } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, act, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { readdirSync, statSync, existsSync, readFileSync } from 'node:fs'
@@ -32,7 +32,6 @@ vi.mock('../hooks/useSwarmQuery', () => createSwarmQueryMock({
 }))
 vi.mock('../hooks/useMutations', () => createMutationsMock())
 
-import { getLogs } from '../lib/api'
 
 // ============================================================
 // 1. Bundle Size Verification (tighter budgets for Phase 27)

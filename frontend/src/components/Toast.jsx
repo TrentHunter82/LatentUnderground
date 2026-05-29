@@ -79,6 +79,7 @@ export function ToastProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useToast() {
   const addToast = useContext(ToastContext)
   if (!addToast) throw new Error('useToast must be used within ToastProvider')
@@ -88,6 +89,7 @@ export function useToast() {
 const noop = () => {}
 
 /** Like useToast but returns a no-op if outside ToastProvider (safe for tests) */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useSafeToast() {
   return useContext(ToastContext) || noop
 }

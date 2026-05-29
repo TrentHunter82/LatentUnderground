@@ -248,7 +248,7 @@ describe('FolderBrowser error notifications', () => {
 
 // --- TemplateManager retry actions ---
 import TemplateManager from '../components/TemplateManager'
-import { getTemplates, createTemplate } from '../lib/api'
+import { getTemplates } from '../lib/api'
 
 describe('TemplateManager retry actions', () => {
   it('shows retry button when template load fails', async () => {

@@ -3,7 +3,7 @@
  * Tests network failures, API timeouts, WebSocket reconnection,
  * and graceful degradation in error scenarios.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { createApiMock, createProjectQueryMock, createSwarmQueryMock, createMutationsMock } from './test-utils'
@@ -465,7 +465,7 @@ describe('Phase 17 - Error Recovery Tests', () => {
     it('useWebSocket hook handles connection loss', async () => {
       // Import the actual hook to test reconnection logic
       const { useWebSocket } = await import('../hooks/useWebSocket')
-      const { renderHook, act: hookAct } = await import('@testing-library/react')
+      const { renderHook } = await import('@testing-library/react')
 
       // Mock WebSocket
       const mockWs = {

@@ -27,7 +27,7 @@ function formatElapsed(seconds) {
   return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`
 }
 
-export default function CheckpointTimeline({ runId, agents = [] }) {
+export default function CheckpointTimeline({ runId }) {
   const [checkpoints, setCheckpoints] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -131,9 +131,8 @@ export default function CheckpointTimeline({ runId, agents = [] }) {
               </div>
 
               {/* Agent lanes */}
-              {agentNames.map((agentName, laneIdx) => {
+              {agentNames.map((agentName) => {
                 const agentCheckpoints = checkpoints.filter(c => c.agent_name === agentName)
-                const colorIdx = parseInt(agentName.replace(/\D/g, '') || '1', 10) - 1
 
                 return (
                   <div key={agentName} className="flex items-center gap-2 py-1.5 border-b border-retro-border/50 last:border-0" role="listitem">

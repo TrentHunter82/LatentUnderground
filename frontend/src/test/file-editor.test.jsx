@@ -301,7 +301,7 @@ describe('FileEditor', () => {
     // Simulate a file_changed WebSocket event
     getFile.mockResolvedValue({ content: '# Updated Tasks' })
 
-    const { rerender } = render(
+    render(
       <ToastProvider>
         <FileEditor
           projectId={1}
@@ -497,7 +497,7 @@ describe('FileEditor', () => {
 
     const callsAfterMount = getFile.mock.calls.length
 
-    const { rerender } = render(
+    render(
       <ToastProvider>
         <FileEditor
           projectId={1}

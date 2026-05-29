@@ -68,14 +68,14 @@ function computeVerdict(raw) {
 export default function RunComparison({ runA, runB, onClose }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [, setError] = useState(null)
 
   useEffect(() => {
     if (!runA?.id || !runB?.id) return
     setLoading(true)
     compareRuns(runA.id, runB.id)
       .then(d => { setData(d); setError(null) })
-      .catch(e => {
+      .catch(() => {
         // Endpoint may not exist — fall back to local comparison
         setData(buildLocalComparison(runA, runB))
         setError(null)

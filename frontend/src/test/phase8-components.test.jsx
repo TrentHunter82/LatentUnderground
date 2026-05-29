@@ -46,7 +46,7 @@ vi.mock('../hooks/useMutations', () => ({
   useCreateTemplate: () => ({ mutateAsync: mockCreateTemplateMutateAsync, isPending: false }),
 }))
 
-import { getTemplates, createProject, launchSwarm, createTemplate, updateTemplate, deleteTemplate, browseDirectory } from '../lib/api'
+import { getTemplates, createTemplate, updateTemplate, browseDirectory } from '../lib/api'
 import { ToastProvider } from '../components/Toast'
 import NewProject from '../components/NewProject'
 import TemplateManager from '../components/TemplateManager'

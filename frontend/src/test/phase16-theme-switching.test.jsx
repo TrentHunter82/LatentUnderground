@@ -2,8 +2,8 @@
  * Phase 16 - Theme Switching & Persistence Tests
  * Tests dark/light/system theme toggle, localStorage persistence, and matchMedia integration.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { createApiMock } from './test-utils'
 

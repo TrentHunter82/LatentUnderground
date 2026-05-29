@@ -3,12 +3,12 @@
  * Full page rendering with mocked API (not unit-level component tests).
  * Tests complete user flows across multiple components.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ToastProvider } from '../components/Toast'
 import { ThemeProvider } from '../hooks/useTheme'
-import { TestQueryWrapper, createProjectQueryMock, createSwarmQueryMock, createMutationsMock, mockProjectKeys, mockSwarmKeys, createApiMock } from './test-utils'
+import { TestQueryWrapper, createProjectQueryMock, createSwarmQueryMock, createMutationsMock, createApiMock } from './test-utils'
 
 // Mock all API functions
 vi.mock('../lib/api', () => createApiMock({

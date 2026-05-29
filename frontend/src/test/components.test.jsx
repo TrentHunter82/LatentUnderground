@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { createApiMock, createProjectQueryMock, createSwarmQueryMock, createMutationsMock, TestQueryWrapper } from './test-utils'
 
 // --- TaskProgress ---
@@ -317,7 +317,7 @@ vi.mock('../hooks/useMutations', () => createMutationsMock({
   useCreateTemplate: () => ({ mutateAsync: mockCreateTemplateMutateAsync, isPending: false }),
 }))
 
-import { launchSwarm, stopSwarm, createProject, getLogs, deleteProject } from '../lib/api'
+import { getLogs } from '../lib/api'
 import SwarmControls from '../components/SwarmControls'
 
 function renderSwarmControls(props = {}) {

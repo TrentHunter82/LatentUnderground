@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { axe } from 'vitest-axe'
 import * as matchers from 'vitest-axe/matchers'
 import { createApiMock, createSwarmQueryMock, createMutationsMock, TestQueryWrapper } from './test-utils'
@@ -435,7 +435,7 @@ describe('Performance benchmarks', () => {
   })
 
   it('Sparkline renders 5000 data points within 200ms', () => {
-    const data = Array.from({ length: 5000 }, (_, i) => Math.random() * 100)
+    const data = Array.from({ length: 5000 }, () => Math.random() * 100)
     const start = performance.now()
 
     const { container } = render(<Sparkline data={data} />)

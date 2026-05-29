@@ -161,7 +161,6 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
 
   // Track the "saved" state for dirty detection
   const savedConfig = useRef({ agent_count: 4, max_phases: 999, custom_prompts: '', max_agents_concurrent: null, max_duration_hours: null, max_restarts_per_agent: null, circuit_breaker_max_failures: 3, circuit_breaker_window_seconds: 300, circuit_breaker_recovery_seconds: 60, auto_queue: false, auto_queue_delay_seconds: 30, guardrails: [] })
-  const savedTimerRef = useRef(null)
 
   useEffect(() => {
     if (initialConfig) {

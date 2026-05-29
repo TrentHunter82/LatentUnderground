@@ -7,7 +7,7 @@
  * 3. matchMedia-driven behavior (theme, sidebar collapse)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, act, within } from '@testing-library/react'
+import { render, screen, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 // --- Mocks ---
@@ -313,10 +313,8 @@ describe('Phase 16 - Responsive Breakpoint Tests', () => {
   describe('ProjectView responsive tabs', () => {
     it('tabs use responsive text sizing', async () => {
       const { default: ProjectView } = await import('../components/ProjectView')
-      let container
       await act(async () => {
-        const result = renderWithProviders(<ProjectView />, { route: '/projects/1' })
-        container = result.container
+        renderWithProviders(<ProjectView />, { route: '/projects/1' })
       })
 
       const tablist = screen.getByRole('tablist')

@@ -21,18 +21,6 @@ function preloadNewProject() {
 
 const ORDER_KEY = 'lu_project_order'
 
-const statusColors = {
-  running: 'bg-emerald-500',
-  stopped: 'bg-zinc-500',
-  created: 'bg-amber-500',
-}
-
-const statusGlow = {
-  running: 'led-active',
-  stopped: '',
-  created: 'led-warning',
-}
-
 // Shape icons for color-independent status (WCAG 1.4.1)
 function ProjectStatusIcon({ status }) {
   const size = 8
@@ -82,7 +70,7 @@ function loadOrder() {
 function saveOrder(order) {
   try {
     localStorage.setItem(ORDER_KEY, JSON.stringify(order))
-  } catch {}
+  } catch { /* ignore */ }
 }
 
 function sortByOrder(projects, order) {

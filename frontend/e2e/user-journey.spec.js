@@ -594,8 +594,6 @@ test.describe('Theme Persistence in Project Context', () => {
     // Default should be dark mode (no 'light' class). The theme system defaults
     // to 'system' mode which resolves to dark in headless browsers.
     // Record the initial state.
-    const initialHasLight = await html.evaluate((el) => el.classList.contains('light'));
-
     // Find the theme toggle button. It cycles: dark -> light -> system -> dark.
     // The button has aria-label containing "mode".
     const themeToggle = page.getByRole('button', { name: /mode.*click/i });
@@ -763,7 +761,7 @@ test.describe('Sidebar Status Filters', () => {
 
   test('filters by status using sidebar filter buttons', async ({ page, request }) => {
     // Create a project (it will have status "created")
-    const project = await createProjectViaAPI(request, {
+    await createProjectViaAPI(request, {
       name: 'Status Filter Project',
       goal: 'Test sidebar status filtering',
       folder_path: 'C:/tmp/status-filter',

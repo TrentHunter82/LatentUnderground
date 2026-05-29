@@ -2,7 +2,7 @@
  * Phase 16 - Keyboard Shortcuts & Navigation Tests
  * Tests all keyboard shortcuts defined in App.jsx and component-level handlers.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { createApiMock } from './test-utils'
@@ -256,7 +256,6 @@ describe('Phase 16 - Keyboard Shortcuts & Navigation', () => {
   describe('TerminalOutput keyboard shortcuts', () => {
     it('Enter key submits input', async () => {
       const { default: TerminalOutput } = await import('../components/TerminalOutput')
-      const { sendSwarmInput } = await import('../lib/api')
 
       await act(async () => {
         renderWithProviders(<TerminalOutput projectId={1} status="running" />)

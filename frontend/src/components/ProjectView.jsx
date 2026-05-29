@@ -6,7 +6,6 @@ import WebhookManager from './WebhookManager'
 import { useParams } from 'react-router-dom'
 import { getSwarmHistory, getSwarmOutput, updateProjectConfig } from '../lib/api'
 import { useProject } from '../hooks/useProjectQuery'
-import { useSafeToast } from './Toast'
 
 const LogViewer = lazy(() => import('./LogViewer'))
 const SwarmHistory = lazy(() => import('./SwarmHistory'))
@@ -25,7 +24,6 @@ const tabs = [
 
 export default function ProjectView({ wsEvents, onProjectChange }) {
   const { id } = useParams()
-  const toast = useSafeToast()
   const projectId = Number(id)
   const [activeTab, setActiveTab] = useState('dashboard')
 
