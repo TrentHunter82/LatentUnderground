@@ -27,7 +27,7 @@ const apiExports = new Set()
 //         export const NAME =
 //         export { NAME }           (not currently used but future-proof)
 const exportPatterns = [
-  /export\s+function\s+(\w+)\s*\(/g,
+  /export\s+(?:async\s+)?function\s+(\w+)\s*\(/g,
   /export\s+const\s+(\w+)\s*=/g,
   /export\s+let\s+(\w+)\s*=/g,
   /export\s+var\s+(\w+)\s*=/g,

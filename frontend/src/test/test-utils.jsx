@@ -329,6 +329,13 @@ export function createApiMock(overrides = {}) {
     startWatch: vi.fn().mockResolvedValue({}),
     stopWatch: vi.fn().mockResolvedValue({}),
 
+    // Message bus
+    getBusMessages: vi.fn().mockResolvedValue({ messages: [], total: 0 }),
+    getBusInbox: vi.fn().mockResolvedValue({ messages: [], total: 0 }),
+    getBusChannelMessages: vi.fn().mockResolvedValue({ messages: [], total: 0 }),
+    sendBusMessage: vi.fn().mockResolvedValue({ id: 'msg-1', status: 'sent' }),
+    ackBusMessage: vi.fn().mockResolvedValue({ status: 'acked' }),
+
     // Image references
     uploadImageReferences: vi.fn().mockResolvedValue({ uploaded: 0 }),
     getImageReferences: vi.fn().mockResolvedValue([]),
