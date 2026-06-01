@@ -144,6 +144,25 @@ export default memo(function LogViewer({ projectId, wsEvents }) {
     }
   }, [wsEvents, hasDateFilter])
 
+  // Append live supervisor activity events under the 'supervisor' identity.
+  // The supervisor is a backend task (not a Claude agent), so its coordination
+  // never appears in agent log files; this surfaces it live in the feed.
+  useEffect(() => {
+    if (wsEvents?.type === 'supervisor' && wsEvents.project_id === projectId) {
+      lastWsTime.current = Date.now()
+      setIsLive(true)
+
+      if (!hasDateFilter) {
+        const entry = {
+          id: `supervisor-ws-${Date.now()}`,
+          agent: 'supervisor',
+          text: wsEvents.line,
+        }
+        setLogs((prev) => [...prev, entry].slice(-1000))
+      }
+    }
+  }, [wsEvents, hasDateFilter, projectId])
+
   // LIVE indicator timeout
   useEffect(() => {
     const timer = setInterval(() => {

@@ -538,6 +538,43 @@ describe('LogViewer', () => {
     expect(screen.getByText('WS log line')).toBeInTheDocument()
   })
 
+  it('appends live supervisor activity events under the supervisor identity', async () => {
+    mockUseLogs.mockReturnValue({ data: { logs: [] }, isLoading: false, error: null })
+    const { rerender } = await act(async () =>
+      render(<LogViewer projectId={1} wsEvents={null} />)
+    )
+
+    await act(async () => {
+      rerender(
+        <LogViewer
+          projectId={1}
+          wsEvents={{ type: 'supervisor', project_id: 1, line: 'Monitoring 2 agent(s), 2 alive' }}
+        />
+      )
+    })
+
+    expect(screen.getByText('Monitoring 2 agent(s), 2 alive')).toBeInTheDocument()
+    expect(screen.getByText('[supervisor]')).toBeInTheDocument()
+  })
+
+  it('ignores supervisor events for a different project', async () => {
+    mockUseLogs.mockReturnValue({ data: { logs: [] }, isLoading: false, error: null })
+    const { rerender } = await act(async () =>
+      render(<LogViewer projectId={1} wsEvents={null} />)
+    )
+
+    await act(async () => {
+      rerender(
+        <LogViewer
+          projectId={1}
+          wsEvents={{ type: 'supervisor', project_id: 2, line: 'Other project supervisor' }}
+        />
+      )
+    })
+
+    expect(screen.queryByText('Other project supervisor')).not.toBeInTheDocument()
+  })
+
   it('truncates buffer to 1000 lines', async () => {
     // Start with 999 lines
     const manyLines = Array.from({ length: 999 }, (_, i) => `Line ${i}`)

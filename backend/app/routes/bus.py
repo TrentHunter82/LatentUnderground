@@ -170,8 +170,12 @@ async def send_message(
     )
     await db.commit()
 
-    # Create attention file for critical/high priority messages
-    if req.priority in ("critical", "high"):
+    # Create an attention file for high/critical priority messages, OR for any
+    # message from a human. Agents poll their inbox out-of-band whenever an
+    # attention file exists (see the PRE-TOOL ATTENTION CHECK in the agent
+    # prompts), so this guarantees a human reaching out interrupts a running
+    # agent mid-run regardless of the message priority.
+    if req.priority in ("critical", "high") or req.from_agent == "human":
         try:
             _create_attention_file(folder, req.to_agent, message_id)
         except OSError as e:

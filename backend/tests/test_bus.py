@@ -96,6 +96,55 @@ class TestBusSendMessage:
         attention_file = folder / ".claude" / "attention" / "Claude-2.attention"
         assert attention_file.exists()
 
+    async def test_send_human_message_creates_attention_file_any_priority(
+        self, client, running_project, sample_project_data
+    ):
+        """A human message creates an attention file even at normal priority.
+
+        Humans reaching out should always interrupt a running agent, so the
+        attention file (which triggers the agent's pre-tool inbox check) is
+        written regardless of priority when from_agent == 'human'.
+        """
+        folder = Path(sample_project_data["folder_path"])
+
+        resp = await client.post(
+            f"/api/bus/{running_project['id']}/send",
+            json={
+                "from_agent": "human",
+                "to_agent": "Claude-1",
+                "channel": "general",
+                "priority": "normal",
+                "msg_type": "request",
+                "body": "Please re-read TASKS.md before continuing",
+            },
+        )
+        assert resp.status_code == 201
+
+        attention_file = folder / ".claude" / "attention" / "Claude-1.attention"
+        assert attention_file.exists()
+
+    async def test_send_normal_agent_message_no_attention_file(
+        self, client, running_project, sample_project_data
+    ):
+        """A normal-priority agent-to-agent message does NOT create an attention file."""
+        folder = Path(sample_project_data["folder_path"])
+
+        resp = await client.post(
+            f"/api/bus/{running_project['id']}/send",
+            json={
+                "from_agent": "Claude-1",
+                "to_agent": "Claude-3",
+                "channel": "general",
+                "priority": "normal",
+                "msg_type": "info",
+                "body": "FYI: utils module updated",
+            },
+        )
+        assert resp.status_code == 201
+
+        attention_file = folder / ".claude" / "attention" / "Claude-3.attention"
+        assert not attention_file.exists()
+
     async def test_send_to_channel(self, client, running_project):
         """Send message to a channel."""
         resp = await client.post(
@@ -294,6 +343,44 @@ class TestBusAck:
             f"/api/bus/{running_project['id']}/ack/fake-uuid-12345?agent=Claude-2",
         )
         assert resp.status_code == 404
+
+    async def test_inter_agent_roundtrip_consumes_message(self, client, running_project):
+        """Regression guard: full inter-agent path send -> deliver -> ack -> consumed.
+
+        Inter-agent messaging must keep working end to end: a sent message is
+        delivered to the recipient's unacked inbox, and after the recipient acks
+        it, it no longer appears in that inbox.
+        """
+        pid = running_project["id"]
+
+        send_resp = await client.post(
+            f"/api/bus/{pid}/send",
+            json={
+                "from_agent": "Claude-1",
+                "to_agent": "Claude-2",
+                "channel": "general",
+                "priority": "normal",
+                "msg_type": "response",
+                "body": "Roundtrip: endpoints ready",
+            },
+        )
+        assert send_resp.status_code == 201
+        message_id = send_resp.json()["id"]
+
+        # Delivered to Claude-2's unacked inbox
+        before = await client.get(f"/api/bus/{pid}/inbox/Claude-2")
+        assert before.status_code == 200
+        assert any(m["id"] == message_id for m in before.json()["messages"])
+
+        # Claude-2 acknowledges it
+        ack = await client.post(f"/api/bus/{pid}/ack/{message_id}?agent=Claude-2")
+        assert ack.status_code == 200
+        assert ack.json()["acked"] is True
+
+        # No longer in the unacked inbox (default unacked_only=True)
+        after = await client.get(f"/api/bus/{pid}/inbox/Claude-2")
+        assert after.status_code == 200
+        assert not any(m["id"] == message_id for m in after.json()["messages"])
 
 
 class TestBusChannels:

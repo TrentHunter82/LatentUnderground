@@ -1450,18 +1450,55 @@ async def _auto_queue_relaunch_agents(project_id: int) -> bool:
         return False
 
 
+def _supervisor_buffer_emit(project_id: int, text: str):
+    """Append a supervisor-attributed line to the project output buffer.
+
+    Sync + lock-safe; use from cancellation/error handlers where awaiting a
+    broadcast is unsafe. Lines are tagged ``[supervisor]`` so the UI can
+    attribute them to the supervisor identity (see AGENT_LOG_COLORS in the
+    frontend) instead of the generic ``[system]`` tag.
+    """
+    with _buffers_lock:
+        buf = _project_output_buffers.setdefault(
+            project_id, deque(maxlen=_MAX_OUTPUT_LINES),
+        )
+        buf.append(f"[supervisor] {text}")
+
+
+async def _supervisor_emit(project_id: int, text: str):
+    """Surface a supervisor activity line in the UI.
+
+    Writes to the project output buffer (polled by the Terminal/Output view)
+    AND broadcasts a live ``supervisor`` WebSocket event, which the Logs view
+    renders under the existing 'supervisor' identity. This is how the user can
+    see the supervisor actively coordinating, not just its start/stop.
+    """
+    _supervisor_buffer_emit(project_id, text)
+    try:
+        await ws_manager.broadcast({
+            "type": "supervisor",
+            "project_id": project_id,
+            "line": text,
+        })
+    except Exception:
+        logger.debug(
+            "Supervisor WS broadcast failed for project %d", project_id, exc_info=True,
+        )
+
+
 async def _supervisor_loop(project_id: int):
     """Monitor agent processes; mark swarm as completed when all exit.
 
     Logs individual agent exits with exit codes and reports partial failures
     to the project output buffer so the user sees agent crashes in the web UI.
     Also auto-stops swarm if no output for configured idle timeout.
+
+    Supervisor activity is surfaced to the UI via _supervisor_emit (buffer +
+    live `supervisor` WS event) so the user can see it coordinating.
     """
     logger.info("Supervisor started for project %d", project_id)
-    # Announce supervisor start to UI
-    with _buffers_lock:
-        buf = _project_output_buffers.setdefault(project_id, deque(maxlen=_MAX_OUTPUT_LINES))
-        buf.append("[system] Supervisor started — monitoring agents")
+    # Announce supervisor start to UI (buffer + live WS event)
+    await _supervisor_emit(project_id, "Supervisor started: monitoring agents")
     # Track which agents we've already reported as exited
     reported_exited: set[str] = set()
     # Load auto-stop config once at start
@@ -1482,6 +1519,26 @@ async def _supervisor_loop(project_id: int):
                 except Exception:
                     logger.warning("Periodic checkpoint flush failed for project %d", project_id, exc_info=True)
 
+                # --- Supervisor heartbeat: prove it is alive and coordinating ---
+                # Emitted on the same ~60s cadence as the flush, but only while
+                # agents are running (a silent supervisor looks dead in the UI).
+                if _any_agent_alive(project_id):
+                    keys = _project_agent_keys(project_id)
+                    alive = sum(
+                        1 for k in keys
+                        if (p := _agent_processes.get(k)) and p.poll() is None
+                    )
+                    usage = _project_resource_usage.get(project_id) or {}
+                    started = usage.get("started_at")
+                    elapsed_txt = ""
+                    if started:
+                        mins = int((time.time() - started) / 60)
+                        elapsed_txt = f", {mins}m elapsed"
+                    await _supervisor_emit(
+                        project_id,
+                        f"Monitoring {len(keys)} agent(s), {alive} alive{elapsed_txt}",
+                    )
+
             # --- Auto-stop check ---
             if auto_stop_min > 0 and _any_agent_alive(project_id):
                 with _buffers_lock:
@@ -1491,11 +1548,10 @@ async def _supervisor_loop(project_id: int):
                         "Auto-stopping project %d: no output for %d minutes",
                         project_id, auto_stop_min,
                     )
-                    with _buffers_lock:
-                        buf = _project_output_buffers.setdefault(
-                            project_id, deque(maxlen=_MAX_OUTPUT_LINES),
-                        )
-                        buf.append(f"[system] Auto-stopped: no output for {auto_stop_min} minutes")
+                    await _supervisor_emit(
+                        project_id,
+                        f"Auto-stopped: no output for {auto_stop_min} minutes",
+                    )
                     # Use _terminate (not _cleanup) to avoid cancelling ourselves
                     await asyncio.to_thread(_terminate_project_agents, project_id)
                     # Mark as stopped in DB
@@ -1535,11 +1591,10 @@ async def _supervisor_loop(project_id: int):
                             "Duration quota exceeded for project %d: %.1fh > %.1fh",
                             project_id, elapsed, max_hours,
                         )
-                        with _buffers_lock:
-                            buf = _project_output_buffers.setdefault(
-                                project_id, deque(maxlen=_MAX_OUTPUT_LINES),
-                            )
-                            buf.append(f"[system] Duration quota exceeded ({elapsed:.1f}h > {max_hours}h) — auto-stopping")
+                        await _supervisor_emit(
+                            project_id,
+                            f"Duration quota exceeded ({elapsed:.1f}h > {max_hours}h), auto-stopping",
+                        )
                         await asyncio.to_thread(_terminate_project_agents, project_id)
                         try:
                             async with aiosqlite.connect(database.DB_PATH) as db:
@@ -1674,9 +1729,7 @@ async def _supervisor_loop(project_id: int):
             await asyncio.sleep(2)
 
             logger.info("All agents exited for project %d, marking completed", project_id)
-            with _buffers_lock:
-                buf = _project_output_buffers.setdefault(project_id, deque(maxlen=_MAX_OUTPUT_LINES))
-                buf.append("[system] All agents exited — processing completion...")
+            await _supervisor_emit(project_id, "All agents exited, processing completion...")
 
             # Flush any pending checkpoints before generating summary
             await asyncio.to_thread(_flush_checkpoints)
@@ -1701,11 +1754,10 @@ async def _supervisor_loop(project_id: int):
                         "Guardrail halt triggered for project %d — run marked failed_guardrail",
                         project_id,
                     )
-                    with _buffers_lock:
-                        buf = _project_output_buffers.setdefault(
-                            project_id, deque(maxlen=_MAX_OUTPUT_LINES),
-                        )
-                        buf.append("[system] Guardrail HALT: run failed validation, phase chaining stopped")
+                    await _supervisor_emit(
+                        project_id,
+                        "Guardrail HALT: run failed validation, phase chaining stopped",
+                    )
                 if has_violations:
                     for r in guardrail_results:
                         if not r["passed"]:
@@ -1771,11 +1823,10 @@ async def _supervisor_loop(project_id: int):
                     "Auto-queue enabled for project %d, relaunching in %d seconds",
                     project_id, auto_queue_delay,
                 )
-                with _buffers_lock:
-                    buf = _project_output_buffers.setdefault(
-                        project_id, deque(maxlen=_MAX_OUTPUT_LINES),
-                    )
-                    buf.append(f"[system] Auto-queue: relaunching agents in {auto_queue_delay} seconds...")
+                await _supervisor_emit(
+                    project_id,
+                    f"Auto-queue: relaunching agents in {auto_queue_delay} seconds...",
+                )
                 try:
                     await ws_manager.broadcast(json.dumps({
                         "type": "auto_queue_pending",
@@ -1791,11 +1842,9 @@ async def _supervisor_loop(project_id: int):
                 relaunch_ok = await _auto_queue_relaunch_agents(project_id)
                 if relaunch_ok:
                     logger.info("Auto-queue relaunch successful for project %d", project_id)
-                    with _buffers_lock:
-                        buf = _project_output_buffers.setdefault(
-                            project_id, deque(maxlen=_MAX_OUTPUT_LINES),
-                        )
-                        buf.append("[system] Auto-queue: agents relaunched successfully")
+                    await _supervisor_emit(
+                        project_id, "Auto-queue: agents relaunched successfully",
+                    )
                     try:
                         await ws_manager.broadcast(json.dumps({
                             "type": "auto_queue_launched",
@@ -1809,11 +1858,9 @@ async def _supervisor_loop(project_id: int):
                     continue
                 else:
                     logger.warning("Auto-queue relaunch failed for project %d", project_id)
-                    with _buffers_lock:
-                        buf = _project_output_buffers.setdefault(
-                            project_id, deque(maxlen=_MAX_OUTPUT_LINES),
-                        )
-                        buf.append("[system] Auto-queue: relaunch failed — stopping")
+                    await _supervisor_emit(
+                        project_id, "Auto-queue: relaunch failed, stopping",
+                    )
                     # Now mark as stopped since relaunch failed
                     try:
                         async with aiosqlite.connect(database.DB_PATH) as db:
@@ -1831,18 +1878,15 @@ async def _supervisor_loop(project_id: int):
                         pass
             else:
                 # Auto-queue not enabled or guardrail halt
-                with _buffers_lock:
-                    buf = _project_output_buffers.setdefault(project_id, deque(maxlen=_MAX_OUTPUT_LINES))
-                    if run_status == "failed_guardrail":
-                        buf.append("[system] Supervisor exiting — guardrail halt triggered")
-                    else:
-                        buf.append("[system] Supervisor exiting — auto-queue disabled")
+                if run_status == "failed_guardrail":
+                    await _supervisor_emit(project_id, "Supervisor exiting: guardrail halt triggered")
+                else:
+                    await _supervisor_emit(project_id, "Supervisor exiting: auto-queue disabled")
             break
     except asyncio.CancelledError:
         logger.info("Supervisor cancelled for project %d", project_id)
-        with _buffers_lock:
-            buf = _project_output_buffers.setdefault(project_id, deque(maxlen=_MAX_OUTPUT_LINES))
-            buf.append("[system] Supervisor cancelled")
+        # Sync emit only — awaiting a broadcast during cancellation is unsafe.
+        _supervisor_buffer_emit(project_id, "Supervisor cancelled")
         # Ensure status is stopped on cancellation
         try:
             async with aiosqlite.connect(database.DB_PATH) as db:
@@ -1856,9 +1900,7 @@ async def _supervisor_loop(project_id: int):
             pass
     except Exception:
         logger.error("Supervisor error for project %d", project_id, exc_info=True)
-        with _buffers_lock:
-            buf = _project_output_buffers.setdefault(project_id, deque(maxlen=_MAX_OUTPUT_LINES))
-            buf.append("[system] Supervisor error — check server logs")
+        _supervisor_buffer_emit(project_id, "Supervisor error: check server logs")
         # Ensure status is stopped on error
         try:
             async with aiosqlite.connect(database.DB_PATH) as db:
