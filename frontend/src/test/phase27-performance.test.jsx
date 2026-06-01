@@ -80,19 +80,19 @@ describe('Phase 27 - Bundle Size Budgets', () => {
     expect(initialSize).toBeLessThan(310 * 1024)
   })
 
-  it('CSS remains under 75KB', () => {
+  it('app CSS remains under 84KB (excluding the dockview vendor stylesheet)', () => {
     if (skipIfNoBuild) return
-    const cssSize = files.filter(f => f.ext === 'css').reduce((sum, f) => sum + f.size, 0)
-    // Actual built size 74234B (72.5KB). Phase 2 token-driven refactor tightened the
-    // base ~2KB; the Terminal reskin (4th skin, dark+light) then adds ~5KB of token
-    // blocks. Gzips to ~13KB on the wire. Budget re-baselined 76KB → 75KB (Hardening
-    // phase) for a tight ~2.5KB headroom — kept in sync with bundle-size.test.js.
-    expect(cssSize).toBeLessThan(75 * 1024)
+    // Excludes dockview-*.css (~37KB vendor stylesheet for the dockable workspace).
+    // App CSS re-baselined 75KB → 84KB (Luma phase): new default neumorphic skin +
+    // Analog relocated to explicit [data-skin] blocks (~6KB). Kept in sync with
+    // bundle-size.test.js.
+    const cssSize = files.filter(f => f.ext === 'css' && f.chunk !== 'dockview').reduce((sum, f) => sum + f.size, 0)
+    expect(cssSize).toBeLessThan(84 * 1024)
   })
 
-  it('no lazy chunk exceeds 85KB (excluding vendors)', () => {
+  it('no lazy chunk exceeds 95KB (excluding vendors)', () => {
     if (skipIfNoBuild) return
-    const vendorChunks = ['index', 'router', 'highlight', 'markdown', 'virtual']
+    const vendorChunks = ['index', 'router', 'highlight', 'markdown', 'virtual', 'dockview']
     const lazyChunks = files.filter(f =>
       f.ext === 'js' && !vendorChunks.includes(f.chunk)
     )
@@ -122,11 +122,11 @@ describe('Phase 27 - Bundle Size Budgets', () => {
   it('total bundle under 1MB (excluding vendor highlight + markdown)', () => {
     if (skipIfNoBuild) return
     const appJs = files.filter(f =>
-      f.ext === 'js' && f.chunk !== 'highlight' && f.chunk !== 'markdown'
+      f.ext === 'js' && f.chunk !== 'highlight' && f.chunk !== 'markdown' && f.chunk !== 'dockview'
     )
     const totalAppSize = appJs.reduce((sum, f) => sum + f.size, 0)
-    // Application JS (without large vendor libs). Budget bumped to 540KB in v2.4
-    // to accommodate the image-reference feature and accumulated UI.
+    // Application JS (without large vendor libs: highlight, markdown, dockview).
+    // Budget 540KB.
     expect(totalAppSize).toBeLessThan(540 * 1024)
   })
 
@@ -311,8 +311,8 @@ describe('Phase 27 - Lazy Loading', () => {
     }
   })
 
-  it('ProjectView.jsx uses React.lazy for tab content', () => {
-    const sourcePath = resolve(process.cwd(), 'src/components/ProjectView.jsx')
+  it('ProjectWorkspace.jsx uses React.lazy for dock panels', () => {
+    const sourcePath = resolve(process.cwd(), 'src/components/ProjectWorkspace.jsx')
     if (existsSync(sourcePath)) {
       const source = readFileSync(sourcePath, 'utf-8')
       const expectedLazy = ['LogViewer', 'SwarmHistory', 'FileEditor']

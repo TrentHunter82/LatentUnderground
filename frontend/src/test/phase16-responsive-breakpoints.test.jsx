@@ -307,7 +307,9 @@ describe('Phase 16 - Responsive Breakpoint Tests', () => {
     })
   })
 
-  describe('ProjectView responsive tabs', () => {
+  // SKIPPED: the scrollable responsive tab bar was removed with the dockable
+  // workspace redesign (dockview manages panel/tab overflow itself).
+  describe.skip('ProjectView responsive tabs', () => {
     it('tabs use responsive text sizing', async () => {
       const { default: ProjectView } = await import('../components/ProjectView')
       await act(async () => {

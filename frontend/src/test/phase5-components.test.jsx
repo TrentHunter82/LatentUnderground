@@ -70,7 +70,10 @@ function renderProjectView(props = {}) {
 }
 
 // --- Keyboard Navigation for Tabs ---
-describe('ProjectView tab keyboard navigation', () => {
+// SKIPPED: the ProjectView tab bar was replaced by the dockable workspace
+// (dockview). Panel switching is now dockview's own tab/keyboard behavior;
+// workspace orchestration is covered by project-workspace.test.jsx and e2e.
+describe.skip('ProjectView tab keyboard navigation', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('renders all tab buttons with correct ARIA attributes', async () => {

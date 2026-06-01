@@ -136,7 +136,9 @@ describe('Phase 16 - Keyboard Shortcuts & Navigation', () => {
     localStorage.setItem('lu_onboarding_complete', 'true')
   })
 
-  describe('ProjectView tab keyboard navigation', () => {
+  // SKIPPED: the ProjectView tab bar (and its roving-tabindex keyboard model)
+  // was replaced by the dockable workspace; dockview owns panel keyboard nav now.
+  describe.skip('ProjectView tab keyboard navigation', () => {
     it('ArrowRight moves to next tab', async () => {
       const { default: ProjectView } = await import('../components/ProjectView')
       await act(async () => {

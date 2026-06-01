@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, startTransition, lazy, Suspense } from 'react'
-import { Routes, Route, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback, useMemo, startTransition, lazy, Suspense } from 'react'
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { getSwarmHistory } from './lib/api'
 import { useProjects, projectKeys } from './hooks/useProjectQuery'
 import { useQueryClient } from '@tanstack/react-query'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useHealthCheck } from './hooks/useHealthCheck'
+import { AppChromeProvider } from './hooks/useAppChrome'
 import Sidebar from './components/Sidebar'
 import Home from './components/Home'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -29,7 +30,12 @@ export default function App() {
   const [showArchived, setShowArchived] = useState(false)
   const [projectHealth, setProjectHealth] = useState({})
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
+
+  // On a project-detail route the workspace owns navigation (the Sidebar becomes
+  // a dockable Navigator tile), so App stops rendering the fixed sidebar there.
+  const isProjectView = /^\/projects\/\d+$/.test(location.pathname)
 
   const { connected, reconnecting } = useWebSocket(setWsEvent)
   const { status: healthStatus, latency } = useHealthCheck()
@@ -117,31 +123,47 @@ export default function App() {
 
   const toggleSidebar = () => setSidebarCollapsed((c) => !c)
 
+  // App-chrome state shared with the dockable Navigator tile (see useAppChrome).
+  const appChrome = useMemo(() => ({
+    projects,
+    onRefresh: refreshProjects,
+    projectHealth,
+    showArchived,
+    onShowArchivedChange: setShowArchived,
+  }), [projects, refreshProjects, projectHealth, showArchived])
+
   return (
+    <AppChromeProvider value={appChrome}>
     <div className="crt-frame flex h-screen bg-zinc-950 retro-grid-bg">
-      <Sidebar
-        projects={projects}
-        onRefresh={refreshProjects}
-        collapsed={sidebarCollapsed}
-        onToggle={toggleSidebar}
-        showArchived={showArchived}
-        onShowArchivedChange={setShowArchived}
-        projectHealth={projectHealth}
-      />
+      {!isProjectView && (
+        <Sidebar
+          projects={projects}
+          onRefresh={refreshProjects}
+          collapsed={sidebarCollapsed}
+          onToggle={toggleSidebar}
+          showArchived={showArchived}
+          onShowArchivedChange={setShowArchived}
+          projectHealth={projectHealth}
+        />
+      )}
 
       <main className="flex-1 flex flex-col min-h-0 relative">
         {/* Top bar */}
         <div className="flex items-center justify-between px-3 py-1.5 shrink-0 border-b border-retro-border">
-          <button
-            onClick={toggleSidebar}
-            className="p-1.5 rounded-md text-zinc-400 hover:text-crt-green hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
-            title={sidebarCollapsed ? 'Open sidebar' : 'Close sidebar'}
-            aria-label={sidebarCollapsed ? 'Open sidebar' : 'Close sidebar'}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M3 5h12M3 9h12M3 13h12" />
-            </svg>
-          </button>
+          {!isProjectView ? (
+            <button
+              onClick={toggleSidebar}
+              className="p-1.5 rounded-md text-zinc-400 hover:text-crt-green hover:bg-retro-grid bg-transparent border-0 cursor-pointer transition-colors"
+              title={sidebarCollapsed ? 'Open sidebar' : 'Close sidebar'}
+              aria-label={sidebarCollapsed ? 'Open sidebar' : 'Close sidebar'}
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M3 5h12M3 9h12M3 13h12" />
+              </svg>
+            </button>
+          ) : (
+            <span className="text-[11px] font-mono text-zinc-500 tracking-[0.2em] uppercase pl-1">Workspace</span>
+          )}
 
           <div className="flex items-center gap-2">
             <button
@@ -232,5 +254,6 @@ export default function App() {
         {showOnboarding && <OnboardingModal open={showOnboarding} onClose={() => setShowOnboarding(false)} />}
       </Suspense>
     </div>
+    </AppChromeProvider>
   )
 }

@@ -214,7 +214,9 @@ describe('Phase 12 - Frontend Integration Tests', () => {
     })
   })
 
-  describe('ProjectView Integration', () => {
+  // SKIPPED: asserted the removed 7-tab bar via a full-App render. The dockable
+  // workspace (dockview) replaces it; see project-workspace.test.jsx + e2e.
+  describe.skip('ProjectView Integration', () => {
     it('renders project view with dashboard tab by default', async () => {
       renderApp('/projects/1')
       await waitFor(() => {
@@ -369,8 +371,9 @@ describe('Phase 12 - Frontend Integration Tests', () => {
       getProject.mockRejectedValueOnce(new Error('Not found'))
       renderApp('/projects/999')
       await waitFor(() => {
-        // Should show tabs even if project load fails
-        expect(screen.getByRole('tab', { name: /dashboard/i })).toBeInTheDocument()
+        // The app shell (top-bar "Workspace" label) stays intact even if the
+        // project fetch fails — graceful degradation, no crash.
+        expect(screen.getAllByText(/workspace/i).length).toBeGreaterThanOrEqual(1)
       })
     })
   })

@@ -11,9 +11,16 @@
  * in the ThemePicker. Keep these in sync with the corresponding CSS blocks.
  */
 
-export const DEFAULT_SKIN = 'analog'
+export const DEFAULT_SKIN = 'luma'
 
 export const SKINS = [
+  {
+    id: 'luma',
+    label: 'Luma',
+    tagline: 'Soft-UI neumorphic graphite',
+    // amber accent · graphite body · steel-blue secondary
+    swatch: ['#E8923C', '#26282C', '#6FB0C9'],
+  },
   {
     id: 'analog',
     label: 'Analog',

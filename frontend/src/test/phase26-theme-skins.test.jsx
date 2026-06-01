@@ -37,10 +37,11 @@ describe('Phase 26 - themes.js registry', () => {
   it('has unique skin ids and a valid default', () => {
     expect(new Set(SKIN_IDS).size).toBe(SKIN_IDS.length)
     expect(SKIN_IDS).toContain(DEFAULT_SKIN)
-    expect(DEFAULT_SKIN).toBe('analog')
+    expect(DEFAULT_SKIN).toBe('luma')
   })
 
-  it('includes the obsidian, blueprint and terminal reskins', () => {
+  it('includes the analog, obsidian, blueprint and terminal reskins', () => {
+    expect(SKIN_IDS).toContain('analog')
     expect(SKIN_IDS).toContain('obsidian')
     expect(SKIN_IDS).toContain('blueprint')
     expect(SKIN_IDS).toContain('terminal')
@@ -98,12 +99,12 @@ describe('Phase 26 - ThemeProvider skin dimension', () => {
     return () => state
   }
 
-  it('defaults to the analog skin and sets the data-skin attribute', async () => {
+  it('defaults to the luma skin and sets the data-skin attribute', async () => {
     const { ThemeProvider, useTheme } = await import('../hooks/useTheme')
     const get = renderWithReader(ThemeProvider, useTheme)
 
-    expect(get().skin).toBe('analog')
-    expect(document.documentElement.getAttribute('data-skin')).toBe('analog')
+    expect(get().skin).toBe('luma')
+    expect(document.documentElement.getAttribute('data-skin')).toBe('luma')
   })
 
   it('setSkin updates state, attribute, and localStorage', async () => {
@@ -139,8 +140,8 @@ describe('Phase 26 - ThemeProvider skin dimension', () => {
       order.push(get().skin)
     }
     // after N cycles we are back to the starting skin
-    expect(order[0]).toBe('analog')
-    expect(order[order.length - 1]).toBe('analog')
+    expect(order[0]).toBe('luma')
+    expect(order[order.length - 1]).toBe('luma')
     // every skin was visited
     expect(new Set(order)).toEqual(new Set(SKIN_IDS))
   })
@@ -159,7 +160,7 @@ describe('Phase 26 - ThemeProvider skin dimension', () => {
     const { ThemeProvider, useTheme } = await import('../hooks/useTheme')
     const get = renderWithReader(ThemeProvider, useTheme)
 
-    expect(get().skin).toBe('analog')
+    expect(get().skin).toBe('luma')
   })
 
   it('skin is orthogonal to mode — changing skin keeps the light class', async () => {
@@ -201,8 +202,8 @@ describe('Phase 26 - ThemePicker', () => {
 
   it('marks the active skin as checked', async () => {
     await renderPicker()
-    const analog = screen.getByRole('radio', { name: /analog/i })
-    expect(analog).toHaveAttribute('aria-checked', 'true')
+    const luma = screen.getByRole('radio', { name: /luma/i })
+    expect(luma).toHaveAttribute('aria-checked', 'true')
     const obsidian = screen.getByRole('radio', { name: /obsidian/i })
     expect(obsidian).toHaveAttribute('aria-checked', 'false')
   })

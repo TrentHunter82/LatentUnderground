@@ -1,0 +1,93 @@
+/* ============================================================================
+   Dockable workspace (dockview) — Luma-first theming.
+   We don't use dockview's bundled palette themes; instead we map every visible
+   --dv-* variable onto the app's own token contract (--body-bg, --panel-bg,
+   --color-retro-*, --color-crt-green …). Because those tokens already adapt to
+   the active skin + light/dark mode, the dock chrome themes correctly under
+   Luma, Analog, Obsidian, Blueprint and Terminal with zero per-skin code.
+   ============================================================================ */
+.lu-dock {
+  --dv-border-radius: 10px;
+  --dv-tabs-and-actions-container-height: 34px;
+  --dv-tab-font-size: 12px;
+
+  --dv-group-view-background-color: var(--body-bg);
+  --dv-tabs-and-actions-container-background-color: var(--color-retro-grid);
+
+  --dv-activegroup-visiblepanel-tab-background-color: var(--panel-bg);
+  --dv-activegroup-visiblepanel-tab-color: var(--body-fg);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--color-retro-grid);
+  --dv-activegroup-hiddenpanel-tab-color: var(--color-zinc-500, #8a8a8a);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-retro-grid);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--body-fg);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-retro-grid);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--color-zinc-500, #8a8a8a);
+
+  --dv-tab-divider-color: var(--color-retro-border);
+  --dv-separator-border: var(--color-retro-border);
+  --dv-paneview-header-border-color: var(--color-retro-border);
+
+  --dv-sash-color: var(--color-retro-border);
+  --dv-active-sash-color: var(--color-crt-green);
+
+  --dv-drag-over-background-color: color-mix(in srgb, var(--color-crt-green) 20%, transparent);
+  --dv-drag-over-border-color: var(--color-crt-green);
+  --dv-floating-box-shadow: var(--neu-raised, 0 10px 30px rgba(0, 0, 0, 0.45));
+
+  --dv-icon-hover-background-color: color-mix(in srgb, var(--body-fg) 12%, transparent);
+  --dv-scrollbar-background-color: var(--scrollbar);
+  --dv-tabs-container-scrollbar-color: var(--scrollbar);
+
+  background: var(--body-bg);
+  font-family: var(--font-sans);
+}
+
+/* Tabs read as soft display-font chips */
+.lu-dock .dv-default-tab,
+.lu-dock .tab {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+}
+
+/* Visible, grabbable resize sashes (discoverability for "drag the dividers"). */
+.lu-dock .dv-resize-container > .dv-sash,
+.lu-dock .sash {
+  transition: background-color 0.15s ease;
+}
+
+/* The active tab gets the accent underline to echo the old tab bar. */
+.lu-dock .dv-active-group .dv-tab.dv-active-tab,
+.lu-dock .dv-tab.dv-active-tab {
+  box-shadow: inset 0 -2px 0 var(--color-crt-green);
+}
+
+/* Each docked panel's content host fills its tile so virtualized panels
+   (TerminalOutput / LogViewer) re-measure against the TILE, not the window. */
+.lu-dock-panel {
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Reuse the fixed-chrome <Sidebar> inside a dock tile by neutralizing its
+   off-canvas positioning so it simply fills the panel. */
+.lu-dock-navigator > aside {
+  position: static !important;
+  width: 100% !important;
+  height: 100%;
+  transform: none !important;
+  border-right: 0;
+}
+
+/* Thin workspace toolbar (title · add-panel · reset). */
+.lu-workspace-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--color-retro-border);
+  background: var(--color-retro-grid);
+}

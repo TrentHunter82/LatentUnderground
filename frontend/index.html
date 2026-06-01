@@ -22,7 +22,7 @@
           var light = mode === 'light' || (mode === 'system' && prefersLight);
           root.classList.toggle('light', light);
           var skin = localStorage.getItem('latent-skin');
-          if (skin !== 'analog' && skin !== 'obsidian' && skin !== 'blueprint' && skin !== 'terminal') skin = 'analog';
+          if (skin !== 'luma' && skin !== 'analog' && skin !== 'obsidian' && skin !== 'blueprint' && skin !== 'terminal') skin = 'luma';
           root.setAttribute('data-skin', skin);
         } catch (e) { /* localStorage unavailable — fall through to default theme */ }
       })();
@@ -30,7 +30,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x26A1;</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;600;700&family=Jost:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   </head>
   <body class="bg-zinc-950 text-zinc-100">
     <div id="root"></div>

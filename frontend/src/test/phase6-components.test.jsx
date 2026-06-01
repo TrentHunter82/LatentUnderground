@@ -329,7 +329,9 @@ function renderProjectView(props = {}) {
   )
 }
 
-describe('Analytics Tab in ProjectView', () => {
+// SKIPPED: ProjectView's 7-tab bar was replaced by the dockable workspace.
+// Analytics is still covered directly by the 'Analytics Component' suite below.
+describe.skip('Analytics Tab in ProjectView', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('renders Analytics tab button', async () => {

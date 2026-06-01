@@ -49,6 +49,9 @@ export default defineConfig({
             if (id.includes('@tanstack/react-virtual') || id.includes('@tanstack/virtual-core')) {
               return 'virtual'
             }
+            if (id.includes('dockview')) {
+              return 'dockview'
+            }
           }
         },
       },

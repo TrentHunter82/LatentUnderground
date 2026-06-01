@@ -249,7 +249,7 @@ export function createThemeMock(valueOverrides = {}) {
     mode: 'dark',
     toggleTheme: vi.fn(),
     setTheme: vi.fn(),
-    skin: 'analog',
+    skin: 'luma',
     setSkin: vi.fn(),
     cycleSkin: vi.fn(),
     skins: SKINS,
