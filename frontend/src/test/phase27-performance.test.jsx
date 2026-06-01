@@ -80,11 +80,14 @@ describe('Phase 27 - Bundle Size Budgets', () => {
     expect(initialSize).toBeLessThan(310 * 1024)
   })
 
-  it('CSS remains under 60KB', () => {
+  it('CSS remains under 75KB', () => {
     if (skipIfNoBuild) return
     const cssSize = files.filter(f => f.ext === 'css').reduce((sum, f) => sum + f.size, 0)
-    // Current: ~55KB. Budget: 60KB.
-    expect(cssSize).toBeLessThan(60 * 1024)
+    // Actual built size 74234B (72.5KB). Phase 2 token-driven refactor tightened the
+    // base ~2KB; the Terminal reskin (4th skin, dark+light) then adds ~5KB of token
+    // blocks. Gzips to ~13KB on the wire. Budget re-baselined 76KB → 75KB (Hardening
+    // phase) for a tight ~2.5KB headroom — kept in sync with bundle-size.test.js.
+    expect(cssSize).toBeLessThan(75 * 1024)
   })
 
   it('no lazy chunk exceeds 85KB (excluding vendors)', () => {

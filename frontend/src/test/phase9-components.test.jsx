@@ -5,7 +5,7 @@ import { ToastProvider, useToast } from '../components/Toast'
 import ShortcutCheatsheet from '../components/ShortcutCheatsheet'
 import OnboardingModal from '../components/OnboardingModal'
 import { KEYBOARD_SHORTCUTS, DEFAULT_TEMPLATE_PRESETS } from '../lib/constants'
-import { createApiMock } from './test-utils'
+import { createApiMock, createThemeMock } from './test-utils'
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -19,11 +19,10 @@ const localStorageMock = (() => {
 })()
 Object.defineProperty(window, 'localStorage', { value: localStorageMock })
 
-// Mock hooks for SettingsPanel
-vi.mock('../hooks/useTheme.jsx', () => ({
-  useTheme: () => ({ theme: 'dark', toggleTheme: vi.fn() }),
-  ThemeProvider: ({ children }) => children,
-}))
+// Mock hooks for SettingsPanel.
+// SettingsPanel renders <ThemePicker/>; use the shared factory so the mock always
+// matches the full useTheme context shape (skin/setSkin/skins) from a single source.
+vi.mock('../hooks/useTheme.jsx', () => createThemeMock())
 
 vi.mock('../hooks/useHealthCheck', () => ({
   useHealthCheck: () => ({ status: 'healthy', latency: 42 }),

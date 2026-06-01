@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { SKINS } from '../lib/themes'
 
 /**
  * Creates a fresh QueryClient configured for testing.
@@ -218,6 +219,45 @@ export function createMutationsMock(overrides = {}) {
     useDeleteImageReference: () => _defaultMutationResult,
     useSendBusMessage: () => _defaultMutationResult,
     ...overrides,
+  }
+}
+
+// ============================================================
+// Shared useTheme Mock Factory
+// ============================================================
+// The ThemeProvider context exposes BOTH the light/dark "mode" axis
+// (theme/mode/toggleTheme/setTheme) AND the orthogonal "skin" axis
+// (skin/setSkin/cycleSkin/skins). Components like SettingsPanel -> ThemePicker
+// read the skin keys; a partial mock that omits them silently under-exercises
+// those components (and a missing `skins` array can break future consumers).
+// Use this factory so every useTheme mock supplies the COMPLETE context shape.
+//
+// Usage:   vi.mock('../hooks/useTheme', () => createThemeMock())
+// Override: vi.mock('../hooks/useTheme', () => createThemeMock({ theme: 'light', mode: 'light' }))
+//
+// The returned context object is created ONCE per factory call and the same
+// reference is returned from every useTheme() invocation, so consumers that put
+// the value (or `skins`) in a dependency array won't see new references each render.
+
+/**
+ * Create a useTheme mock module object for vi.mock().
+ * `valueOverrides` merges into the default context value (e.g. { theme: 'light' }).
+ */
+export function createThemeMock(valueOverrides = {}) {
+  const value = {
+    theme: 'dark',
+    mode: 'dark',
+    toggleTheme: vi.fn(),
+    setTheme: vi.fn(),
+    skin: 'analog',
+    setSkin: vi.fn(),
+    cycleSkin: vi.fn(),
+    skins: SKINS,
+    ...valueOverrides,
+  }
+  return {
+    useTheme: () => value,
+    ThemeProvider: ({ children }) => children,
   }
 }
 

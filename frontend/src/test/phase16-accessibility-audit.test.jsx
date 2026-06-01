@@ -11,6 +11,8 @@ import * as matchers from 'vitest-axe/matchers'
 
 expect.extend(matchers)
 
+// Every test here dynamically imports a component and runs a full axe-core audit (heavy).
+// Timeouts are governed by the authoritative `testTimeout` in vite.config.js.
 // --- Mock all external dependencies ---
 
 const mockNavigate = vi.fn()
@@ -97,16 +99,13 @@ vi.mock('../hooks/useNotifications', () => ({
   useNotifications: () => ({ notify: vi.fn(), permission: 'granted', requestPermission: vi.fn() }),
 }))
 
-vi.mock('../hooks/useTheme', () => ({
-  useTheme: () => ({ theme: 'dark', mode: 'dark', toggleTheme: vi.fn(), setTheme: vi.fn() }),
-  ThemeProvider: ({ children }) => children,
-}))
+vi.mock('../hooks/useTheme', () => createThemeMock())
 
 vi.mock('../hooks/useHealthCheck', () => ({
   useHealthCheck: () => ({ status: 'healthy', latency: 42 }),
 }))
 
-const { createApiMock, createProjectQueryMock, createSwarmQueryMock, createMutationsMock } = await vi.hoisted(() => import('./test-utils'))
+const { createApiMock, createProjectQueryMock, createSwarmQueryMock, createMutationsMock, createThemeMock } = await vi.hoisted(() => import('./test-utils'))
 
 vi.mock('../hooks/useProjectQuery', () => createProjectQueryMock({
   useProject: () => ({ data: { id: 1, name: 'Test Project', goal: 'Test goal', status: 'running', config: '{"agent_count": 4, "max_phases": 10}' }, isLoading: false, error: null }),

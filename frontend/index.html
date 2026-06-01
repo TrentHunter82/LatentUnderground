@@ -4,6 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Latent Underground</title>
+    <!--
+      No-flash theme bootstrap. Applies the persisted light/dark mode (.light class)
+      and reskin (data-skin attribute) synchronously, before first paint, so returning
+      users with a stored 'light' mode or a non-default skin don't see a flash of the
+      default dark/analog theme. Mirrors getInitialMode/getInitialSkin in useTheme.jsx;
+      keep the skin id list in sync with lib/themes.js SKIN_IDS.
+    -->
+    <script>
+      (function () {
+        try {
+          var root = document.documentElement;
+          var mode = localStorage.getItem('latent-theme');
+          if (mode !== 'dark' && mode !== 'light' && mode !== 'system') mode = 'system';
+          var prefersLight = typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-color-scheme: light)').matches;
+          var light = mode === 'light' || (mode === 'system' && prefersLight);
+          root.classList.toggle('light', light);
+          var skin = localStorage.getItem('latent-skin');
+          if (skin !== 'analog' && skin !== 'obsidian' && skin !== 'blueprint' && skin !== 'terminal') skin = 'analog';
+          root.setAttribute('data-skin', skin);
+        } catch (e) { /* localStorage unavailable — fall through to default theme */ }
+      })();
+    </script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x26A1;</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

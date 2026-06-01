@@ -176,16 +176,19 @@ test.describe('Theme System', () => {
   test('persists theme preference across page loads', async ({ page }) => {
     await page.goto('/');
 
-    // Set a theme preference in localStorage
+    // Set a light-mode preference under the key the app actually reads ('latent-theme',
+    // not 'theme' — see useTheme.jsx STORAGE_KEY). The no-flash bootstrap in index.html
+    // must then apply the `.light` class on the next load.
     await page.evaluate(() => {
-      localStorage.setItem('theme', 'light');
+      localStorage.setItem('latent-theme', 'light');
     });
 
     await page.reload();
 
-    // Theme should be restored from localStorage
-    const storedTheme = await page.evaluate(() => localStorage.getItem('theme'));
+    // The preference is honoured: it round-trips AND the app applies it to <html>.
+    const storedTheme = await page.evaluate(() => localStorage.getItem('latent-theme'));
     expect(storedTheme).toBe('light');
+    await expect(page.locator('html')).toHaveClass(/light/);
   });
 });
 

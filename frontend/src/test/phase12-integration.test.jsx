@@ -227,7 +227,7 @@ describe('Phase 12 - Frontend Integration Tests', () => {
       expect(screen.getByRole('tab', { name: /logs/i })).toBeInTheDocument()
       expect(screen.getByRole('tab', { name: /analytics/i })).toBeInTheDocument()
       expect(screen.getByRole('tab', { name: /settings/i })).toBeInTheDocument()
-    }, 20000)
+    })
 
     it('loads project data and displays status', async () => {
       renderApp('/projects/1')
@@ -238,7 +238,7 @@ describe('Phase 12 - Frontend Integration Tests', () => {
         expect(dashboardTab).toBeInTheDocument()
         expect(dashboardTab).toHaveAttribute('aria-selected', 'true')
       }, { timeout: 15000 })
-    }, 20000)
+    })
 
     it('switches between tabs on click', async () => {
       renderApp('/projects/1')
@@ -250,7 +250,7 @@ describe('Phase 12 - Frontend Integration Tests', () => {
       })
       const historyTab = screen.getByRole('tab', { name: /history/i })
       expect(historyTab).toHaveAttribute('aria-selected', 'true')
-    }, 20000)
+    })
   })
 
   describe('Sidebar Search & Filter Integration', () => {
@@ -319,7 +319,7 @@ describe('Phase 12 - Frontend Integration Tests', () => {
         fireEvent.keyDown(window, { key: 'Escape' })
       })
       // Settings should be closed (no settings-specific content visible)
-    }, 15000)
+    })
   })
 
   describe('Health Status Indicator', () => {

@@ -59,7 +59,7 @@ describe('FileEditor', () => {
     await act(async () => { renderEditor({ projectId: 42 }) })
 
     expect(getFile).toHaveBeenCalledWith('tasks/TASKS.md', 42)
-  }, 15000)
+  })
 
   // -------------------------------------------------------
   // 3. Shows markdown preview of file content
@@ -463,7 +463,7 @@ describe('FileEditor', () => {
       expect(textarea).toBeInTheDocument()
       expect(textarea.value).toBe('unsaved content')
     })
-  }, 15000)
+  })
 
   // -------------------------------------------------------
   // 19. Edit button is present in preview mode

@@ -9,6 +9,7 @@ import Sidebar from './components/Sidebar'
 import Home from './components/Home'
 import ErrorBoundary from './components/ErrorBoundary'
 import ThemeToggle from './components/ThemeToggle'
+import SkinToggle from './components/SkinToggle'
 
 // Lazy-load route components and modals for bundle splitting
 const NewProject = lazy(() => import('./components/NewProject'))
@@ -165,6 +166,7 @@ export default function App() {
                 <circle cx="8" cy="8" r="2" />
               </svg>
             </button>
+            <SkinToggle />
             <ThemeToggle />
             <div className="group relative flex items-center gap-1.5 cursor-default">
               <span

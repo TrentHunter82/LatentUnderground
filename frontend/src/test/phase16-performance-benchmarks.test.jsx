@@ -97,10 +97,7 @@ vi.mock('../hooks/useNotifications', () => ({
   useNotifications: () => ({ notify: vi.fn(), permission: 'granted', requestPermission: vi.fn() }),
 }))
 
-vi.mock('../hooks/useTheme', () => ({
-  useTheme: () => ({ theme: 'dark', mode: 'dark', toggleTheme: vi.fn(), setTheme: vi.fn() }),
-  ThemeProvider: ({ children }) => children,
-}))
+vi.mock('../hooks/useTheme', () => createThemeMock())
 
 vi.mock('../hooks/useHealthCheck', () => ({
   useHealthCheck: () => ({ status: 'healthy', latency: 42 }),
@@ -131,7 +128,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
 })
 
 import { ToastProvider } from '../components/Toast'
-import { TestQueryWrapper } from './test-utils'
+import { TestQueryWrapper, createThemeMock } from './test-utils'
 
 function renderWithProviders(ui, { route = '/' } = {}) {
   return render(
@@ -165,7 +162,7 @@ describe('Phase 16 - Performance Benchmarks', () => {
       const elapsed = performance.now() - start
 
       expect(elapsed).toBeLessThan(2000)
-    }, 10000)
+    })
 
     it('DOM node count stays reasonable with 1000 lines', async () => {
       const { default: TerminalOutput } = await import('../components/TerminalOutput')
@@ -179,7 +176,7 @@ describe('Phase 16 - Performance Benchmarks', () => {
       // Total DOM nodes should stay under 10000 even with 1000 lines of output
       const nodeCount = container.querySelectorAll('*').length
       expect(nodeCount).toBeLessThan(10000)
-    }, 10000)
+    })
   })
 
   describe('AgentGrid with many agents', () => {
@@ -232,7 +229,7 @@ describe('Phase 16 - Performance Benchmarks', () => {
 
       // ProjectView with all its lazy-loaded components should render quickly
       expect(elapsed).toBeLessThan(2000)
-    }, 10000)
+    })
   })
 
   describe('NewProject form', () => {
@@ -263,6 +260,6 @@ describe('Phase 16 - Performance Benchmarks', () => {
         unmount()
       }
       // If this completes without hanging or crashing, memory management is acceptable
-    }, 15000)
+    })
   })
 })

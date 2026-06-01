@@ -1,5 +1,87 @@
 # Agent Plans
 
+## Claude-4 (Polish/Review) — Theme System Final Gate (Phase 1)
+
+State on entry: Theme System & Reskins is implemented and VERIFIED green by the swarm
+(frontend 795 pass / 0 fail, backend themes 19/19, lint 0, build OK, CSS 69.4KB < 72KB).
+A prior Claude-4 context already drafted next-swarm.ps1 (Phase 2 = tokenize per-skin CSS).
+The current relaunch handed a generic placeholder tasks/TASKS.md — must reconcile so the
+next relaunch doesn't loop on empty tasks (lessons #79).
+
+### Plan
+1. [x] Re-establish green baseline (full frontend suite) — 795 pass / 24 skip / 0 fail.
+2. [x] Read all theme artifacts (themes.js, useTheme, ThemePicker, SettingsPanel, index.html, index.css, tests).
+3. [x] Multi-agent adversarial review workflow over the theme diff (5 dimensions → verify each finding).
+4. [x] Apply confirmed fix-now findings (10/10). See findings summary below.
+5. [x] Re-run affected suites + full suite — 799 pass / 24 skip / 0 fail; CSS 71.77KB < 72KB.
+6. [x] Reconcile tasks/TASKS.md to reflect the completed Phase 1 theme work (no placeholder loop).
+7. [x] Consolidate lessons.md (+4 lessons); update AGENT_STATUS, activity.log, heartbeat.
+8. [x] Validate next-swarm.ps1 parses; create phase-complete.signal; output COMPLETE-ALL.
+
+### Fresh-context final re-certification (2026-06-01T02:51Z)
+A later Claude-4 context re-ran the WHOLE gate from scratch (trusting no prior report):
+- frontend **806 pass / 24 skip / 0 fail (40 files)** — fixed one flake: `phase15-features.test.jsx`
+  FileEditor-404 tests timed out at the 5s default under full-suite load (35/35 green alone) →
+  added file-level `vi.setConfig({ testTimeout: 15000 })` (lesson #451 pattern). Re-run: 806/0.
+- ESLint **0 errors** (42 pre-existing non-blocking react-hooks advisories); build OK,
+  **CSS 74234B / 72.5KB < 76KB**; backend `themes.validate` PASS; `next-swarm.ps1` parses clean.
+- Re-reviewed theme code (themes.js / useTheme / ThemePicker / SkinToggle): staff-engineer quality.
+- Re-created `.claude/signals/phase-complete.signal` (the earlier one was withdrawn during the
+  concurrent token refactor). Tree now stable & green → safe to signal.
+
+### Claude-4 Review Findings (theme-system adversarial review — 20 agents)
+Raw 15 → 10 confirmed fix-now (all fixed) → 5 rejected (sound reasoning, e.g. `aria-required`
+is invalid on `radiogroup`; the 0.02-opacity light glow is imperceptible; the "double
+getInitialMode race" can't occur — useState runs synchronously).
+
+Confirmed & fixed:
+- **a11y (high):** SettingsPanel focus-trap selector matched `<button tabindex="-1">` (inactive
+  ThemePicker radios). Added `:not([tabindex="-1"])` to every element-type clause.
+- **CSS (high/med):** base `.btn-neon-danger:hover` + `.retro-panel-glow` hardcode the Analog
+  mint palette; non-Analog skins inherited it on hover/glow. Added per-skin overrides for
+  obsidian dark+light and blueprint dark+light (`:hover`) and blueprint `.retro-panel-glow`.
+  (Reviewer undercounted by one — obsidian-light `:hover` was also missing; fixed it too.)
+- **tests (med):** no shared `createThemeMock`; partial/duplicated `useTheme` mocks across 10
+  files. Added the factory (imports real `SKINS`) and migrated all 10. Added focus-movement
+  assertions to theme-picker-keyboard (it claimed to test focus but never asserted it).
+- **integration (high):** skin id list duplicated in themes.js / index.html / index.css with no
+  mechanical sync. Added `theme-registry-sync.test.js` to fail loudly on drift (chosen over the
+  reviewer's "empty analog CSS block" idea, which would have spent precious CSS budget).
+
+### Reconciliation note (concurrent token refactor)
+While I was finalizing, Claude-2 landed a token-driven `index.css` refactor (the planned Phase-2
+headline) — the `:root` COMPONENT TOKEN CONTRACT. My literal per-skin `.btn-neon-danger:hover` /
+`.retro-panel-glow` overrides were SUPERSEDED by it (the bug I found is now fixed structurally via
+`--btn-danger-hover-*` / `--panel-glow-shadow` tokens, 6 skin token-overrides present). The refactor
+also shrank CSS to 68.41KB (budget headroom restored). My other fixes are untouched by it and remain
+green. My `theme-registry-sync.test.js` SURVIVED the refactor (still passing) — the SSOT guard proved
+its worth. Re-verified the full tree green AFTER the refactor: 799 pass / 24 skip / 0 fail. Updated
+next-swarm.ps1 so Phase 2 doesn't redo the now-landed tokenization.
+
+---
+
+## Claude-1 (Backend/Core) — Current Session
+
+Mission: Make Latent Underground fully controllable from the web UI — no terminal
+management needed. Polish per-agent orchestration, fix bugs, improve reliability.
+
+### Plan
+1. [in progress] Baseline: run full backend pytest suite, capture any failures.
+2. [in progress] Backend orchestration audit workflow (6 concern finders + adversarial
+   verification) → confirmed bugs / reliability / controllability gaps.
+3. [ ] Fix confirmed failing tests (reliability baseline must stay green).
+4. [ ] Fix confirmed audit findings, highest severity first. Root-cause, no hacks.
+5. [ ] Re-run tests to prove each fix. Mark done only after green.
+6. [ ] Update lessons.md; signal backend-ready.
+
+### Notes
+- swarm.py (3843 lines) is the orchestration core. API surface already rich.
+- Prior phases report ~1488 backend tests green. This is polish/reliability work.
+
+---
+
+# Agent Plans (history below)
+
 ## Claude-2 [Frontend/Interface] - COMPLETED (Phase 27 Session)
 
 ### Phase 27: Preload Hints, Guardrail Display, Bundle Optimization

@@ -38,6 +38,109 @@
   --animate-cursor-blink: cursor-blink 0.8s step-end infinite;
 }
 
+/* ============================================================================
+   COMPONENT TOKEN CONTRACT
+   The hand-written component classes below (.btn-neon, .retro-panel, .led-*,
+   .neon-*, .glow-*, .retro-input, .retro-progress, frame, markdown, scrollbar)
+   read these semantic tokens instead of literal hexes. The defaults in this
+   block ARE the Analog dark skin — so analog renders with no override block.
+
+   A skin/mode (html.light, html[data-skin="x"], html.light[data-skin="x"]) is
+   then just ONE selector that overrides the small set of tokens that differ,
+   plus the Tailwind --color-* tokens it already overrode. No per-component rule
+   duplication. Adding a skin = authoring one token block.
+
+   Colors that a skin already remaps via --color-* (accent/border/etc.) are
+   referenced through those vars here, so they update for free.
+   ============================================================================ */
+:root {
+  /* Body & frame */
+  --body-bg: #12120e;
+  --body-fg: #E0DCC8;
+  --scanline: rgba(128, 200, 176, 0.015);
+  --vignette: inset 0 0 150px rgba(18, 18, 14, 0.6);
+  --grid-line: rgba(60, 60, 48, 0.15);
+
+  /* Neon text — color + glow (per accent hue) */
+  --neon-green: var(--color-crt-green);
+  --neon-green-glow: 0 0 10px rgba(128, 200, 176, 0.5);
+  --neon-cyan: var(--color-crt-cyan);
+  --neon-cyan-glow: 0 0 10px rgba(90, 172, 160, 0.5);
+  --neon-magenta: var(--color-crt-magenta);
+  --neon-magenta-glow: 0 0 10px rgba(196, 30, 58, 0.4);
+  --neon-amber: var(--color-crt-amber);
+  --neon-amber-glow: 0 0 10px rgba(232, 120, 56, 0.4);
+
+  /* Box glows (per accent hue) */
+  --glow-green: 0 0 8px rgba(128, 200, 176, 0.2), inset 0 1px 0 rgba(200, 192, 168, 0.08);
+  --glow-cyan: 0 0 8px rgba(90, 172, 160, 0.2), inset 0 1px 0 rgba(200, 192, 168, 0.08);
+  --glow-magenta: 0 0 8px rgba(196, 30, 58, 0.2), inset 0 1px 0 rgba(200, 192, 168, 0.08);
+  --glow-amber: 0 0 8px rgba(232, 120, 56, 0.2), inset 0 1px 0 rgba(200, 192, 168, 0.08);
+
+  /* Tactile button */
+  --btn-border: var(--color-crt-green);
+  --btn-color: var(--color-crt-green);
+  --btn-bg: linear-gradient(180deg, rgba(128, 200, 176, 0.08) 0%, transparent 100%);
+  --btn-shadow: inset 0 1px 0 rgba(200, 192, 168, 0.1), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --btn-hover-bg: rgba(128, 200, 176, 0.12);
+  --btn-hover-border: var(--btn-border);
+  --btn-hover-shadow: inset 0 1px 0 rgba(200, 192, 168, 0.15), 0 0 10px rgba(128, 200, 176, 0.2), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --btn-hover-text-shadow: 0 0 8px rgba(128, 200, 176, 0.4);
+  --btn-danger-border: var(--color-signal-red);
+  --btn-danger-color: var(--color-signal-red);
+  --btn-danger-bg: linear-gradient(180deg, rgba(200, 55, 45, 0.06) 0%, transparent 100%);
+  --btn-danger-hover-bg: rgba(200, 55, 45, 0.1);
+  --btn-danger-hover-border: var(--btn-danger-border);
+  --btn-danger-hover-shadow: inset 0 1px 0 rgba(200, 192, 168, 0.1), 0 0 10px rgba(200, 55, 45, 0.2), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --btn-danger-hover-text-shadow: 0 0 8px rgba(200, 55, 45, 0.3);
+
+  /* Panel / card */
+  --panel-bg: rgba(18, 18, 14, 0.9);
+  --panel-border: #4A4A3C;
+  --panel-shadow: inset 0 1px 0 rgba(200, 192, 168, 0.06), 0 1px 3px rgba(0, 0, 0, 0.2);
+  --panel-glow-shadow: inset 0 1px 0 rgba(200, 192, 168, 0.06), inset 0 0 30px rgba(128, 200, 176, 0.02), 0 1px 3px rgba(0, 0, 0, 0.2);
+
+  /* Input */
+  --input-bg: rgba(12, 12, 8, 0.95);
+  --input-border: #4A4A3C;
+  --input-color: #E0DCC8;
+  --input-caret: var(--color-crt-green);
+  --input-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+  --input-focus-border: var(--color-crt-green);
+  --input-focus-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 6px rgba(128, 200, 176, 0.15);
+  --input-placeholder: #5A5A48;
+
+  /* Progress */
+  --progress-bg: #1A1A14;
+  --progress-border: #4A4A3C;
+  --progress-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  --progress-fill: linear-gradient(90deg, #5AACA0, #80C8B0);
+  --progress-fill-shadow: 0 0 6px rgba(128, 200, 176, 0.3);
+
+  /* Jewel-cap indicator LEDs */
+  --led-active: radial-gradient(circle at 35% 35%, #B0E8D8, #80C8B0 55%, #408870);
+  --led-active-shadow: 0 0 6px rgba(128, 200, 176, 0.5);
+  --led-active-border: 1px solid rgba(128, 200, 176, 0.3);
+  --led-inactive: radial-gradient(circle at 35% 35%, #4A4A3C, #3C3C30 60%, #2A2A20);
+  --led-inactive-border: 1px solid rgba(60, 60, 48, 0.5);
+  --led-warning: radial-gradient(circle at 35% 35%, #F0D868, #D4A830 55%, #9A7820);
+  --led-warning-shadow: 0 0 6px rgba(212, 168, 48, 0.5);
+  --led-warning-border: 1px solid rgba(212, 168, 48, 0.3);
+  --led-danger: radial-gradient(circle at 35% 35%, #E86858, #C8372D 55%, #8A2420);
+  --led-danger-shadow: 0 0 6px rgba(200, 55, 45, 0.5);
+  --led-danger-border: 1px solid rgba(200, 55, 45, 0.3);
+
+  /* Markdown */
+  --md-code-bg: #22221a;
+  --md-code-color: #80C8B0;
+  --md-pre-bg: #12120e;
+  --md-pre-border: #3C3C30;
+
+  /* Scrollbar */
+  --scrollbar: #3C3C30;
+  --scrollbar-hover: #4A4A3C;
+}
+
 /* === Keyframes === */
 @keyframes glow-pulse {
   0%, 100% { opacity: 1; }
@@ -99,8 +202,8 @@ html {
 
 body {
   font-family: 'Space Mono', ui-monospace, monospace;
-  background-color: #12120e;
-  color: #E0DCC8;
+  background-color: var(--body-bg);
+  color: var(--body-fg);
   -webkit-font-smoothing: antialiased;
   text-rendering: geometricPrecision;
 }
@@ -117,8 +220,8 @@ body {
     0deg,
     transparent,
     transparent 3px,
-    rgba(128, 200, 176, 0.015) 3px,
-    rgba(128, 200, 176, 0.015) 6px
+    var(--scanline) 3px,
+    var(--scanline) 6px
   );
   pointer-events: none;
   z-index: 9999;
@@ -132,7 +235,7 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  box-shadow: inset 0 0 150px rgba(18, 18, 14, 0.6);
+  box-shadow: var(--vignette);
   pointer-events: none;
   z-index: 9998;
 }
@@ -140,63 +243,44 @@ body {
 /* === Background Grid (warm, subtle) === */
 .retro-grid-bg {
   background-image:
-    linear-gradient(rgba(60, 60, 48, 0.15) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(60, 60, 48, 0.15) 1px, transparent 1px);
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: 48px 48px;
 }
 
 /* === Text Glow Utilities (warm, soft — not harsh neon) === */
 .neon-green {
-  color: #80C8B0;
-  text-shadow: 0 0 10px rgba(128, 200, 176, 0.5);
+  color: var(--neon-green);
+  text-shadow: var(--neon-green-glow);
 }
 
 .neon-cyan {
-  color: #5AACA0;
-  text-shadow: 0 0 10px rgba(90, 172, 160, 0.5);
+  color: var(--neon-cyan);
+  text-shadow: var(--neon-cyan-glow);
 }
 
 .neon-magenta {
-  color: #C41E3A;
-  text-shadow: 0 0 10px rgba(196, 30, 58, 0.4);
+  color: var(--neon-magenta);
+  text-shadow: var(--neon-magenta-glow);
 }
 
 .neon-amber {
-  color: #E87838;
-  text-shadow: 0 0 10px rgba(232, 120, 56, 0.4);
+  color: var(--neon-amber);
+  text-shadow: var(--neon-amber-glow);
 }
 
 /* === Box Glow (warm chrome reflections) === */
-.glow-green {
-  box-shadow:
-    0 0 8px rgba(128, 200, 176, 0.2),
-    inset 0 1px 0 rgba(200, 192, 168, 0.08);
-}
-
-.glow-cyan {
-  box-shadow:
-    0 0 8px rgba(90, 172, 160, 0.2),
-    inset 0 1px 0 rgba(200, 192, 168, 0.08);
-}
-
-.glow-magenta {
-  box-shadow:
-    0 0 8px rgba(196, 30, 58, 0.2),
-    inset 0 1px 0 rgba(200, 192, 168, 0.08);
-}
-
-.glow-amber {
-  box-shadow:
-    0 0 8px rgba(232, 120, 56, 0.2),
-    inset 0 1px 0 rgba(200, 192, 168, 0.08);
-}
+.glow-green { box-shadow: var(--glow-green); }
+.glow-cyan { box-shadow: var(--glow-cyan); }
+.glow-magenta { box-shadow: var(--glow-magenta); }
+.glow-amber { box-shadow: var(--glow-amber); }
 
 /* === Tactile Button (chrome-bordered, toggle-cap feel) === */
 .btn-neon {
   position: relative;
-  border: 1px solid #80C8B0;
-  color: #80C8B0;
-  background: linear-gradient(180deg, rgba(128, 200, 176, 0.08) 0%, transparent 100%);
+  border: 1px solid var(--btn-border);
+  color: var(--btn-color);
+  background: var(--btn-bg);
   padding: 0.5rem 1rem;
   font-family: 'Space Mono', monospace;
   font-size: 0.875rem;
@@ -205,18 +289,14 @@ body {
   transition: all 0.15s ease;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  box-shadow:
-    inset 0 1px 0 rgba(200, 192, 168, 0.1),
-    0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--btn-shadow);
 }
 
 .btn-neon:hover {
-  background: rgba(128, 200, 176, 0.12);
-  box-shadow:
-    inset 0 1px 0 rgba(200, 192, 168, 0.15),
-    0 0 10px rgba(128, 200, 176, 0.2),
-    0 2px 4px rgba(0, 0, 0, 0.2);
-  text-shadow: 0 0 8px rgba(128, 200, 176, 0.4);
+  background: var(--btn-hover-bg);
+  border-color: var(--btn-hover-border);
+  box-shadow: var(--btn-hover-shadow);
+  text-shadow: var(--btn-hover-text-shadow);
 }
 
 .btn-neon:active {
@@ -227,97 +307,101 @@ body {
 }
 
 .btn-neon-danger {
-  border-color: #C8372D;
-  color: #C8372D;
-  background: linear-gradient(180deg, rgba(200, 55, 45, 0.06) 0%, transparent 100%);
+  border-color: var(--btn-danger-border);
+  color: var(--btn-danger-color);
+  background: var(--btn-danger-bg);
 }
 
 .btn-neon-danger:hover {
-  background: rgba(200, 55, 45, 0.1);
-  box-shadow:
-    inset 0 1px 0 rgba(200, 192, 168, 0.1),
-    0 0 10px rgba(200, 55, 45, 0.2),
-    0 2px 4px rgba(0, 0, 0, 0.2);
-  text-shadow: 0 0 8px rgba(200, 55, 45, 0.3);
+  background: var(--btn-danger-hover-bg);
+  border-color: var(--btn-danger-hover-border);
+  box-shadow: var(--btn-danger-hover-shadow);
+  text-shadow: var(--btn-danger-hover-text-shadow);
 }
 
 /* === Chrome-Bezeled Panel (card) === */
 .retro-panel {
-  background: rgba(18, 18, 14, 0.9);
-  border: 1px solid #4A4A3C;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
   border-radius: 0.5rem;
-  box-shadow:
-    inset 0 1px 0 rgba(200, 192, 168, 0.06),
-    0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--panel-shadow);
 }
 
 .retro-panel-glow {
-  box-shadow:
-    inset 0 1px 0 rgba(200, 192, 168, 0.06),
-    inset 0 0 30px rgba(128, 200, 176, 0.02),
-    0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--panel-glow-shadow);
 }
 
 /* === Dark Display Input (readout window style) === */
 .retro-input {
-  background: rgba(12, 12, 8, 0.95);
-  border: 1px solid #4A4A3C;
-  color: #E0DCC8;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-color);
   font-family: 'JetBrains Mono', monospace;
-  caret-color: #80C8B0;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+  caret-color: var(--input-caret);
+  box-shadow: var(--input-shadow);
 }
 
 .retro-input:focus {
-  border-color: #80C8B0;
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.2),
-    0 0 6px rgba(128, 200, 176, 0.15);
+  border-color: var(--input-focus-border);
+  box-shadow: var(--input-focus-shadow);
   outline: none;
 }
 
 .retro-input::placeholder {
-  color: #5A5A48;
+  color: var(--input-placeholder);
 }
 
 /* === Progress Bar (chrome-trimmed) === */
 .retro-progress {
-  background: #1A1A14;
-  border: 1px solid #4A4A3C;
+  background: var(--progress-bg);
+  border: 1px solid var(--progress-border);
   overflow: hidden;
   border-radius: 3px;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--progress-shadow);
 }
 
 .retro-progress-fill {
-  background: linear-gradient(90deg, #5AACA0, #80C8B0);
-  box-shadow: 0 0 6px rgba(128, 200, 176, 0.3);
+  background: var(--progress-fill);
+  box-shadow: var(--progress-fill-shadow);
   transition: width 0.5s ease-out;
 }
 
 /* === Jewel-Cap Indicator Lights (3D radial gradient) === */
 .led-active {
-  background: radial-gradient(circle at 35% 35%, #B0E8D8, #80C8B0 55%, #408870);
-  box-shadow: 0 0 6px rgba(128, 200, 176, 0.5);
-  border: 1px solid rgba(128, 200, 176, 0.3);
+  background: var(--led-active);
+  box-shadow: var(--led-active-shadow);
+  border: var(--led-active-border);
 }
 
 .led-inactive {
-  background: radial-gradient(circle at 35% 35%, #4A4A3C, #3C3C30 60%, #2A2A20);
-  border: 1px solid rgba(60, 60, 48, 0.5);
+  background: var(--led-inactive);
+  border: var(--led-inactive-border);
 }
 
 .led-warning {
-  background: radial-gradient(circle at 35% 35%, #F0D868, #D4A830 55%, #9A7820);
-  box-shadow: 0 0 6px rgba(212, 168, 48, 0.5);
-  border: 1px solid rgba(212, 168, 48, 0.3);
+  background: var(--led-warning);
+  box-shadow: var(--led-warning-shadow);
+  border: var(--led-warning-border);
 }
 
 .led-danger {
-  background: radial-gradient(circle at 35% 35%, #E86858, #C8372D 55%, #8A2420);
-  box-shadow: 0 0 6px rgba(200, 55, 45, 0.5);
-  border: 1px solid rgba(200, 55, 45, 0.3);
+  background: var(--led-danger);
+  box-shadow: var(--led-danger-shadow);
+  border: var(--led-danger-border);
 }
+
+/* ============================================================================
+   THEME SKINS (reskins) — token overrides only
+   A skin is a palette family applied via the `data-skin` attribute on <html>.
+   It composes with the light/dark `.light` class. The default skin ("analog")
+   has no block here — it falls through to the :root token defaults above.
+
+   Specificity note: `html[data-skin="x"]:not(.light)` (0,2,1) ties with
+   `html.light[data-skin="x"]` (0,2,1) and both beat `html.light` (0,1,1) and
+   the :root defaults (0,0,0), so each variant resolves the right tokens
+   regardless of source order. Each block overrides (a) the Tailwind --color-*
+   tokens it remaps and (b) the component tokens that differ from analog-dark.
+   ============================================================================ */
 
 /* === Light Theme: Mint/Cream Analog === */
 html.light {
@@ -347,129 +431,593 @@ html.light {
   --color-retro-dark: #E8F4EE;
   --color-retro-border: #88A898;
   --color-retro-grid: #D0E4D8;
+
+  /* Component tokens */
+  --body-bg: #D8EEE2;
+  --body-fg: #1C2820;
+  --scanline: rgba(128, 200, 176, 0.04);
+  --vignette: inset 0 0 120px rgba(216, 238, 226, 0.3);
+  --grid-line: rgba(58, 138, 106, 0.1);
+
+  --neon-green-glow: none;
+  --neon-cyan-glow: none;
+  --neon-magenta-glow: none;
+  --neon-amber-glow: none;
+  --glow-green: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --glow-cyan: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --glow-magenta: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --glow-amber: 0 1px 3px rgba(0, 0, 0, 0.08);
+
+  --btn-bg: linear-gradient(180deg, rgba(58, 138, 106, 0.06) 0%, transparent 100%);
+  --btn-hover-bg: rgba(58, 138, 106, 0.08);
+  --btn-hover-shadow: 0 1px 4px rgba(58, 138, 106, 0.15);
+  --btn-hover-text-shadow: none;
+
+  --panel-bg: rgba(240, 248, 244, 0.95);
+  --panel-border: #88A898;
+  --panel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 3px rgba(0, 0, 0, 0.08);
+
+  --input-bg: #F0F8F4;
+  --input-border: #88A898;
+  --input-color: #1C2820;
+  --input-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+  --input-focus-shadow: 0 0 4px rgba(58, 138, 106, 0.15);
+  --input-placeholder: #88A898;
+
+  --progress-bg: #B0CCC0;
+  --progress-border: #88A898;
+  --progress-fill: linear-gradient(90deg, #2A7A70, #3A8A6A);
+  --progress-fill-shadow: none;
+
+  --led-active: radial-gradient(circle at 35% 35%, #68C8A0, #3A8A6A 55%, #286848);
+  --led-active-shadow: 0 0 4px rgba(58, 138, 106, 0.3);
+  --led-inactive: radial-gradient(circle at 35% 35%, #B0CCC0, #88A898 60%, #607868);
+  --led-inactive-border: 1px solid rgba(96, 120, 104, 0.3);
+  --led-warning: radial-gradient(circle at 35% 35%, #E8C848, #A08020 55%, #786018);
+  --led-warning-shadow: 0 0 4px rgba(160, 128, 32, 0.3);
+  --led-danger: radial-gradient(circle at 35% 35%, #D85848, #9A2A22 55%, #6A1A18);
+  --led-danger-shadow: 0 0 4px rgba(154, 42, 34, 0.3);
+
+  --md-code-bg: #B0CCC0;
+  --md-code-color: #2A7A70;
+  --md-pre-bg: #C8E0D4;
+  --md-pre-border: #88A898;
+
+  --scrollbar: #88A898;
+  --scrollbar-hover: #607868;
 }
 
-html.light body {
-  background-color: #D8EEE2;
-  color: #1C2820;
+/* ----------------------------------------------------------------------------
+   OBSIDIAN — blacked-out industrial. Reference: deep-black control panel with a
+   single chrome knob. Near-pure-black surfaces, chrome/white accent, steel tones.
+   ---------------------------------------------------------------------------- */
+html[data-skin="obsidian"]:not(.light) {
+  --color-crt-green: #E8E8E8;     /* chrome — primary accent */
+  --color-crt-cyan: #92A6AE;      /* steel — Claude-1 */
+  --color-crt-magenta: #C56F6F;   /* muted brick — Claude-2 */
+  --color-crt-amber: #CBA56A;     /* brass — Claude-4 */
+  --color-retro-dark: #060606;
+  --color-retro-border: #2C2C2C;
+  --color-retro-grid: #161616;
+  --color-neural-400: #E8E8E8;
+  --color-neural-500: #B8C0C4;
+  --color-neural-600: #92A6AE;
+  --color-signal-green: #79C2A6;
+  --color-signal-amber: #CBA56A;
+  --color-signal-red: #C56F6F;
+
+  /* Component tokens */
+  --body-bg: #060606;
+  --body-fg: #D6D6D6;
+  --scanline: rgba(255, 255, 255, 0.012);
+  --vignette: inset 0 0 180px rgba(0, 0, 0, 0.8);
+  --grid-line: rgba(255, 255, 255, 0.04);
+
+  --neon-green: #ECECEC;
+  --neon-green-glow: 0 0 8px rgba(255, 255, 255, 0.25);
+  --neon-cyan: #A6B8C0;
+  --neon-cyan-glow: 0 0 8px rgba(166, 184, 192, 0.3);
+  --neon-magenta: #D08585;
+  --neon-magenta-glow: 0 0 8px rgba(208, 133, 133, 0.3);
+  --neon-amber: #D6B47A;
+  --neon-amber-glow: 0 0 8px rgba(214, 180, 122, 0.3);
+  --glow-green: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 4px rgba(0, 0, 0, 0.6);
+  --glow-cyan: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 4px rgba(0, 0, 0, 0.6);
+  --glow-magenta: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 4px rgba(0, 0, 0, 0.6);
+  --glow-amber: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 4px rgba(0, 0, 0, 0.6);
+
+  --btn-border: #3A3A3A;
+  --btn-color: #E0E0E0;
+  --btn-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 100%);
+  --btn-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.5);
+  --btn-hover-bg: rgba(255, 255, 255, 0.08);
+  --btn-hover-border: #5A5A5A;
+  --btn-hover-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 2px 6px rgba(0, 0, 0, 0.6);
+  --btn-hover-text-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+  --btn-danger-border: #6A3030;
+  --btn-danger-color: #D08585;
+  --btn-danger-bg: linear-gradient(180deg, rgba(197, 111, 111, 0.06) 0%, transparent 100%);
+  --btn-danger-hover-bg: rgba(197, 111, 111, 0.1);
+  --btn-danger-hover-border: #8A5050;
+  --btn-danger-hover-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 2px 6px rgba(0, 0, 0, 0.6);
+  --btn-danger-hover-text-shadow: 0 0 6px rgba(208, 133, 133, 0.3);
+
+  --panel-bg: rgba(14, 14, 14, 0.92);
+  --panel-border: #242424;
+  --panel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 2px 6px rgba(0, 0, 0, 0.5);
+  --panel-glow-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 0 40px rgba(255, 255, 255, 0.015), 0 2px 6px rgba(0, 0, 0, 0.5);
+
+  --input-bg: #0A0A0A;
+  --input-border: #2A2A2A;
+  --input-color: #E0E0E0;
+  --input-focus-border: #6A6A6A;
+  --input-focus-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 0 6px rgba(255, 255, 255, 0.08);
+  --input-placeholder: #555;
+
+  --progress-bg: #121212;
+  --progress-border: #2A2A2A;
+  --progress-fill: linear-gradient(90deg, #9A9A9A, #ECECEC);
+  --progress-fill-shadow: 0 0 6px rgba(255, 255, 255, 0.2);
+
+  /* Chrome knob/jewel — mirrors the white control in the reference */
+  --led-active: radial-gradient(circle at 35% 30%, #FFFFFF, #D0D0D0 55%, #707070);
+  --led-active-shadow: 0 0 6px rgba(255, 255, 255, 0.4), inset 0 -1px 2px rgba(0, 0, 0, 0.4);
+  --led-active-border: 1px solid rgba(255, 255, 255, 0.25);
+  --led-inactive: radial-gradient(circle at 35% 35%, #2A2A2A, #1A1A1A 60%, #0E0E0E);
+  --led-inactive-border: 1px solid rgba(60, 60, 60, 0.6);
+  --led-warning: radial-gradient(circle at 35% 35%, #E6CB8E, #CBA56A 55%, #8A6E3E);
+  --led-warning-shadow: 0 0 6px rgba(203, 165, 106, 0.4);
+  --led-danger: radial-gradient(circle at 35% 35%, #E09090, #C56F6F 55%, #7E3A3A);
+  --led-danger-shadow: 0 0 6px rgba(197, 111, 111, 0.4);
+
+  --md-code-bg: #181818;
+  --md-code-color: #D6D6D6;
+  --md-pre-bg: #0A0A0A;
+  --md-pre-border: #2A2A2A;
+
+  --scrollbar: #2C2C2C;
+  --scrollbar-hover: #3C3C3C;
 }
 
-html.light .crt-frame::before {
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 3px,
-    rgba(128, 200, 176, 0.04) 3px,
-    rgba(128, 200, 176, 0.04) 6px
-  );
+/* Obsidian — light variant ("platinum"): clean neutral grey, graphite accent */
+html.light[data-skin="obsidian"] {
+  --color-zinc-950: #ECECEC;
+  --color-zinc-900: #E0E0E0;
+  --color-zinc-800: #CECECE;
+  --color-zinc-700: #A8A8A8;
+  --color-zinc-600: #808080;
+  --color-zinc-500: #606060;
+  --color-zinc-400: #4A4A4A;
+  --color-zinc-300: #363636;
+  --color-zinc-200: #242424;
+  --color-zinc-100: #161616;
+  --color-zinc-50: #0A0A0A;
+
+  --color-crt-green: #2A2A2A;     /* graphite */
+  --color-crt-cyan: #4A5A62;      /* slate steel */
+  --color-crt-magenta: #9A3B3B;
+  --color-crt-amber: #8A6A2A;
+  --color-neural-400: #2A2A2A;
+  --color-neural-500: #4A4A4A;
+  --color-neural-600: #4A5A62;
+  --color-signal-green: #3F7D67;
+  --color-signal-amber: #8A6A2A;
+  --color-signal-red: #9A3B3B;
+  --color-retro-dark: #ECECEC;
+  --color-retro-border: #BFBFBF;
+  --color-retro-grid: #DADADA;
+
+  /* Component tokens */
+  --body-bg: #E8E8E8;
+  --body-fg: #1A1A1A;
+  --neon-green: #2A2A2A;
+  --neon-green-glow: none;
+  --neon-cyan: #4A5A62;
+  --neon-cyan-glow: none;
+  --neon-magenta: #9A3B3B;
+  --neon-magenta-glow: none;
+  --neon-amber: #8A6A2A;
+  --neon-amber-glow: none;
+  --glow-green: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --glow-cyan: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --glow-magenta: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --glow-amber: 0 1px 3px rgba(0, 0, 0, 0.1);
+
+  --btn-bg: linear-gradient(180deg, rgba(0, 0, 0, 0.04) 0%, transparent 100%);
+  --btn-hover-bg: rgba(0, 0, 0, 0.06);
+  --btn-hover-text-shadow: none;
+  --btn-danger-border: #9A3B3B;
+  --btn-danger-color: #9A3B3B;
+  --btn-danger-hover-bg: rgba(154, 59, 59, 0.06);
+  --btn-danger-hover-shadow: 0 1px 4px rgba(154, 59, 59, 0.15);
+  --btn-danger-hover-text-shadow: none;
+
+  --panel-bg: #FAFAFA;
+  --panel-border: #C8C8C8;
+  --panel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 1px 3px rgba(0, 0, 0, 0.1);
+
+  --input-bg: #FFFFFF;
+  --input-border: #C8C8C8;
+  --input-color: #1A1A1A;
+  --input-focus-border: #4A4A4A;
+  --input-focus-shadow: 0 0 4px rgba(0, 0, 0, 0.12);
+  --input-placeholder: #A0A0A0;
+
+  --progress-bg: #CECECE;
+  --progress-border: #B0B0B0;
+  --progress-fill: linear-gradient(90deg, #4A4A4A, #2A2A2A);
+  --progress-fill-shadow: none;
+
+  --led-active: radial-gradient(circle at 35% 30%, #6A6A6A, #2A2A2A 55%, #101010);
+  --led-active-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+  --led-inactive: radial-gradient(circle at 35% 35%, #D0D0D0, #B0B0B0 60%, #888);
+  --led-inactive-border: 1px solid rgba(120, 120, 120, 0.4);
+
+  --md-code-bg: #DCDCDC;
+  --md-code-color: #2A2A2A;
+  --md-pre-bg: #E4E4E4;
+  --md-pre-border: #C8C8C8;
+
+  --scrollbar: #B0B0B0;
+  --scrollbar-hover: #888;
 }
 
-html.light .crt-frame::after {
-  box-shadow: inset 0 0 120px rgba(216, 238, 226, 0.3);
+/* ----------------------------------------------------------------------------
+   BLUEPRINT — technical drafting lab. Light variant is primary (cool paper +
+   blueprint blue); dark variant is a cyanotype (deep navy + cyan lines).
+   ---------------------------------------------------------------------------- */
+
+/* Blueprint — dark variant ("cyanotype") */
+html[data-skin="blueprint"]:not(.light) {
+  --color-crt-green: #5FB4D8;     /* cyan — primary accent */
+  --color-crt-cyan: #79C3E0;
+  --color-crt-magenta: #E07B6B;
+  --color-crt-amber: #D6B26A;
+  --color-retro-dark: #0B1A26;
+  --color-retro-border: #1E3A4C;
+  --color-retro-grid: #102433;
+  --color-neural-400: #5FB4D8;
+  --color-neural-500: #4A9AC0;
+  --color-neural-600: #79C3E0;
+  --color-signal-green: #6FC3A8;
+  --color-signal-amber: #D6B26A;
+  --color-signal-red: #E07B6B;
+
+  /* Component tokens */
+  --body-bg: #0B1A26;
+  --body-fg: #B6D4E2;
+  --scanline: rgba(95, 180, 216, 0.03);
+  --vignette: inset 0 0 160px rgba(5, 14, 22, 0.7);
+  --grid-line: rgba(95, 180, 216, 0.12);
+
+  --neon-green: #7FC8E6;
+  --neon-green-glow: 0 0 10px rgba(95, 180, 216, 0.5);
+  --neon-cyan: #95D2EC;
+  --neon-cyan-glow: 0 0 10px rgba(121, 195, 224, 0.5);
+  --neon-magenta: #EA9384;
+  --neon-magenta-glow: 0 0 10px rgba(224, 123, 107, 0.4);
+  --neon-amber: #E0C384;
+  --neon-amber-glow: 0 0 10px rgba(214, 178, 106, 0.4);
+  --glow-green: 0 0 8px rgba(95, 180, 216, 0.2), inset 0 1px 0 rgba(150, 210, 236, 0.08);
+  --glow-cyan: 0 0 8px rgba(95, 180, 216, 0.2), inset 0 1px 0 rgba(150, 210, 236, 0.08);
+  --glow-magenta: 0 0 8px rgba(95, 180, 216, 0.2), inset 0 1px 0 rgba(150, 210, 236, 0.08);
+  --glow-amber: 0 0 8px rgba(95, 180, 216, 0.2), inset 0 1px 0 rgba(150, 210, 236, 0.08);
+
+  --btn-color: #7FC8E6;
+  --btn-bg: linear-gradient(180deg, rgba(95, 180, 216, 0.08) 0%, transparent 100%);
+  --btn-hover-bg: rgba(95, 180, 216, 0.12);
+  --btn-hover-shadow: 0 0 10px rgba(95, 180, 216, 0.25);
+  --btn-hover-text-shadow: 0 0 8px rgba(95, 180, 216, 0.4);
+  --btn-danger-color: #EA9384;
+  --btn-danger-hover-bg: rgba(224, 123, 107, 0.12);
+  --btn-danger-hover-shadow: 0 0 10px rgba(224, 123, 107, 0.25);
+  --btn-danger-hover-text-shadow: 0 0 8px rgba(224, 123, 107, 0.4);
+
+  --panel-bg: rgba(15, 34, 48, 0.92);
+  --panel-border: #1E3A4C;
+  --panel-shadow: inset 0 1px 0 rgba(150, 210, 236, 0.06), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --panel-glow-shadow: inset 0 1px 0 rgba(150, 210, 236, 0.06), inset 0 0 40px rgba(95, 180, 216, 0.015), 0 1px 3px rgba(0, 0, 0, 0.3);
+
+  --input-bg: #081521;
+  --input-border: #1E3A4C;
+  --input-color: #B6D4E2;
+  --input-focus-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 6px rgba(95, 180, 216, 0.2);
+  --input-placeholder: #486A7C;
+
+  --progress-bg: #0E2030;
+  --progress-border: #1E3A4C;
+  --progress-fill: linear-gradient(90deg, #4A9AC0, #5FB4D8);
+  --progress-fill-shadow: 0 0 6px rgba(95, 180, 216, 0.3);
+
+  --led-active: radial-gradient(circle at 35% 35%, #A6DCF0, #5FB4D8 55%, #2E7A9C);
+  --led-active-shadow: 0 0 6px rgba(95, 180, 216, 0.5);
+  --led-inactive: radial-gradient(circle at 35% 35%, #1E3A4C, #142C3C 60%, #0B1A26);
+  --led-inactive-border: 1px solid rgba(30, 58, 76, 0.6);
+  --led-warning: radial-gradient(circle at 35% 35%, #E8CE8E, #D6B26A 55%, #9A7E3E);
+  --led-warning-shadow: 0 0 6px rgba(214, 178, 106, 0.4);
+  --led-danger: radial-gradient(circle at 35% 35%, #EE9C8C, #E07B6B 55%, #9E4A3A);
+  --led-danger-shadow: 0 0 6px rgba(224, 123, 107, 0.4);
+
+  --md-code-bg: #0E2030;
+  --md-code-color: #7FC8E6;
+  --md-pre-bg: #081521;
+  --md-pre-border: #1E3A4C;
+
+  --scrollbar: #1E3A4C;
+  --scrollbar-hover: #2E5A74;
 }
 
-html.light .retro-grid-bg {
-  background-image:
-    linear-gradient(rgba(58, 138, 106, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(58, 138, 106, 0.1) 1px, transparent 1px);
+/* Blueprint — light variant (primary): cool paper, blueprint blue, soft neumorphic */
+html.light[data-skin="blueprint"] {
+  --color-zinc-950: #E7EAEC;
+  --color-zinc-900: #DCE1E4;
+  --color-zinc-800: #C6CFD4;
+  --color-zinc-700: #9AAAB2;
+  --color-zinc-600: #6E828C;
+  --color-zinc-500: #54676F;
+  --color-zinc-400: #3E505A;
+  --color-zinc-300: #2C3D46;
+  --color-zinc-200: #1F2D35;
+  --color-zinc-100: #142027;
+  --color-zinc-50: #0C161B;
+
+  --color-crt-green: #2E6E8E;     /* blueprint blue */
+  --color-crt-cyan: #3A7CA5;
+  --color-crt-magenta: #B0413E;   /* annotation red */
+  --color-crt-amber: #A9762E;
+  --color-neural-400: #2E6E8E;
+  --color-neural-500: #3A7CA5;
+  --color-neural-600: #3A7CA5;
+  --color-signal-green: #2E7D6A;
+  --color-signal-amber: #A9762E;
+  --color-signal-red: #B0413E;
+  --color-retro-dark: #E7EAEC;
+  --color-retro-border: #BCC6CD;
+  --color-retro-grid: #D6DDE2;
+
+  /* Component tokens */
+  --body-bg: #E7EAEC;
+  --body-fg: #1B2A35;
+  --scanline: rgba(46, 110, 142, 0.025);
+  --vignette: inset 0 0 120px rgba(46, 110, 142, 0.06);
+  --grid-line: rgba(46, 110, 142, 0.12);
+
+  --neon-green: #2E6E8E;
+  --neon-green-glow: none;
+  --neon-cyan: #3A7CA5;
+  --neon-cyan-glow: none;
+  --neon-magenta: #B0413E;
+  --neon-magenta-glow: none;
+  --neon-amber: #A9762E;
+  --neon-amber-glow: none;
+  --glow-green: 0 1px 3px rgba(27, 42, 53, 0.1);
+  --glow-cyan: 0 1px 3px rgba(27, 42, 53, 0.1);
+  --glow-magenta: 0 1px 3px rgba(27, 42, 53, 0.1);
+  --glow-amber: 0 1px 3px rgba(27, 42, 53, 0.1);
+
+  --btn-bg: linear-gradient(180deg, rgba(46, 110, 142, 0.06) 0%, transparent 100%);
+  --btn-hover-bg: rgba(46, 110, 142, 0.1);
+  --btn-hover-shadow: 0 1px 4px rgba(46, 110, 142, 0.2);
+  --btn-hover-text-shadow: none;
+  --btn-danger-hover-bg: rgba(176, 65, 62, 0.08);
+  --btn-danger-hover-shadow: 0 1px 4px rgba(176, 65, 62, 0.15);
+  --btn-danger-hover-text-shadow: none;
+
+  /* Soft neumorphic faceplate — raised off the paper */
+  --panel-bg: #F2F5F7;
+  --panel-border: #C8D2D8;
+  --panel-shadow: -4px -4px 10px rgba(255, 255, 255, 0.7), 4px 4px 12px rgba(46, 70, 86, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+
+  --input-bg: #EDF1F3;
+  --input-border: #C8D2D8;
+  --input-color: #1B2A35;
+  --input-shadow: inset 2px 2px 5px rgba(46, 70, 86, 0.1), inset -2px -2px 5px rgba(255, 255, 255, 0.7);
+  --input-focus-shadow: 0 0 4px rgba(46, 110, 142, 0.2);
+  --input-placeholder: #8CA0AA;
+
+  --progress-bg: #DCE1E4;
+  --progress-border: #C8D2D8;
+  --progress-shadow: inset 2px 2px 4px rgba(46, 70, 86, 0.12);
+  --progress-fill: linear-gradient(90deg, #3A7CA5, #2E6E8E);
+  --progress-fill-shadow: none;
+
+  --led-active: radial-gradient(circle at 35% 30%, #6FB4D2, #2E6E8E 55%, #1E5070);
+  --led-active-shadow: 0 0 4px rgba(46, 110, 142, 0.35), inset 0 -1px 2px rgba(0, 0, 0, 0.15);
+  --led-inactive: radial-gradient(circle at 35% 35%, #D6DFE4, #BCC6CD 60%, #94A4AC);
+  --led-inactive-border: 1px solid rgba(110, 130, 140, 0.4);
+  --led-warning: radial-gradient(circle at 35% 35%, #D6A84E, #A9762E 55%, #7E5820);
+  --led-warning-shadow: 0 0 4px rgba(169, 118, 46, 0.3);
+  --led-danger: radial-gradient(circle at 35% 35%, #CC6660, #B0413E 55%, #7E2C2A);
+  --led-danger-shadow: 0 0 4px rgba(176, 65, 62, 0.3);
+
+  --md-code-bg: #D6DFE4;
+  --md-code-color: #2E6E8E;
+  --md-pre-bg: #DCE1E4;
+  --md-pre-border: #C8D2D8;
+
+  --scrollbar: #BCC6CD;
+  --scrollbar-hover: #9AAAB2;
 }
 
-html.light .neon-green {
-  color: #3A8A6A;
-  text-shadow: none;
+/* ----------------------------------------------------------------------------
+   TERMINAL — amber-phosphor CRT. Dark variant is primary: warm-black glass with
+   glowing amber phosphor text, scanlines, and jewel LEDs. Light variant is a
+   "parchment printout": warm cream paper with burnt-amber/sepia ink.
+   A distinct hue family from analog (mint), obsidian (chrome) and blueprint (cyan).
+   ---------------------------------------------------------------------------- */
+
+/* Terminal — dark variant (primary): amber phosphor */
+html[data-skin="terminal"]:not(.light) {
+  --color-crt-green: #FFB000;     /* amber phosphor — primary accent */
+  --color-crt-cyan: #FFC76B;      /* light amber — Claude-1 */
+  --color-crt-magenta: #FF7043;   /* red-orange — Claude-2 */
+  --color-crt-amber: #FFD166;     /* gold — Claude-4 */
+  --color-retro-dark: #0B0800;
+  --color-retro-border: #4A3417;
+  --color-retro-grid: #1C1206;
+  --color-neural-400: #FFB000;
+  --color-neural-500: #E09A2B;
+  --color-neural-600: #FFC76B;
+  --color-signal-green: #9CCC65;
+  --color-signal-amber: #FFD166;
+  --color-signal-red: #FF5C4D;
+
+  /* Component tokens */
+  --body-bg: #0B0800;
+  --body-fg: #F4C77B;
+  --scanline: rgba(255, 176, 0, 0.025);
+  --vignette: inset 0 0 170px rgba(0, 0, 0, 0.75);
+  --grid-line: rgba(255, 176, 0, 0.06);
+
+  --neon-green: #FFC04A;
+  --neon-green-glow: 0 0 10px rgba(255, 176, 0, 0.55);
+  --neon-cyan: #FFD27F;
+  --neon-cyan-glow: 0 0 10px rgba(255, 199, 107, 0.5);
+  --neon-magenta: #FF8A6B;
+  --neon-magenta-glow: 0 0 10px rgba(255, 112, 67, 0.45);
+  --neon-amber: #FFDC85;
+  --neon-amber-glow: 0 0 10px rgba(255, 209, 102, 0.45);
+  --glow-green: 0 0 8px rgba(255, 176, 0, 0.22), inset 0 1px 0 rgba(255, 210, 140, 0.08);
+  --glow-cyan: 0 0 8px rgba(255, 199, 107, 0.22), inset 0 1px 0 rgba(255, 210, 140, 0.08);
+  --glow-magenta: 0 0 8px rgba(255, 112, 67, 0.22), inset 0 1px 0 rgba(255, 210, 140, 0.08);
+  --glow-amber: 0 0 8px rgba(255, 209, 102, 0.22), inset 0 1px 0 rgba(255, 210, 140, 0.08);
+
+  --btn-bg: linear-gradient(180deg, rgba(255, 176, 0, 0.08) 0%, transparent 100%);
+  --btn-shadow: inset 0 1px 0 rgba(255, 210, 140, 0.08), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --btn-hover-bg: rgba(255, 176, 0, 0.14);
+  --btn-hover-shadow: inset 0 1px 0 rgba(255, 210, 140, 0.12), 0 0 12px rgba(255, 176, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.4);
+  --btn-hover-text-shadow: 0 0 8px rgba(255, 176, 0, 0.5);
+  --btn-danger-bg: linear-gradient(180deg, rgba(255, 92, 77, 0.07) 0%, transparent 100%);
+  --btn-danger-hover-bg: rgba(255, 92, 77, 0.12);
+  --btn-danger-hover-shadow: 0 0 10px rgba(255, 92, 77, 0.25);
+  --btn-danger-hover-text-shadow: 0 0 8px rgba(255, 92, 77, 0.4);
+
+  --panel-bg: rgba(20, 14, 2, 0.92);
+  --panel-border: #2A1E08;
+  --panel-shadow: inset 0 1px 0 rgba(255, 210, 140, 0.05), 0 2px 6px rgba(0, 0, 0, 0.5);
+  --panel-glow-shadow: inset 0 1px 0 rgba(255, 210, 140, 0.05), inset 0 0 36px rgba(255, 176, 0, 0.025), 0 2px 6px rgba(0, 0, 0, 0.5);
+
+  --input-bg: #080500;
+  --input-border: #2A1E08;
+  --input-color: #F4C77B;
+  --input-focus-border: #FFB000;
+  --input-focus-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 0 6px rgba(255, 176, 0, 0.25);
+  --input-placeholder: #7A5A28;
+
+  --progress-bg: #160E02;
+  --progress-border: #2A1E08;
+  --progress-fill: linear-gradient(90deg, #E09A2B, #FFB000);
+  --progress-fill-shadow: 0 0 8px rgba(255, 176, 0, 0.35);
+
+  --led-active: radial-gradient(circle at 35% 35%, #FFD98A, #FFB000 55%, #A66E00);
+  --led-active-shadow: 0 0 7px rgba(255, 176, 0, 0.55);
+  --led-active-border: 1px solid rgba(255, 176, 0, 0.35);
+  --led-inactive: radial-gradient(circle at 35% 35%, #2A2010, #1A1206 60%, #0E0A02);
+  --led-inactive-border: 1px solid rgba(74, 52, 23, 0.6);
+  --led-warning: radial-gradient(circle at 35% 35%, #FFE08A, #FFD166 55%, #A8862E);
+  --led-warning-shadow: 0 0 6px rgba(255, 209, 102, 0.5);
+  --led-danger: radial-gradient(circle at 35% 35%, #FF8A75, #FF5C4D 55%, #9E2E22);
+  --led-danger-shadow: 0 0 6px rgba(255, 92, 77, 0.5);
+
+  --md-code-bg: #1A1206;
+  --md-code-color: #FFB000;
+  --md-pre-bg: #080500;
+  --md-pre-border: #2A1E08;
+
+  --scrollbar: #2A1E08;
+  --scrollbar-hover: #4A3417;
 }
 
-html.light .neon-cyan {
-  color: #2A7A70;
-  text-shadow: none;
-}
+/* Terminal — light variant ("parchment printout"): warm cream paper, sepia ink */
+html.light[data-skin="terminal"] {
+  --color-zinc-950: #F4ECD6;
+  --color-zinc-900: #EBE0C4;
+  --color-zinc-800: #DCCEA8;
+  --color-zinc-700: #C0AE82;
+  --color-zinc-600: #9C8A5E;
+  --color-zinc-500: #6E5E38;
+  --color-zinc-400: #564826;
+  --color-zinc-300: #41351A;
+  --color-zinc-200: #2E2511;
+  --color-zinc-100: #1E170A;
+  --color-zinc-50: #120D05;
 
-html.light .neon-magenta {
-  color: #9A1830;
-  text-shadow: none;
-}
+  --color-crt-green: #9A5B00;     /* burnt amber ink — primary accent */
+  --color-crt-cyan: #8A6A1E;      /* olive-gold */
+  --color-crt-magenta: #A6371F;   /* rust red */
+  --color-crt-amber: #8A5A12;
+  --color-neural-400: #9A5B00;
+  --color-neural-500: #8A6A1E;
+  --color-neural-600: #8A6A1E;
+  --color-signal-green: #5E7A2E;
+  --color-signal-amber: #8A6A1E;
+  --color-signal-red: #A6371F;
+  --color-retro-dark: #F4ECD6;
+  --color-retro-border: #C9B78C;
+  --color-retro-grid: #E6DABC;
 
-html.light .neon-amber {
-  color: #B86028;
-  text-shadow: none;
-}
+  /* Component tokens */
+  --body-bg: #F4ECD6;
+  --body-fg: #2E2511;
+  --scanline: rgba(154, 91, 0, 0.02);
+  --vignette: inset 0 0 120px rgba(154, 91, 0, 0.05);
+  --grid-line: rgba(154, 91, 0, 0.08);
 
-html.light .glow-green,
-html.light .glow-cyan,
-html.light .glow-magenta,
-html.light .glow-amber {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
+  --neon-green: #9A5B00;
+  --neon-green-glow: none;
+  --neon-cyan: #8A6A1E;
+  --neon-cyan-glow: none;
+  --neon-magenta: #A6371F;
+  --neon-magenta-glow: none;
+  --neon-amber: #8A5A12;
+  --neon-amber-glow: none;
+  --glow-green: 0 1px 3px rgba(46, 37, 17, 0.1);
+  --glow-cyan: 0 1px 3px rgba(46, 37, 17, 0.1);
+  --glow-magenta: 0 1px 3px rgba(46, 37, 17, 0.1);
+  --glow-amber: 0 1px 3px rgba(46, 37, 17, 0.1);
 
-html.light .btn-neon {
-  border-color: #3A8A6A;
-  color: #3A8A6A;
-  background: linear-gradient(180deg, rgba(58, 138, 106, 0.06) 0%, transparent 100%);
-}
+  --btn-bg: linear-gradient(180deg, rgba(154, 91, 0, 0.06) 0%, transparent 100%);
+  --btn-hover-bg: rgba(154, 91, 0, 0.1);
+  --btn-hover-shadow: 0 1px 4px rgba(154, 91, 0, 0.2);
+  --btn-hover-text-shadow: none;
+  --btn-danger-bg: linear-gradient(180deg, rgba(166, 55, 31, 0.06) 0%, transparent 100%);
+  --btn-danger-hover-bg: rgba(166, 55, 31, 0.1);
+  --btn-danger-hover-shadow: 0 1px 4px rgba(166, 55, 31, 0.15);
+  --btn-danger-hover-text-shadow: none;
 
-html.light .btn-neon:hover {
-  background: rgba(58, 138, 106, 0.08);
-  box-shadow: 0 1px 4px rgba(58, 138, 106, 0.15);
-  text-shadow: none;
-}
+  --panel-bg: #FBF5E6;
+  --panel-border: #D8C9A2;
+  --panel-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 3px rgba(46, 37, 17, 0.1);
 
-html.light .btn-neon-danger {
-  border-color: #9A2A22;
-  color: #9A2A22;
-}
+  --input-bg: #FCF7EA;
+  --input-border: #D8C9A2;
+  --input-color: #2E2511;
+  --input-shadow: inset 0 1px 2px rgba(46, 37, 17, 0.06);
+  --input-focus-border: #9A5B00;
+  --input-focus-shadow: 0 0 4px rgba(154, 91, 0, 0.2);
+  --input-placeholder: #A8946A;
 
-html.light .retro-panel {
-  background: rgba(240, 248, 244, 0.95);
-  border-color: #88A898;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    0 1px 3px rgba(0, 0, 0, 0.08);
-}
+  --progress-bg: #E6DABC;
+  --progress-border: #D8C9A2;
+  --progress-fill: linear-gradient(90deg, #B5751A, #9A5B00);
+  --progress-fill-shadow: none;
 
-html.light .retro-input {
-  background: #F0F8F4;
-  border-color: #88A898;
-  color: #1C2820;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
-}
+  --led-active: radial-gradient(circle at 35% 30%, #D89A3A, #9A5B00 55%, #6E3F00);
+  --led-active-shadow: 0 0 4px rgba(154, 91, 0, 0.3);
+  --led-inactive: radial-gradient(circle at 35% 35%, #E2D6B6, #C9B78C 60%, #9C8A5E);
+  --led-inactive-border: 1px solid rgba(156, 138, 94, 0.4);
+  --led-warning: radial-gradient(circle at 35% 35%, #D8B85E, #8A6A1E 55%, #6A5018);
+  --led-warning-shadow: 0 0 4px rgba(138, 106, 30, 0.3);
+  --led-danger: radial-gradient(circle at 35% 35%, #C8604E, #A6371F 55%, #7A281A);
+  --led-danger-shadow: 0 0 4px rgba(166, 55, 31, 0.3);
 
-html.light .retro-input:focus {
-  border-color: #3A8A6A;
-  box-shadow: 0 0 4px rgba(58, 138, 106, 0.15);
-}
+  --md-code-bg: #E6DABC;
+  --md-code-color: #9A5B00;
+  --md-pre-bg: #EBE0C4;
+  --md-pre-border: #D8C9A2;
 
-html.light .retro-input::placeholder {
-  color: #88A898;
-}
-
-html.light .led-active {
-  background: radial-gradient(circle at 35% 35%, #68C8A0, #3A8A6A 55%, #286848);
-  box-shadow: 0 0 4px rgba(58, 138, 106, 0.3);
-}
-
-html.light .led-inactive {
-  background: radial-gradient(circle at 35% 35%, #B0CCC0, #88A898 60%, #607868);
-  border-color: rgba(96, 120, 104, 0.3);
-}
-
-html.light .led-warning {
-  background: radial-gradient(circle at 35% 35%, #E8C848, #A08020 55%, #786018);
-  box-shadow: 0 0 4px rgba(160, 128, 32, 0.3);
-}
-
-html.light .led-danger {
-  background: radial-gradient(circle at 35% 35%, #D85848, #9A2A22 55%, #6A1A18);
-  box-shadow: 0 0 4px rgba(154, 42, 34, 0.3);
-}
-
-html.light .retro-progress {
-  background: #B0CCC0;
-  border-color: #88A898;
-}
-
-html.light .retro-progress-fill {
-  background: linear-gradient(90deg, #2A7A70, #3A8A6A);
-  box-shadow: none;
+  --scrollbar: #C9B78C;
+  --scrollbar-hover: #9C8A5E;
 }
 
 /* === Tab bar scroll (hide scrollbar on mobile) === */
@@ -490,18 +1038,11 @@ html.light .retro-progress-fill {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #3C3C30;
+  background: var(--scrollbar);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4A4A3C;
-}
-
-html.light ::-webkit-scrollbar-thumb {
-  background: #88A898;
-}
-html.light ::-webkit-scrollbar-thumb:hover {
-  background: #607868;
+  background: var(--scrollbar-hover);
 }
 
 /* === Markdown Styles === */
@@ -513,20 +1054,20 @@ html.light ::-webkit-scrollbar-thumb:hover {
 .markdown-body ol { list-style: decimal; padding-left: 1.5rem; }
 .markdown-body li { margin: 0.125rem 0; }
 .markdown-body code {
-  background: #22221a;
+  background: var(--md-code-bg);
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
   font-size: 0.875rem;
-  color: #80C8B0;
+  color: var(--md-code-color);
   font-family: 'JetBrains Mono', monospace;
 }
 .markdown-body pre {
-  background: #12120e;
+  background: var(--md-pre-bg);
   padding: 0.75rem;
   border-radius: 0.5rem;
   overflow-x: auto;
   margin: 0.5rem 0;
-  border: 1px solid #3C3C30;
+  border: 1px solid var(--md-pre-border);
 }
 .markdown-body pre code {
   background: none;
@@ -534,16 +1075,7 @@ html.light ::-webkit-scrollbar-thumb:hover {
 }
 .markdown-body input[type="checkbox"] {
   margin-right: 0.5rem;
-  accent-color: #80C8B0;
-}
-
-html.light .markdown-body code {
-  background: #B0CCC0;
-  color: #2A7A70;
-}
-html.light .markdown-body pre {
-  background: #C8E0D4;
-  border-color: #88A898;
+  accent-color: var(--color-crt-green);
 }
 
 /* === Print Stylesheet === */

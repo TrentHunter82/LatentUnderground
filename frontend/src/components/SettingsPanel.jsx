@@ -4,6 +4,7 @@ import { useHealthCheck } from '../hooks/useHealthCheck'
 import { useNotifications } from '../hooks/useNotifications'
 import { getStoredApiKey, clearApiKey } from '../lib/api'
 import ConfirmDialog from './ConfirmDialog'
+import ThemePicker from './ThemePicker'
 
 const OperationsDashboard = lazy(() => import('./OperationsDashboard'))
 
@@ -49,8 +50,10 @@ export default function SettingsPanel({ open, onClose, onOpenAuth }) {
     if (e.key === 'Tab') {
       const panel = panelRef.current
       if (!panel) return
+      // Exclude elements removed from the tab order (tabindex="-1"), e.g. the
+      // inactive ThemePicker skin radios under the WAI-ARIA roving-tabindex pattern.
       const focusable = panel.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        'button:not([tabindex="-1"]), [href], input:not([tabindex="-1"]), select:not([tabindex="-1"]), textarea:not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])'
       )
       if (focusable.length === 0) return
       const first = focusable[0]
@@ -151,6 +154,10 @@ export default function SettingsPanel({ open, onClose, onOpenAuth }) {
                   </span>
                 </button>
               </div>
+            </div>
+            <div className="mt-2">
+              <div className="text-xs text-zinc-500 font-mono mb-2 px-0.5">Skin</div>
+              <ThemePicker />
             </div>
           </section>
 

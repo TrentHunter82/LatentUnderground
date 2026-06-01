@@ -13,7 +13,7 @@ import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { axe } from 'vitest-axe'
 import * as matchers from 'vitest-axe/matchers'
-import { createApiMock } from './test-utils'
+import { createApiMock, createThemeMock } from './test-utils'
 
 expect.extend(matchers)
 
@@ -34,11 +34,9 @@ vi.mock('../hooks/useHealthCheck', () => ({
   useHealthCheck: () => ({ status: 'healthy', latency: 42, data: { status: 'ok', app: { active_processes: 0 } } }),
 }))
 
-// Mock useTheme (SettingsPanel uses theme/toggleTheme)
-vi.mock('../hooks/useTheme.jsx', () => ({
-  useTheme: () => ({ theme: 'dark', toggleTheme: vi.fn() }),
-  ThemeProvider: ({ children }) => children,
-}))
+// Mock useTheme via the shared factory (SettingsPanel uses theme/toggleTheme;
+// the factory supplies the full context shape incl. skin/setSkin/skins).
+vi.mock('../hooks/useTheme.jsx', () => createThemeMock())
 
 // Mock useNotifications (SettingsPanel uses permission/enabled/setEnabled)
 vi.mock('../hooks/useNotifications', () => ({

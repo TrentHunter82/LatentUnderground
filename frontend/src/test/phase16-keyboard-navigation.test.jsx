@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { createApiMock } from './test-utils'
+import { createApiMock, createThemeMock } from './test-utils'
 
 // --- Mocks ---
 
@@ -89,10 +89,7 @@ vi.mock('../hooks/useNotifications', () => ({
   useNotifications: () => ({ notify: vi.fn(), permission: 'granted', requestPermission: vi.fn() }),
 }))
 
-vi.mock('../hooks/useTheme', () => ({
-  useTheme: () => ({ theme: 'dark', mode: 'dark', toggleTheme: vi.fn(), setTheme: vi.fn() }),
-  ThemeProvider: ({ children }) => children,
-}))
+vi.mock('../hooks/useTheme', () => createThemeMock())
 
 vi.mock('../hooks/useHealthCheck', () => ({
   useHealthCheck: () => ({ status: 'healthy', latency: 42 }),
@@ -224,7 +221,7 @@ describe('Phase 16 - Keyboard Shortcuts & Navigation', () => {
         const lastTab = tabs[tabs.length - 1]
         expect(lastTab).toHaveAttribute('aria-selected', 'true')
       })
-    }, 15000)
+    })
 
     it('ArrowRight on last tab wraps to first', async () => {
       const { default: ProjectView } = await import('../components/ProjectView')
@@ -311,7 +308,7 @@ describe('Phase 16 - Keyboard Shortcuts & Navigation', () => {
       })
 
       expect(mockNavigate).toHaveBeenCalledWith('/projects/new')
-    }, 15000)
+    })
 
     it('Ctrl+K focuses sidebar search', async () => {
       const { default: App } = await import('../App')
@@ -334,7 +331,7 @@ describe('Phase 16 - Keyboard Shortcuts & Navigation', () => {
       if (searchInput) {
         expect(document.activeElement).toBe(searchInput)
       }
-    }, 15000)
+    })
 
     it('Escape closes open modals/panels', async () => {
       const { default: App } = await import('../App')
@@ -359,7 +356,7 @@ describe('Phase 16 - Keyboard Shortcuts & Navigation', () => {
         // Either no dialog or dialog is closed
         expect(dialog === null || dialog.getAttribute('open') === null).toBeTruthy()
       })
-    }, 15000)
+    })
   })
 
   describe('Form keyboard handling', () => {

@@ -91,10 +91,7 @@ vi.mock('../hooks/useNotifications', () => ({
   useNotifications: () => ({ notify: vi.fn(), permission: 'granted', requestPermission: vi.fn() }),
 }))
 
-vi.mock('../hooks/useTheme', () => ({
-  useTheme: () => ({ theme: 'dark', mode: 'dark', toggleTheme: vi.fn(), setTheme: vi.fn() }),
-  ThemeProvider: ({ children }) => children,
-}))
+vi.mock('../hooks/useTheme', () => createThemeMock())
 
 vi.mock('../hooks/useHealthCheck', () => ({
   useHealthCheck: () => ({ status: 'healthy', latency: 42 }),
@@ -124,7 +121,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
 })
 
 import { ToastProvider } from '../components/Toast'
-import { TestQueryWrapper } from './test-utils'
+import { TestQueryWrapper, createThemeMock } from './test-utils'
 
 function renderWithProviders(ui, { route = '/' } = {}) {
   return render(

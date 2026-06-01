@@ -20,6 +20,16 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/test/setup.js',
     exclude: ['e2e/**', 'node_modules/**'],
+    // Authoritative timeouts (single source of truth). Many suites dynamic-import
+    // heavy components (FileEditor, react-markdown, highlight.js) inside test bodies;
+    // under full-suite parallel load the shared transform pipeline saturates and a
+    // <2s isolated test can stall >15s. A generous ceiling here absorbs that tail
+    // deterministically. Genuine hangs (full-App renders) are guarded by describe.skip.
+    // NOTE: prefer this over per-test `}, 15000)` args or `vi.setConfig({testTimeout})`
+    // — the latter is applied per-worker at runtime and is NOT reliable under parallel
+    // load (observed falling back to the 5000ms default). See tasks/lessons.md.
+    testTimeout: 30000,
+    hookTimeout: 30000,
   },
   build: {
     target: 'es2020',

@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { TestQueryWrapper } from './test-utils'
+import { TestQueryWrapper, createThemeMock } from './test-utils'
 
 // --- Mocks ---
 
@@ -108,10 +108,7 @@ vi.mock('../hooks/useNotifications', () => ({
   useNotifications: () => ({ notify: vi.fn(), permission: 'granted', requestPermission: vi.fn() }),
 }))
 
-vi.mock('../hooks/useTheme', () => ({
-  useTheme: () => ({ theme: 'dark', mode: 'dark', toggleTheme: vi.fn(), setTheme: vi.fn() }),
-  ThemeProvider: ({ children }) => children,
-}))
+vi.mock('../hooks/useTheme', () => createThemeMock())
 
 vi.mock('../hooks/useHealthCheck', () => ({
   useHealthCheck: () => ({ status: 'healthy', latency: 42 }),
@@ -317,7 +314,7 @@ describe('Phase 17 - Complete User Journey', () => {
       await waitFor(() => {
         expect(screen.getByText(/Starting iteration 1/)).toBeInTheDocument()
       }, { timeout: 10000 })
-    }, 15000)
+    })
 
     it('TerminalOutput shows agent tabs for running agents', async () => {
       const { getSwarmOutput } = await import('../lib/api')
@@ -338,7 +335,7 @@ describe('Phase 17 - Complete User Journey', () => {
           expect(tabs.length).toBeGreaterThanOrEqual(1) // At least "All" tab
         }
       }, { timeout: 10000 })
-    }, 15000)
+    })
   })
 
   describe('Step 5: Stop Swarm', () => {
@@ -445,7 +442,7 @@ describe('Phase 17 - Complete User Journey', () => {
         const panel = screen.getByRole('tabpanel')
         expect(panel).toBeTruthy()
       }
-    }, 15000)
+    })
 
     it('keyboard navigation cycles through tabs', async () => {
       const { default: ProjectView } = await import('../components/ProjectView')

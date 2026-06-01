@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { createApiMock, createSwarmQueryMock, createMutationsMock, createProjectQueryMock } from './test-utils'
 
+// Timeouts are governed by the authoritative `testTimeout` in vite.config.js — `vi.setConfig`
+// here proved unreliable under full-suite parallel load (fell back to the 5000ms default).
 // Mock react-markdown and remark/rehype plugins before any imports
 vi.mock('react-markdown', () => ({
   default: ({ children }) => <div data-testid="markdown-preview">{children}</div>,

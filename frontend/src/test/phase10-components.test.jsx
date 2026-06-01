@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor, renderHook } from '@testing-library/react'
 import { ToastProvider, useToast, useSafeToast } from '../components/Toast'
-import { createApiMock, createSwarmQueryMock, createMutationsMock } from './test-utils'
+import { createApiMock, createSwarmQueryMock, createMutationsMock, createThemeMock } from './test-utils'
 
 // Mock API module
 vi.mock('../lib/api', () => createApiMock({
@@ -52,10 +52,7 @@ vi.mock('react-router-dom', () => ({
   Route: () => null,
 }))
 
-vi.mock('../hooks/useTheme.jsx', () => ({
-  useTheme: () => ({ theme: 'dark', toggleTheme: vi.fn() }),
-  ThemeProvider: ({ children }) => children,
-}))
+vi.mock('../hooks/useTheme.jsx', () => createThemeMock())
 
 vi.mock('../hooks/useHealthCheck', () => ({
   useHealthCheck: () => ({ status: 'healthy', latency: 42 }),
@@ -283,7 +280,7 @@ describe('Bundle optimization', () => {
     // Verify react-markdown is importable (confirms it exists in the project)
     const mod = await import('react-markdown')
     expect(mod.default).toBeDefined()
-  }, 15000)
+  })
 })
 
 // --- Error display patterns are consistent ---

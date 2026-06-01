@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { createApiMock, createProjectQueryMock, createSwarmQueryMock, createMutationsMock } from './test-utils'
+import { createApiMock, createProjectQueryMock, createSwarmQueryMock, createMutationsMock, createThemeMock } from './test-utils'
 
 // --- Mocks ---
 
@@ -89,10 +89,7 @@ vi.mock('../hooks/useNotifications', () => ({
   useNotifications: () => ({ notify: vi.fn(), permission: 'granted', requestPermission: vi.fn() }),
 }))
 
-vi.mock('../hooks/useTheme', () => ({
-  useTheme: () => ({ theme: 'dark', mode: 'dark', toggleTheme: vi.fn(), setTheme: vi.fn() }),
-  ThemeProvider: ({ children }) => children,
-}))
+vi.mock('../hooks/useTheme', () => createThemeMock())
 
 vi.mock('../hooks/useHealthCheck', () => ({
   useHealthCheck: () => ({ status: 'healthy', latency: 42 }),
@@ -505,7 +502,7 @@ describe('Phase 17 - Error Recovery Tests', () => {
       // Editor should render without crashing (container exists)
       const container = document.querySelector('[class*="retro-panel"]')
       expect(container).toBeTruthy()
-    }, 15000)
+    })
 
     it('shows error when putFile fails', async () => {
       const { getFile, putFile } = await import('../lib/api')
@@ -564,7 +561,7 @@ describe('Phase 17 - Error Recovery Tests', () => {
       // Should show error state or loading (not crash)
       const container = document.querySelector('main') || document.querySelector('[class*="retro"]')
       expect(container).toBeTruthy()
-    }, 15000)
+    })
 
     it('handles 500 error in API gracefully', async () => {
       const { getProject, getSwarmStatus } = await import('../lib/api')
@@ -583,7 +580,7 @@ describe('Phase 17 - Error Recovery Tests', () => {
 
       // Dashboard renders partial data (project name from getProject mock)
       expect(screen.getByText('Test Project')).toBeInTheDocument()
-    }, 15000)
+    })
   })
 
   // Full-page Dashboard render hangs in jsdom (TESTING_RULES #25). Covered by e2e.
@@ -608,6 +605,6 @@ describe('Phase 17 - Error Recovery Tests', () => {
 
       // Dashboard should still render with project name from getProject
       expect(screen.getByText('Test Project')).toBeInTheDocument()
-    }, 15000)
+    })
   })
 })
