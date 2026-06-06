@@ -315,7 +315,7 @@ def mock_launch_deps():
     real swarm.ps1 -SetupOnly would. Tests still need to mock subprocess.Popen
     for the actual agent processes.
     """
-    def setup_side_effect(folder, swarm_script, agent_count, max_phases):
+    def setup_side_effect(folder, swarm_script, agent_count, max_phases, role_profile="default"):
         prompts_dir = folder / ".claude" / "prompts"
         prompts_dir.mkdir(parents=True, exist_ok=True)
         for i in range(1, agent_count + 1):

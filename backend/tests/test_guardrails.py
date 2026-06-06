@@ -1070,3 +1070,79 @@ class TestGuardrailEdgeCases:
             assert has_violations is False
         finally:
             database.DB_PATH = original
+
+
+# ---------------------------------------------------------------------------
+# Data Research content-safety guardrails (the seeded template's rules)
+# ---------------------------------------------------------------------------
+class TestDataResearchContentSafety:
+    """The data-research template ships one hard content-safety guardrail:
+    require the reviewer's "SAFETY: CLEAN" certification (halt) plus an
+    explicit-content reject backstop (warn). Source: _BUILTIN_TEMPLATES.
+    """
+
+    @pytest.fixture(autouse=True)
+    def cleanup_buffers(self):
+        yield
+        _project_output_buffers.clear()
+
+    def _seed_config(self):
+        from app.database import _BUILTIN_TEMPLATES
+        tpl = next(t for t in _BUILTIN_TEMPLATES if t["name"].startswith("Data Research"))
+        return json.dumps({"guardrails": tpl["config"]["guardrails"]})
+
+    async def _run_with_output(self, tmp_db, lines):
+        async with aiosqlite.connect(tmp_db) as db:
+            await db.execute(
+                "INSERT INTO projects (name, goal, folder_path, config) VALUES (?, ?, ?, ?)",
+                ("DR", "DR", "/tmp/dr", self._seed_config()),
+            )
+            await db.commit()
+        _project_output_buffers[1] = deque(lines)
+        return await _run_guardrails(1)
+
+    @pytest.mark.asyncio
+    async def test_clean_certified_run_passes(self, tmp_db):
+        """Reviewer certified clean and no explicit terms -> both rules pass."""
+        original = database.DB_PATH
+        database.DB_PATH = tmp_db
+        try:
+            results = await self._run_with_output(tmp_db, [
+                "[Claude-5] Reviewed 12 datasets, all approved.",
+                "[Claude-5] SAFETY: CLEAN - haul screened, no disallowed media in the approved set",
+            ])
+            assert results is not None and len(results) == 2
+            assert all(r["passed"] for r in results)
+        finally:
+            database.DB_PATH = original
+
+    @pytest.mark.asyncio
+    async def test_missing_safety_cert_halts(self, tmp_db):
+        """No SAFETY: CLEAN certification -> regex_match (halt) fails the run."""
+        original = database.DB_PATH
+        database.DB_PATH = tmp_db
+        try:
+            results = await self._run_with_output(tmp_db, [
+                "[Claude-5] Reviewed datasets but did not finish certification.",
+            ])
+            match = next(r for r in results if r["rule_type"] == "regex_match")
+            assert match["passed"] is False
+            assert match["action"] == "halt"
+        finally:
+            database.DB_PATH = original
+
+    @pytest.mark.asyncio
+    async def test_explicit_content_flags_warn(self, tmp_db):
+        """An explicit-content marker trips the regex_reject backstop (warn)."""
+        original = database.DB_PATH
+        database.DB_PATH = tmp_db
+        try:
+            results = await self._run_with_output(tmp_db, [
+                "[Claude-3] Found a dataset containing pornographic images, discarding it.",
+                "[Claude-5] SAFETY: CLEAN - haul screened, no disallowed media in the approved set",
+            ])
+            reject = next(r for r in results if r["rule_type"] == "regex_reject")
+            assert reject["passed"] is False
+            assert reject["action"] == "warn"  # backstop flags but does not halt
+        finally:
+            database.DB_PATH = original

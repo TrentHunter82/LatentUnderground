@@ -475,6 +475,65 @@ async def _run_migrations(db: aiosqlite.Connection) -> bool:
     return True
 
 
+# Built-in swarm templates seeded on startup (insert-if-not-exists by name).
+# The "data-research" role_profile is defined in .claude/role-profiles.json and drives the
+# media-gathering team. The single content-safety guardrail enforces the reviewer's clean
+# sign-off (halt) plus an explicit-content backstop (warn). See FRONTEND/BACKEND rules.
+_BUILTIN_TEMPLATES = [
+    {
+        "name": "Data Research — Media Gathering",
+        "description": (
+            "A resourceful 5-agent team (Coordinator, Scout, Harvester, Curator, Reviewer) that "
+            "discovers, scrapes, downloads, curates, and reviews high-quality media/datasets from "
+            "Hugging Face, the web, and academic sources. The only hard guardrail is content "
+            "safety: no pornographic or very violent media."
+        ),
+        "config": {
+            "role_profile": "data-research",
+            "agent_count": 5,
+            "max_phases": 3,
+            "guardrails": [
+                {
+                    "type": "regex_match",
+                    "pattern": "SAFETY: CLEAN",
+                    "action": "halt",
+                },
+                {
+                    "type": "regex_reject",
+                    "pattern": "(?i)(child sexual|csam|pornograph|sexually explicit|hardcore porn|gore footage|graphic violence|gratuitous violence|beheading|dismember)",
+                    "action": "warn",
+                },
+            ],
+        },
+    },
+]
+
+
+async def _seed_builtin_templates(db: aiosqlite.Connection):
+    """Insert built-in templates if a template with the same name doesn't exist yet.
+
+    Best-effort: silently skips if the swarm_templates table isn't present (e.g.
+    minimal/partial DBs in some tests). Must never break startup.
+    """
+    import json as _json
+    exists = await (await db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='swarm_templates'"
+    )).fetchone()
+    if not exists:
+        return
+    for tpl in _BUILTIN_TEMPLATES:
+        row = await (await db.execute(
+            "SELECT id FROM swarm_templates WHERE name = ?", (tpl["name"],)
+        )).fetchone()
+        if row:
+            continue
+        await db.execute(
+            "INSERT INTO swarm_templates (name, description, config) VALUES (?, ?, ?)",
+            (tpl["name"], tpl["description"], _json.dumps(tpl["config"])),
+        )
+        _logger.info("Seeded built-in template: %s", tpl["name"])
+
+
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
@@ -495,5 +554,8 @@ async def init_db():
         if schema_changed:
             await db.execute("ANALYZE")
             _logger.info("ANALYZE completed after schema migration")
+
+        # Seed built-in templates (idempotent: insert-if-not-exists by name)
+        await _seed_builtin_templates(db)
 
         await db.commit()

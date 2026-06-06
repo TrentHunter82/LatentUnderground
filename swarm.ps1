@@ -11,7 +11,8 @@ param(
     [int]$AgentCount = 4,
     [int]$MaxPhases = 999,
     [switch]$SetupOnly,
-    [int]$AgentStartDelay = 30  # Seconds between agent launches (staggered start)
+    [int]$AgentStartDelay = 30,  # Seconds between agent launches (staggered start)
+    [string]$RoleProfile = "default"  # Role profile from .claude/role-profiles.json (e.g. "data-research")
 )
 
 $ErrorActionPreference = "Stop"
@@ -1097,62 +1098,93 @@ function Build-PromptFromTemplate {
 }
 
 # === DYNAMIC AGENT PLAN ===
-# Role slot definitions: ordered from most critical to auxiliary
-# Slots 0-3 form the signal chain; slots 4-7 run signal-free (parallel)
-$roleSlots = @(
-    @{ RoleKey = "backend";       RoleTitle = "Backend/Core";            Signal = "backend-ready";  Color = "Cyan";        RuleFiles = @($backendRules, $windowsRules, $securityRules) },
-    @{ RoleKey = "frontend";      RoleTitle = "Frontend/Interface";      Signal = "frontend-ready"; Color = "Magenta";     RuleFiles = @($frontendRules, $securityRules) },
-    @{ RoleKey = "integration";   RoleTitle = "Integration/Testing";     Signal = "tests-passing";  Color = "Green";       RuleFiles = @($testingRules, $backendRules, $frontendRules) },
-    @{ RoleKey = "polish";        RoleTitle = "Polish/Review";           Signal = "phase-complete"; Color = "Yellow";      RuleFiles = @($backendRules, $frontendRules, $testingRules, $windowsRules, $securityRules) },
-    @{ RoleKey = "distiller";     RoleTitle = "Knowledge Extraction";    Signal = "";               Color = "DarkCyan";    RuleFiles = @() },
-    @{ RoleKey = "performance";   RoleTitle = "Performance/Optimization"; Signal = "";              Color = "White";       RuleFiles = @($backendRules, $frontendRules, $testingRules) },
-    @{ RoleKey = "documentation"; RoleTitle = "Documentation";           Signal = "";               Color = "DarkGreen";   RuleFiles = @($backendRules, $frontendRules) },
-    @{ RoleKey = "artdirector";   RoleTitle = "Art Director";            Signal = "";               Color = "DarkMagenta"; RuleFiles = @($frontendRules) }
-)
+# Role slots, merge plans, and duplication slots are loaded from .claude/role-profiles.json
+# (the single source of truth, shared with the backend's TASKS.md generator). The selected
+# $RoleProfile picks one profile; "default" reproduces the original software-build roster.
+# Within a profile, the leading slots that have a non-empty Signal form the sequential signal
+# chain (each waits on the previous chain slot's signal).
+function Load-RoleProfile([string]$ProfileName) {
+    $path = ".claude/role-profiles.json"
+    if (-not (Test-Path $path)) {
+        throw "Role profiles file not found at $path"
+    }
+    $data = Get-Content $path -Raw -Encoding UTF8 | ConvertFrom-Json
+    $profile = $data.$ProfileName
+    if (-not $profile) {
+        throw "Role profile '$ProfileName' not found in $path"
+    }
+
+    # Build slots, resolving rule filenames to their file contents
+    $slots = @()
+    foreach ($s in $profile.slots) {
+        $ruleContents = @()
+        foreach ($rf in $s.rules) {
+            $content = Read-RulesFile $rf
+            if ($content) { $ruleContents += $content }
+        }
+        $slots += @{
+            RoleKey   = $s.key
+            RoleTitle = $s.title
+            Signal    = $s.signal
+            Color     = $s.color
+            RuleFiles = $ruleContents
+        }
+    }
+
+    # merge_plans: PSCustomObject (count -> assignments) -> hashtable keyed by count string
+    $mergePlans = @{}
+    if ($profile.merge_plans) {
+        foreach ($p in $profile.merge_plans.PSObject.Properties) {
+            $mergePlans[$p.Name] = $p.Value
+        }
+    }
+
+    return @{
+        Slots         = $slots
+        MergePlans    = $mergePlans
+        DupChainSlots = @($profile.chain_roles)
+    }
+}
 
 function Build-AgentPlan {
-    param([int]$Count)
+    param(
+        [int]$Count,
+        [array]$Roster,
+        [hashtable]$MergePlans,
+        [array]$DupChainSlots
+    )
 
-    $effectiveCount = [Math]::Min([Math]::Max($Count, 1), 16)
+    $maxAgents = [Math]::Max($Roster.Count * 2, 16)
+    $effectiveCount = [Math]::Min([Math]::Max($Count, 1), $maxAgents)
+
+    # Number of leading slots that form the sequential signal chain (non-empty Signal).
+    $chainSlotCount = 0
+    foreach ($slot in $Roster) {
+        if ([string]::IsNullOrEmpty($slot.Signal)) { break }
+        $chainSlotCount++
+    }
 
     # Build slot assignments using ArrayList.Add() to avoid PowerShell array flattening
     $slotAssignments = [System.Collections.ArrayList]::new()
-
-    switch ($effectiveCount) {
-        1 {
-            $null = $slotAssignments.Add(@(0,1,2,3))
+    $countKey = "$effectiveCount"
+    if ($MergePlans.ContainsKey($countKey)) {
+        foreach ($assignment in $MergePlans[$countKey]) {
+            $null = $slotAssignments.Add(@($assignment))
         }
-        2 {
-            $null = $slotAssignments.Add(@(0,2))
-            $null = $slotAssignments.Add(@(1,3))
+    } elseif ($effectiveCount -le $Roster.Count) {
+        # One agent per slot (in order) up to the requested count
+        for ($i = 0; $i -lt $effectiveCount; $i++) {
+            $null = $slotAssignments.Add(@($i))
         }
-        3 {
-            $null = $slotAssignments.Add(@(0))
-            $null = $slotAssignments.Add(@(1))
-            $null = $slotAssignments.Add(@(2,3))
+    } else {
+        # All slots get an agent, then duplicate the parallelizable chain roles round-robin
+        for ($i = 0; $i -lt $Roster.Count; $i++) {
+            $null = $slotAssignments.Add(@($i))
         }
-        default {
-            # 4+ agents: each chain role gets its own agent
-            $null = $slotAssignments.Add(@(0))
-            $null = $slotAssignments.Add(@(1))
-            $null = $slotAssignments.Add(@(2))
-            $null = $slotAssignments.Add(@(3))
-
-            # Add specialized roles in order (slots 4-7: distiller, performance, documentation, artdirector)
-            $specializedSlots = @(4, 5, 6, 7)
-            $added = 0
-            for ($i = 0; $i -lt $specializedSlots.Count -and ($added + 4) -lt $effectiveCount; $i++) {
-                $null = $slotAssignments.Add(@($specializedSlots[$i]))
-                $added++
-            }
-
-            # Beyond 8 agents: duplicate chain roles round-robin
-            $chainSlots = @(0, 1, 2, 0)
-            $dupIdx = 0
-            while ($slotAssignments.Count -lt $effectiveCount) {
-                $null = $slotAssignments.Add(@($chainSlots[$dupIdx % $chainSlots.Count]))
-                $dupIdx++
-            }
+        $dupIdx = 0
+        while ($slotAssignments.Count -lt $effectiveCount) {
+            $null = $slotAssignments.Add(@($DupChainSlots[$dupIdx % $DupChainSlots.Count]))
+            $dupIdx++
         }
     }
 
@@ -1161,8 +1193,6 @@ function Build-AgentPlan {
 
     # Build agent definitions from slot assignments
     $agents = @()
-    # Track which chain signals have been assigned
-    $chainSignals = @("", "backend-ready", "frontend-ready", "tests-passing")  # indexed by chain position
     $chainPosition = 0
 
     for ($i = 0; $i -lt $slotAssignments.Count; $i++) {
@@ -1170,10 +1200,10 @@ function Build-AgentPlan {
         $agentNum = $i + 1
         $name = "Claude-$agentNum"
 
-        # Determine if this agent is in the signal chain (has any chain slot 0-3)
+        # Determine if this agent is in the signal chain (has any chain slot)
         $hasChainSlot = $false
         foreach ($s in $slots) {
-            if ($s -le 3) { $hasChainSlot = $true; break }
+            if ([int]$s -lt $chainSlotCount) { $hasChainSlot = $true; break }
         }
 
         # Build combined role title
@@ -1181,7 +1211,7 @@ function Build-AgentPlan {
         $roleKeys = @()
         $allRuleFiles = @()
         foreach ($s in $slots) {
-            $slot = $roleSlots[$s]
+            $slot = $Roster[[int]$s]
             $roleTitles += $slot.RoleTitle
             $roleKeys += $slot.RoleKey
             $allRuleFiles += $slot.RuleFiles
@@ -1192,27 +1222,29 @@ function Build-AgentPlan {
 
         # Determine color: use first slot's color, or extra color for duplicates
         $firstSlotIdx = [int]$slots[0]
-        $primarySlot = $roleSlots[$firstSlotIdx]
-        if ($i -lt $roleSlots.Count) {
+        $primarySlot = $Roster[$firstSlotIdx]
+        if ($i -lt $Roster.Count) {
             $color = $primarySlot.Color
         } else {
-            $color = $extraColors[($i - $roleSlots.Count) % $extraColors.Count]
+            $color = $extraColors[($i - $Roster.Count) % $extraColors.Count]
         }
 
-        # Determine WaitFor signal
-        # Chain agents (first 4 with chain slots) form a sequential dependency
-        # Duplicate chain workers (9+) use their primary role's wait signal
-        # Specialized agents (distiller, performance, etc.) run immediately (no wait)
+        # Determine WaitFor signal.
+        # A chain agent waits on the signal emitted by the previous chain slot.
+        # Duplicate chain workers wait on their primary role's predecessor signal.
+        # Non-chain (specialized) agents run immediately (no wait).
         $waitFor = ""
-        if ($hasChainSlot -and $chainPosition -lt $chainSignals.Count) {
+        if ($hasChainSlot -and $chainPosition -lt $chainSlotCount) {
             # Primary chain agent
             if ($chainPosition -gt 0) {
-                $waitFor = $chainSignals[$chainPosition]
+                $waitFor = $Roster[$chainPosition - 1].Signal
             }
             $chainPosition++
         } elseif ($hasChainSlot) {
-            # Duplicate chain worker (beyond position 3): use the primary role's wait signal
-            $waitFor = $chainSignals[[Math]::Min($firstSlotIdx, $chainSignals.Count - 1)]
+            # Duplicate chain worker: wait on the slot before this agent's primary role
+            if ($firstSlotIdx -gt 0) {
+                $waitFor = $Roster[$firstSlotIdx - 1].Signal
+            }
         }
 
         $agents += @{
@@ -1229,8 +1261,10 @@ function Build-AgentPlan {
 }
 
 # === DEFINE AGENT PROMPTS ===
-# Build the dynamic agent plan based on AgentCount
-$agentPlan = Build-AgentPlan -Count $AgentCount
+# Load the selected role profile and build the dynamic agent plan based on AgentCount
+$activeProfile = Load-RoleProfile $RoleProfile
+$roleSlots = $activeProfile.Slots
+$agentPlan = Build-AgentPlan -Count $AgentCount -Roster $activeProfile.Slots -MergePlans $activeProfile.MergePlans -DupChainSlots $activeProfile.DupChainSlots
 $agentRoleList = ($agentPlan | ForEach-Object { $_.Role }) -join ", "
 Write-Host "  Agent plan: $($agentPlan.Count) agents ($agentRoleList)" -ForegroundColor Gray
 

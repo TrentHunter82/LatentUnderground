@@ -1,0 +1,56 @@
+{
+  "_comment": "Single source of truth for swarm role profiles. Loaded by BOTH swarm.ps1 (Build-AgentPlan -> agent prompts) and backend/app/routes/swarm.py (-> tasks/TASKS.md). Keep them in sync via this file. 'slots' is ordered most-critical -> auxiliary. Leading slots with a non-empty 'signal' form the sequential signal chain (each waits on the previous chain slot's signal). 'merge_plans' maps agent_count -> slot-index assignments for small teams; counts not listed get one agent per slot, then 'chain_roles' duplicated round-robin for extra agents. 'rules' are filenames under .claude/rules/.",
+  "default": {
+    "description": "Standard software build team (backend, frontend, testing, polish, + specialists).",
+    "slots": [
+      {"key": "backend", "title": "Backend/Core", "signal": "backend-ready", "color": "Cyan",
+       "rules": ["BACKEND_RULES.md", "WINDOWS_RULES.md", "SECURITY_RULES.md"],
+       "tasks": ["Analyze project structure and identify tasks", "Implement core functionality", "Add error handling and validation"]},
+      {"key": "frontend", "title": "Frontend/Interface", "signal": "frontend-ready", "color": "Magenta",
+       "rules": ["FRONTEND_RULES.md", "SECURITY_RULES.md"],
+       "tasks": ["Set up UI scaffolding", "Implement main interface components", "Connect to backend APIs"]},
+      {"key": "integration", "title": "Integration/Testing", "signal": "tests-passing", "color": "Green",
+       "rules": ["TESTING_RULES.md", "BACKEND_RULES.md", "FRONTEND_RULES.md"],
+       "tasks": ["Write unit tests for core modules", "Write integration tests", "Verify all components work together"]},
+      {"key": "polish", "title": "Polish/Review", "signal": "phase-complete", "color": "Yellow",
+       "rules": ["BACKEND_RULES.md", "FRONTEND_RULES.md", "TESTING_RULES.md", "WINDOWS_RULES.md", "SECURITY_RULES.md"],
+       "tasks": ["Code review all agent work", "Fix issues found in review", "FINAL: Generate next-swarm.ps1 for next phase"]},
+      {"key": "distiller", "title": "Knowledge Extraction", "signal": "", "color": "DarkCyan",
+       "rules": [],
+       "tasks": ["Monitor message bus for lessons", "Consolidate lessons learned", "Maintain knowledge base"]},
+      {"key": "performance", "title": "Performance/Optimization", "signal": "", "color": "White",
+       "rules": ["BACKEND_RULES.md", "FRONTEND_RULES.md", "TESTING_RULES.md"],
+       "tasks": ["Profile application performance", "Identify optimization opportunities", "Implement and verify improvements"]},
+      {"key": "documentation", "title": "Documentation", "signal": "", "color": "DarkGreen",
+       "rules": ["BACKEND_RULES.md", "FRONTEND_RULES.md"],
+       "tasks": ["Document API endpoints and architecture", "Write setup and usage guides", "Verify all docs match actual behavior"]},
+      {"key": "artdirector", "title": "Art Director", "signal": "", "color": "DarkMagenta",
+       "rules": ["FRONTEND_RULES.md"],
+       "tasks": ["Review frontend visual consistency", "Provide constructive UI/UX feedback", "Polish visual design and interactions"]}
+    ],
+    "merge_plans": {"1": [[0, 1, 2, 3]], "2": [[0, 2], [1, 3]], "3": [[0], [1], [2, 3]]},
+    "chain_roles": [0, 1, 2, 0]
+  },
+  "data-research": {
+    "description": "High-quality media/dataset gathering team. Pipeline: Coordinator -> Scout -> Harvester -> Curator -> Reviewer. Only hard guardrail is content safety (no pornographic / very violent media).",
+    "slots": [
+      {"key": "coordinator", "title": "Research Coordinator", "signal": "research-plan-ready", "color": "Cyan",
+       "rules": ["DATA_RESEARCH_RULES.md"],
+       "tasks": ["Scope the gathering campaign and partition sources across the team", "Track coverage and dedupe candidates across agents", "Assemble datasets/DATASETS.md manifest and make the final go/no-go"]},
+      {"key": "scout", "title": "Discovery / Ideation", "signal": "sources-found", "color": "Magenta",
+       "rules": ["DATA_RESEARCH_RULES.md"],
+       "tasks": ["Brainstorm gathering angles and run a multi-source sweep (Hugging Face, web, academic, scrape targets)", "Propose ranked candidate sources with access notes", "Hand the source list to the Harvester"]},
+      {"key": "harvester", "title": "Acquisition / Harvester", "signal": "data-acquired", "color": "Green",
+       "rules": ["DATA_RESEARCH_RULES.md"],
+       "tasks": ["Pull/scrape/download from candidate sources, spawning parallel subagents for speed", "Record the source URL and a short note for every item", "Write raw items and draft cards under datasets/<slug>/"]},
+      {"key": "curator", "title": "Curation / Filtering", "signal": "data-curated", "color": "Yellow",
+       "rules": ["DATA_RESEARCH_RULES.md"],
+       "tasks": ["Dedupe and score candidates for quality/taste; keep only the best", "Normalize and finalize each datasets/<slug>/CARD.md", "Flag borderline items to the Reviewer"]},
+      {"key": "validator", "title": "Review / Approval", "signal": "data-approved", "color": "DarkCyan",
+       "rules": ["DATA_RESEARCH_RULES.md"],
+       "tasks": ["Review each item for quality and screen out any pornographic or very violent media", "APPROVE or REJECT each dataset on the 'review' bus channel with reasons", "Sign off the manifest once the haul is clean"]}
+    ],
+    "merge_plans": {"1": [[0, 1, 2, 3, 4]], "2": [[0, 1, 2], [3, 4]], "3": [[0, 1], [2, 3], [4]], "4": [[0], [1, 2], [3], [4]]},
+    "chain_roles": [1, 2]
+  }
+}

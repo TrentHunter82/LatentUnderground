@@ -1,0 +1,2 @@
+Once you've deduped, filtered to the best datasets, finalized each CARD.md, and updated
+datasets/DATASETS.md, create .claude/signals/data-curated.signal so the Reviewer can approve.

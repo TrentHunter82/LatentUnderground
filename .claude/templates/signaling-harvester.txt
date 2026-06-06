@@ -1,0 +1,2 @@
+Once you've pulled the candidate datasets into datasets/<slug>/ folders with draft CARD.md files and
+reported them to the Curator, create .claude/signals/data-acquired.signal.

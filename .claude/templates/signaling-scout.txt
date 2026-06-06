@@ -1,0 +1,2 @@
+Once datasets/SOURCES.md has a solid ranked list of candidate sources and you've posted it to the
+bus, create .claude/signals/sources-found.signal so the Harvester can start pulling.

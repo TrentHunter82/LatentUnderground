@@ -28,6 +28,14 @@ _LU_ROOT = Path(__file__).parent.parent.parent.parent
 # Scripts to copy into new project folders
 _SCAFFOLD_SCRIPTS = ["swarm.ps1", "stop-swarm.ps1", "swarm.bat"]
 
+# Single files under .claude/ to copy into new project folders (the swarm reads these
+# relative to the project folder). role-profiles.json drives the agent roster/role profile.
+_SCAFFOLD_FILES = [".claude/role-profiles.json"]
+
+# Directory trees under .claude/ to copy wholesale (prompt templates + role rules) so the
+# template-based prompt generation works in every project, not just this repo.
+_SCAFFOLD_TREES = [".claude/templates", ".claude/rules"]
+
 # Directories to create in new project folders
 _SCAFFOLD_DIRS = [
     ".claude/heartbeats",
@@ -87,6 +95,23 @@ async def create_project(project: ProjectCreate, db: aiosqlite.Connection = Depe
         if src.exists() and not dest.exists():
             shutil.copy2(src, dest)
             logger.info("Scaffolded %s into %s", script, folder)
+
+    # Copy individual .claude/ config files (e.g. role-profiles.json)
+    for rel in _SCAFFOLD_FILES:
+        src = _LU_ROOT / rel
+        dest = folder / rel
+        if src.exists() and not dest.exists():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
+            logger.info("Scaffolded %s into %s", rel, folder)
+
+    # Copy prompt-template and rules trees so template-based prompts work everywhere
+    for rel in _SCAFFOLD_TREES:
+        src = _LU_ROOT / rel
+        dest = folder / rel
+        if src.exists():
+            shutil.copytree(src, dest, dirs_exist_ok=True)
+            logger.info("Scaffolded %s tree into %s", rel, folder)
 
     # Copy message bus client
     bus_src = _LU_ROOT / "backend" / "bus-client" / "swarm-msg.ps1"

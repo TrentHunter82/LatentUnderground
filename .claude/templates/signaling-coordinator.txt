@@ -1,0 +1,2 @@
+Once your campaign plan and per-role assignments are posted to the bus and datasets/DATASETS.md is
+scaffolded, create .claude/signals/research-plan-ready.signal so the Scout can begin.

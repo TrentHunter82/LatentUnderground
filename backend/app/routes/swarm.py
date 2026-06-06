@@ -524,6 +524,25 @@ def _any_agent_alive(project_id: int) -> bool:
     return False
 
 
+# Model + reasoning effort for spawned swarm agents. Latest Opus with a large
+# extended-thinking budget ("most effort") by default; override via env without
+# touching code (e.g. LU_AGENT_MODEL=opus, LU_AGENT_THINKING_TOKENS=0 to disable).
+_AGENT_MODEL = os.environ.get("LU_AGENT_MODEL", "claude-opus-4-8")
+_AGENT_THINKING_TOKENS = os.environ.get("LU_AGENT_THINKING_TOKENS", "31999")
+
+
+def _agent_model_args() -> list[str]:
+    """CLI args selecting the agent model (empty if explicitly disabled)."""
+    return ["--model", _AGENT_MODEL] if _AGENT_MODEL else []
+
+
+def _apply_agent_effort(env: dict) -> dict:
+    """Set the extended-thinking budget on a spawn env (skip if disabled)."""
+    if _AGENT_THINKING_TOKENS and _AGENT_THINKING_TOKENS != "0":
+        env["MAX_THINKING_TOKENS"] = _AGENT_THINKING_TOKENS
+    return env
+
+
 def _find_claude_cmd() -> list[str]:
     """Find the claude CLI and return the command list to invoke it.
 
@@ -555,8 +574,52 @@ def _find_claude_cmd() -> list[str]:
     return [cmd_path]
 
 
+def _load_role_profile(folder: Path, profile_name: str) -> Optional[dict]:
+    """Load one role profile from the project's .claude/role-profiles.json.
+
+    This is the SAME file swarm.ps1 reads to build agent prompts, so TASKS.md
+    sections line up with the agents. Returns None if the file or profile is
+    missing (caller falls back to the built-in default roster).
+    """
+    path = folder / ".claude" / "role-profiles.json"
+    if not path.exists():
+        return None
+    try:
+        # utf-8-sig tolerates a BOM if the file was ever rewritten by PowerShell
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Failed to read role-profiles.json: %s", e)
+        return None
+    return data.get(profile_name)
+
+
+def _build_agent_assignments(profile: dict, count: int) -> list[list[int]]:
+    """Map agent_count -> per-agent slot-index assignments for a profile.
+
+    Mirrors swarm.ps1 Build-AgentPlan exactly so the backend's TASKS.md matches
+    the prompts swarm.ps1 generates.
+    """
+    slots = profile.get("slots", [])
+    merge_plans = profile.get("merge_plans", {})
+    dup = profile.get("chain_roles") or [0]
+    max_agents = max(len(slots) * 2, 16)
+    n = min(max(count, 1), max_agents)
+    key = str(n)
+    if key in merge_plans:
+        return [list(a) for a in merge_plans[key]]
+    if n <= len(slots):
+        return [[i] for i in range(n)]
+    assignments = [[i] for i in range(len(slots))]
+    di = 0
+    while len(assignments) < n:
+        assignments.append([dup[di % len(dup)]])
+        di += 1
+    return assignments
+
+
 def _run_setup_only(
     folder: Path, swarm_script: Path, agent_count: int, max_phases: int,
+    role_profile: str = "default",
 ) -> subprocess.CompletedProcess:
     """Run swarm.ps1 -SetupOnly synchronously. Returns CompletedProcess."""
     args = [
@@ -564,6 +627,7 @@ def _run_setup_only(
         "-Resume", "-NoConfirm", "-SetupOnly",
         "-AgentCount", str(agent_count),
         "-MaxPhases", str(max_phases),
+        "-RoleProfile", role_profile,
     ]
     return subprocess.run(
         args, cwd=str(folder), capture_output=True, text=True, timeout=60,
@@ -1328,6 +1392,7 @@ async def _auto_queue_relaunch_agents(project_id: int) -> bool:
                     *claude_cmd,
                     "--print",
                     "--output-format", "stream-json",
+                    *_agent_model_args(),
                     "--resume", prev_session,
                     "--dangerously-skip-permissions",
                     "--verbose",
@@ -1341,6 +1406,7 @@ async def _auto_queue_relaunch_agents(project_id: int) -> bool:
                     *claude_cmd,
                     "--print",
                     "--output-format", "stream-json",
+                    *_agent_model_args(),
                     "--dangerously-skip-permissions",
                     "--verbose",
                     prompt_text,
@@ -1349,6 +1415,7 @@ async def _auto_queue_relaunch_agents(project_id: int) -> bool:
             try:
                 spawn_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
                 spawn_env["AGENT_NAME"] = agent_name
+                _apply_agent_effort(spawn_env)
                 popen_kwargs = dict(
                     cwd=str(folder),
                     stdin=subprocess.DEVNULL,
@@ -1981,6 +2048,15 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
     if not swarm_script.exists():
         raise HTTPException(status_code=400, detail="swarm.ps1 not found in project folder")
 
+    # Role profile selects which team of agents to spawn (default software build,
+    # "data-research" media-gathering team, etc.). Stored in the project config.
+    role_profile = "default"
+    try:
+        _cfg = json.loads(project.get("config") or "{}")
+        role_profile = _cfg.get("role_profile") or "default"
+    except (json.JSONDecodeError, TypeError):
+        pass
+
     # --- Quota enforcement: max_agents_concurrent ---
     quota = await _get_project_quota(req.project_id)
     max_agents = quota.get("max_agents_concurrent")
@@ -2029,54 +2105,60 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
         # Resume mode: preserve existing TASKS.md with agent progress
         logger.info("Resume mode: preserving existing TASKS.md for project %d", req.project_id)
     else:
-        # Fresh launch: create new TASKS.md with dynamic agent sections
-        # Role roster matches swarm.ps1 Build-AgentPlan slot assignments
-        _role_slots = [
-            ("Backend/Core", "Analyze project structure and identify tasks",
-             "Implement core functionality", "Add error handling and validation"),
-            ("Frontend/Interface", "Set up UI scaffolding",
-             "Implement main interface components", "Connect to backend APIs"),
-            ("Integration/Testing", "Write unit tests for core modules",
-             "Write integration tests", "Verify all components work together"),
-            ("Polish/Review", "Code review all agent work",
-             "Fix issues found in review",
-             "FINAL: Generate next-swarm.ps1 for next phase"),
-            ("Knowledge Extraction", "Monitor message bus for lessons",
-             "Consolidate lessons learned", "Maintain knowledge base"),
-            ("Performance/Optimization", "Profile application performance",
-             "Identify optimization opportunities", "Implement and verify improvements"),
-            ("Documentation", "Document API endpoints and architecture",
-             "Write setup and usage guides", "Verify all docs match actual behavior"),
-            ("Art Director", "Review frontend visual consistency",
-             "Provide constructive UI/UX feedback",
-             "Polish visual design and interactions"),
-        ]
-        # Merge plans for fewer agents (indices into _role_slots)
-        _merge_plans: dict[int, list[list[int]]] = {
-            1: [[0, 1, 2, 3]],
-            2: [[0, 2], [1, 3]],
-            3: [[0], [1], [2, 3]],
-        }
-        count = req.agent_count
-        if count <= 3:
-            assignments = _merge_plans[count]
-        elif count <= 8:
-            assignments = [[i] for i in range(min(count, len(_role_slots)))]
+        # Fresh launch: create new TASKS.md with dynamic agent sections.
+        # Prefer the shared .claude/role-profiles.json (same file swarm.ps1 uses to
+        # build prompts) so the sections match the agents. Fall back to the built-in
+        # default roster if the file is missing (older project folders).
+        profile = _load_role_profile(folder, role_profile)
+        if profile is None and role_profile != "default":
+            logger.warning(
+                "Role profile '%s' not found for project %d; using default roster",
+                role_profile, req.project_id,
+            )
+
+        if profile is not None:
+            slots = profile.get("slots", [])
+            assignments = _build_agent_assignments(profile, req.agent_count)
+            role_titles_for = lambda s: slots[s]["title"]
+            tasks_for = lambda s: list(slots[s].get("tasks", []))
         else:
-            # 9+: base 8 roles + round-robin duplicates
-            assignments = [[i] for i in range(len(_role_slots))]
-            chain = [0, 1, 2, 0]
-            for extra in range(count - len(_role_slots)):
-                assignments.append([chain[extra % len(chain)]])
+            # Built-in default roster (mirrors role-profiles.json "default")
+            _role_slots = [
+                ("Backend/Core", "Analyze project structure and identify tasks",
+                 "Implement core functionality", "Add error handling and validation"),
+                ("Frontend/Interface", "Set up UI scaffolding",
+                 "Implement main interface components", "Connect to backend APIs"),
+                ("Integration/Testing", "Write unit tests for core modules",
+                 "Write integration tests", "Verify all components work together"),
+                ("Polish/Review", "Code review all agent work",
+                 "Fix issues found in review",
+                 "FINAL: Generate next-swarm.ps1 for next phase"),
+                ("Knowledge Extraction", "Monitor message bus for lessons",
+                 "Consolidate lessons learned", "Maintain knowledge base"),
+                ("Performance/Optimization", "Profile application performance",
+                 "Identify optimization opportunities", "Implement and verify improvements"),
+                ("Documentation", "Document API endpoints and architecture",
+                 "Write setup and usage guides", "Verify all docs match actual behavior"),
+                ("Art Director", "Review frontend visual consistency",
+                 "Provide constructive UI/UX feedback",
+                 "Polish visual design and interactions"),
+            ]
+            _default_profile = {
+                "slots": [{"title": t[0], "tasks": list(t[1:])} for t in _role_slots],
+                "merge_plans": {"1": [[0, 1, 2, 3]], "2": [[0, 2], [1, 3]], "3": [[0], [1], [2, 3]]},
+                "chain_roles": [0, 1, 2, 0],
+            }
+            assignments = _build_agent_assignments(_default_profile, req.agent_count)
+            role_titles_for = lambda s: _role_slots[s][0]
+            tasks_for = lambda s: list(_role_slots[s][1:])
 
         sections = []
         for idx, slot_indices in enumerate(assignments):
             agent_num = idx + 1
-            role_titles = [_role_slots[s][0] for s in slot_indices]
-            title = " + ".join(role_titles)
+            title = " + ".join(role_titles_for(s) for s in slot_indices)
             tasks = []
             for s in slot_indices:
-                tasks.extend(_role_slots[s][1:])
+                tasks.extend(tasks_for(s))
             task_lines = "".join(f"- [ ] {t}\n" for t in tasks)
             sections.append(f"## Claude-{agent_num} [{title}]\n{task_lines}")
 
@@ -2114,6 +2196,7 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
     try:
         result = await asyncio.to_thread(
             _run_setup_only, folder, swarm_script, req.agent_count, req.max_phases,
+            role_profile,
         )
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=500, detail="Setup phase timed out after 60s")
@@ -2214,6 +2297,7 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
             # Add AGENT_NAME for CLI client identification
             spawn_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
             spawn_env["AGENT_NAME"] = agent_name
+            _apply_agent_effort(spawn_env)
             popen_kwargs = dict(
                 cwd=str(folder),
                 stdin=subprocess.DEVNULL,  # --print mode needs stdin EOF to start
@@ -2228,6 +2312,7 @@ async def _launch_swarm_locked(req: SwarmLaunchRequest, db: aiosqlite.Connection
                     *claude_cmd,  # e.g. ["node", "cli.js"] or ["claude"]
                     "--print",
                     "--output-format", "stream-json",
+                    *_agent_model_args(),
                     "--dangerously-skip-permissions",
                     "--verbose",
                     prompt_text,
@@ -2732,10 +2817,12 @@ def _spawn_and_register_agent(
     if not prompt_text:
         raise ValueError(f"Empty prompt file for {agent_name}")
 
-    # Spawn
+    # Spawn (latest model + extended-thinking effort, matching the launch path)
+    if isinstance(popen_kwargs.get("env"), dict):
+        _apply_agent_effort(popen_kwargs["env"])
     process = subprocess.Popen(
         [*claude_cmd, "--print", "--output-format", "stream-json",
-         "--dangerously-skip-permissions", "--verbose", prompt_text],
+         *_agent_model_args(), "--dangerously-skip-permissions", "--verbose", prompt_text],
         **popen_kwargs,
     )
 
@@ -3642,6 +3729,7 @@ async def send_directive(
             prompt_text = prompt_file.read_text(encoding="utf-8-sig").strip()
             claude_cmd = _find_claude_cmd()
             spawn_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+            _apply_agent_effort(spawn_env)
             popen_kwargs = dict(
                 cwd=str(folder),
                 stdin=subprocess.DEVNULL,
@@ -3653,7 +3741,7 @@ async def send_directive(
                 popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
             new_proc = subprocess.Popen(
                 [*claude_cmd, "--print", "--output-format", "stream-json",
-                 "--dangerously-skip-permissions", "--verbose", prompt_text],
+                 *_agent_model_args(), "--dangerously-skip-permissions", "--verbose", prompt_text],
                 **popen_kwargs,
             )
             # Set up drain threads (pass folder for rate limit signal writing)

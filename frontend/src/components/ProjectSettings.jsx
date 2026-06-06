@@ -131,6 +131,7 @@ function GuardrailRuleRow({ rule, index, onChange, onRemove }) {
 export default function ProjectSettings({ projectId, initialConfig, onSave }) {
   const [agentCount, setAgentCount] = useState(4)
   const [maxPhases, setMaxPhases] = useState(24)
+  const [roleProfile, setRoleProfile] = useState('default')
   const [customPrompts, setCustomPrompts] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -160,18 +161,20 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
   const deleteImageMutation = useDeleteImageReference()
 
   // Track the "saved" state for dirty detection
-  const savedConfig = useRef({ agent_count: 4, max_phases: 999, custom_prompts: '', max_agents_concurrent: null, max_duration_hours: null, max_restarts_per_agent: null, circuit_breaker_max_failures: 3, circuit_breaker_window_seconds: 300, circuit_breaker_recovery_seconds: 60, auto_queue: false, auto_queue_delay_seconds: 30, guardrails: [] })
+  const savedConfig = useRef({ agent_count: 4, max_phases: 999, role_profile: 'default', custom_prompts: '', max_agents_concurrent: null, max_duration_hours: null, max_restarts_per_agent: null, circuit_breaker_max_failures: 3, circuit_breaker_window_seconds: 300, circuit_breaker_recovery_seconds: 60, auto_queue: false, auto_queue_delay_seconds: 30, guardrails: [] })
 
   useEffect(() => {
     if (initialConfig) {
       const ac = initialConfig.agent_count ?? 4
       const mp = initialConfig.max_phases ?? 999
+      const rp = initialConfig.role_profile ?? 'default'
       const cp = initialConfig.custom_prompts ?? ''
       const mac = initialConfig.max_agents_concurrent ?? null
       const mdh = initialConfig.max_duration_hours ?? null
       const mra = initialConfig.max_restarts_per_agent ?? null
       setAgentCount(ac)
       setMaxPhases(mp)
+      setRoleProfile(rp)
       setCustomPrompts(cp)
       setMaxAgentsConcurrent(mac)
       setMaxDurationHours(mdh)
@@ -183,7 +186,7 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
       setAutoQueueDelay(initialConfig.auto_queue_delay_seconds ?? 30)
       const gr = Array.isArray(initialConfig.guardrails) ? initialConfig.guardrails : []
       setGuardrailRules(gr.map(r => ({ type: r.type, pattern: r.pattern || '', threshold: r.threshold ?? 0, action: r.action || 'warn' })))
-      savedConfig.current = { agent_count: ac, max_phases: mp, custom_prompts: cp, max_agents_concurrent: mac, max_duration_hours: mdh, max_restarts_per_agent: mra, circuit_breaker_max_failures: initialConfig.circuit_breaker_max_failures ?? 3, circuit_breaker_window_seconds: initialConfig.circuit_breaker_window_seconds ?? 300, circuit_breaker_recovery_seconds: initialConfig.circuit_breaker_recovery_seconds ?? 60, auto_queue: initialConfig.auto_queue ?? false, auto_queue_delay_seconds: initialConfig.auto_queue_delay_seconds ?? 30, guardrails: gr }
+      savedConfig.current = { agent_count: ac, max_phases: mp, role_profile: rp, custom_prompts: cp, max_agents_concurrent: mac, max_duration_hours: mdh, max_restarts_per_agent: mra, circuit_breaker_max_failures: initialConfig.circuit_breaker_max_failures ?? 3, circuit_breaker_window_seconds: initialConfig.circuit_breaker_window_seconds ?? 300, circuit_breaker_recovery_seconds: initialConfig.circuit_breaker_recovery_seconds ?? 60, auto_queue: initialConfig.auto_queue ?? false, auto_queue_delay_seconds: initialConfig.auto_queue_delay_seconds ?? 30, guardrails: gr }
     }
   }, [initialConfig])
 
@@ -226,6 +229,7 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
     return (
       agentCount !== savedConfig.current.agent_count ||
       maxPhases !== savedConfig.current.max_phases ||
+      roleProfile !== savedConfig.current.role_profile ||
       (customPrompts || '') !== (savedConfig.current.custom_prompts || '') ||
       maxAgentsConcurrent !== savedConfig.current.max_agents_concurrent ||
       maxDurationHours !== savedConfig.current.max_duration_hours ||
@@ -237,7 +241,7 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
       autoQueueDelay !== savedConfig.current.auto_queue_delay_seconds ||
       grChanged
     )
-  }, [agentCount, maxPhases, customPrompts, maxAgentsConcurrent, maxDurationHours, maxRestartsPerAgent, cbMaxFailures, cbWindowSeconds, cbRecoverySeconds, autoQueue, autoQueueDelay, guardrailRules])
+  }, [agentCount, maxPhases, roleProfile, customPrompts, maxAgentsConcurrent, maxDurationHours, maxRestartsPerAgent, cbMaxFailures, cbWindowSeconds, cbRecoverySeconds, autoQueue, autoQueueDelay, guardrailRules])
 
   // Warn on browser navigation/close when dirty
   useEffect(() => {
@@ -282,6 +286,7 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
       const config = {
         agent_count: agentCount,
         max_phases: maxPhases,
+        role_profile: roleProfile,
         custom_prompts: customPrompts || undefined,
         max_agents_concurrent: maxAgentsConcurrent,
         max_duration_hours: maxDurationHours,
@@ -294,7 +299,7 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
         guardrails: cleanedRules.length > 0 ? cleanedRules : null,
       }
       await onSave(projectId, config)
-      savedConfig.current = { agent_count: agentCount, max_phases: maxPhases, custom_prompts: customPrompts || '', max_agents_concurrent: maxAgentsConcurrent, max_duration_hours: maxDurationHours, max_restarts_per_agent: maxRestartsPerAgent, circuit_breaker_max_failures: cbMaxFailures, circuit_breaker_window_seconds: cbWindowSeconds, circuit_breaker_recovery_seconds: cbRecoverySeconds, auto_queue: autoQueue, auto_queue_delay_seconds: autoQueueDelay, guardrails: cleanedRules }
+      savedConfig.current = { agent_count: agentCount, max_phases: maxPhases, role_profile: roleProfile, custom_prompts: customPrompts || '', max_agents_concurrent: maxAgentsConcurrent, max_duration_hours: maxDurationHours, max_restarts_per_agent: maxRestartsPerAgent, circuit_breaker_max_failures: cbMaxFailures, circuit_breaker_window_seconds: cbWindowSeconds, circuit_breaker_recovery_seconds: cbRecoverySeconds, auto_queue: autoQueue, auto_queue_delay_seconds: autoQueueDelay, guardrails: cleanedRules }
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } finally {
@@ -363,6 +368,20 @@ export default function ProjectSettings({ projectId, initialConfig, onSave }) {
               {fieldErrors.maxPhases}
             </span>
           )}
+        </div>
+        <div>
+          <label htmlFor="roleProfile" className="block text-sm text-zinc-400 mb-1 font-mono">Role Profile</label>
+          <select
+            id="roleProfile"
+            value={roleProfile}
+            onChange={(e) => setRoleProfile(e.target.value)}
+            aria-describedby="roleProfile-hint"
+            className="retro-input w-full px-3 py-2 rounded text-sm"
+          >
+            <option value="default">Default — Software Build</option>
+            <option value="data-research">Data Research — Media Gathering</option>
+          </select>
+          <span id="roleProfile-hint" className="text-[10px] text-zinc-600 font-mono mt-0.5 block">Which team of agents to spawn on launch</span>
         </div>
         <div>
           <label htmlFor="customPrompts" className="block text-sm text-zinc-400 mb-1 font-mono">Custom Prompts</label>

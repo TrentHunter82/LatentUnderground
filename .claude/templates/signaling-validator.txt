@@ -1,0 +1,4 @@
+Once you've reviewed every dataset, recorded an APPROVED/REJECTED verdict for each in
+datasets/DATASETS.md, printed the "SAFETY: CLEAN - haul screened, no disallowed media in the
+approved set" certification line, and confirmed the remaining haul is high quality, create
+.claude/signals/data-approved.signal.

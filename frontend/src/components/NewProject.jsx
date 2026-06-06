@@ -6,7 +6,7 @@ import FolderBrowser from './FolderBrowser'
 import TemplateManager from './TemplateManager'
 import ImageReferenceUpload from './ImageReferenceUpload'
 import { useTemplates, templateKeys } from '../hooks/useProjectQuery'
-import { useCreateProject, useLaunchSwarm, useCreateTemplate } from '../hooks/useMutations'
+import { useCreateProject, useLaunchSwarm, useCreateTemplate, useUpdateProjectConfig } from '../hooks/useMutations'
 import { uploadImageReferences } from '../lib/api'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -29,6 +29,9 @@ export default function NewProject({ onProjectChange }) {
   const [error, setError] = useState(null)
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [form, setForm] = useState({ ...defaultForm })
+  // Extra config from the selected template that isn't a plain form field
+  // (role_profile, guardrails). Persisted onto the project after creation.
+  const [templateExtras, setTemplateExtras] = useState(null)
   const [images, setImages] = useState([])
   const [showBrowser, setShowBrowser] = useState(false)
   const [showManager, setShowManager] = useState(false)
@@ -43,6 +46,7 @@ export default function NewProject({ onProjectChange }) {
   const createProjectMutation = useCreateProject()
   const launchSwarmMutation = useLaunchSwarm()
   const createTemplateMutation = useCreateTemplate()
+  const updateProjectConfigMutation = useUpdateProjectConfig()
 
   const loading = createProjectMutation.isPending || launchSwarmMutation.isPending
 
@@ -70,6 +74,7 @@ export default function NewProject({ onProjectChange }) {
 
     if (!id) {
       setForm({ ...defaultForm })
+      setTemplateExtras(null)
       return
     }
 
@@ -88,6 +93,13 @@ export default function NewProject({ onProjectChange }) {
       agent_count: cfg.agent_count ?? f.agent_count,
       max_phases: cfg.max_phases ?? f.max_phases,
     }))
+
+    // Capture config that isn't a plain form field; persisted post-create so the
+    // launch path picks up the right team and guardrails.
+    const extras = {}
+    if (cfg.role_profile) extras.role_profile = cfg.role_profile
+    if (Array.isArray(cfg.guardrails)) extras.guardrails = cfg.guardrails
+    setTemplateExtras(Object.keys(extras).length ? extras : null)
   }
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
@@ -101,10 +113,29 @@ export default function NewProject({ onProjectChange }) {
     }
   }
 
+  // Persist template config that isn't a plain create field (role_profile, guardrails)
+  // onto the new project so the launch path uses the right team and content-safety rules.
+  const applyTemplateExtras = async (projectId) => {
+    if (!templateExtras) return
+    try {
+      await updateProjectConfigMutation.mutateAsync({
+        projectId,
+        config: {
+          agent_count: form.agent_count,
+          max_phases: form.max_phases,
+          ...templateExtras,
+        },
+      })
+    } catch {
+      toast('Template settings could not be applied — set the role profile in Settings.', 'warning', 5000)
+    }
+  }
+
   const doSubmit = async () => {
     setError(null)
     try {
       const project = await createProjectMutation.mutateAsync(form)
+      await applyTemplateExtras(project.id)
       await uploadImages(project.id)
       onProjectChange?.()
       navigate(`/projects/${project.id}`)
@@ -123,6 +154,7 @@ export default function NewProject({ onProjectChange }) {
     setError(null)
     try {
       const project = await createProjectMutation.mutateAsync(form)
+      await applyTemplateExtras(project.id)
       await uploadImages(project.id)
       await launchSwarmMutation.mutateAsync({
         project_id: project.id,
@@ -186,6 +218,12 @@ export default function NewProject({ onProjectChange }) {
                     </option>
                   ))}
                 </select>
+                {templateExtras?.role_profile === 'data-research' && (
+                  <p className="text-[10px] text-crt-cyan mt-1.5 font-mono">
+                    Data research team — Coordinator → Scout → Harvester → Curator → Reviewer.
+                    Content-safety guardrail enabled (no pornographic / very violent media).
+                  </p>
+                )}
               </>
             )}
             {templates.length === 0 && !showManager && (

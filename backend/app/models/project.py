@@ -55,6 +55,12 @@ class ProjectConfig(BaseModel):
     agent_count: Optional[int] = Field(None, ge=1, le=16, examples=[4])
     max_phases: Optional[int] = Field(None, ge=1, le=999, examples=[24])
     custom_prompts: Optional[str] = Field(None, max_length=5000)
+    # Role profile: selects which team of agents to spawn. Names map to keys in
+    # .claude/role-profiles.json (e.g. "default" software build, "data-research").
+    role_profile: Optional[str] = Field(
+        None, max_length=50,
+        description="Role profile name from .claude/role-profiles.json (e.g. 'default', 'data-research')",
+    )
     auto_stop_minutes: Optional[int] = Field(
         None, ge=0, le=1440,
         description="Auto-stop swarm if no output for N minutes (0 = disabled)",
